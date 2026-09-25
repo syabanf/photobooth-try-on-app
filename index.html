@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f1f0f1" />
+    <title>Virtual Try-On</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..800&display=swap"
+    />
+  </head>
+  <body>
+    <div id="authScreen" class="auth" hidden>
+      <div class="ambient" aria-hidden="true"></div>
+      <section class="auth-hero">
+        <div class="rail-brand" aria-hidden="true">VT</div>
+        <div class="auth-hero-copy">
+          <p class="kicker">Virtual try-on for stores</p>
+          <h1>Let shoppers try clothes on at a glance<span class="accent-dot">.</span></h1>
+          <p class="auth-lede">A camera, a browser and your catalog. Run it on kiosks, mirrors and photobooths across every store you manage.</p>
+        </div>
+        <ul class="auth-perks">
+          <li><span class="perk-icon"><i data-icon="clock"></i></span><span><strong>14 days free.</strong> No card needed.</span></li>
+          <li><span class="perk-icon"><i data-icon="pin"></i></span><span><strong>Up to 3 locations</strong> and 10 points during the trial.</span></li>
+          <li><span class="perk-icon"><i data-icon="aperture"></i></span><span><strong>Try-on and photobooth</strong> run on the device, with no install.</span></li>
+        </ul>
+      </section>
+
+      <section class="auth-panel">
+        <div class="card auth-card">
+          <div id="authForms">
+            <div class="auth-head">
+              <h2 id="authTitle" class="auth-title">Start your free trial<span class="accent-dot">.</span></h2>
+              <p id="authDesc" class="card-desc">Set up your stores and points in a few minutes.</p>
+            </div>
+            <div id="authTabs" class="pill-tabs pill-tabs--full">
+              <button type="button" class="pill-tab is-active" data-auth="trial">Start trial</button>
+              <button type="button" class="pill-tab" data-auth="signin">Sign in</button>
+            </div>
+
+            <form id="trialForm" class="form-stack" novalidate>
+              <p class="field-error" data-error-for="form" hidden></p>
+              <label class="field"><span class="field-label">Your name</span>
+                <input class="input" name="name" autocomplete="name" placeholder="Rizky Pratama" /></label>
+              <p class="field-error" data-error-for="name" hidden></p>
+              <label class="field"><span class="field-label">Business</span>
+                <input class="input" name="business" autocomplete="organization" placeholder="Studio Rupa" /></label>
+              <p class="field-error" data-error-for="business" hidden></p>
+              <label class="field"><span class="field-label">Work email</span>
+                <input class="input" name="email" type="email" autocomplete="email" placeholder="you@company.com" /></label>
+              <p class="field-error" data-error-for="email" hidden></p>
+              <label class="field"><span class="field-label">Password</span>
+                <input class="input" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" /></label>
+              <p class="field-error" data-error-for="password" hidden></p>
+              <button type="submit" class="btn btn-primary btn-lg btn-block">Start 14-day trial</button>
+            </form>
+
+            <form id="signInForm" class="form-stack" novalidate hidden>
+              <p class="field-error" data-error-for="form" hidden></p>
+              <label class="field"><span class="field-label">Email</span>
+                <input class="input" name="email" type="email" autocomplete="email" placeholder="you@company.com" /></label>
+              <p class="field-error" data-error-for="email" hidden></p>
+              <label class="field"><span class="field-label">Password</span>
+                <input class="input" name="password" type="password" autocomplete="current-password" /></label>
+              <p class="field-error" data-error-for="password" hidden></p>
+              <button type="submit" class="btn btn-primary btn-lg btn-block">Sign in</button>
+            </form>
+          </div>
+
+          <div id="authExpired" class="auth-expired" hidden>
+            <span class="empty-icon"><i data-icon="clock"></i></span>
+            <h2 class="auth-title">Your trial has ended<span class="accent-dot">.</span></h2>
+            <p id="authExpiredDesc" class="card-desc"></p>
+            <button id="authSwitch" type="button" class="btn btn-outline btn-block">Sign in with another account</button>
+          </div>
+        </div>
+        <p class="auth-note">Trial build: accounts and data stay in this browser.</p>
+      </section>
+    </div>
+
+    <div class="shell" hidden>
+      <div class="ambient" aria-hidden="true"></div>
+
+      <aside id="rail" class="rail" aria-label="Main">
+        <div class="rail-brand" aria-hidden="true">VT</div>
+        <button id="railCapture" type="button" class="rail-action" aria-label="Take snapshot" title="Take snapshot">
+          <i data-icon="camera"></i>
+        </button>
+        <nav class="rail-nav">
+          <button type="button" class="rail-item" data-view="dashboard" title="Dashboard">
+            <i data-icon="dashboard"></i><span class="rail-label">Dashboard</span>
+          </button>
+          <button type="button" class="rail-item" data-view="tryon" title="Try on">
+            <i data-icon="shirt"></i><span class="rail-label">Try on</span>
+          </button>
+          <button type="button" class="rail-item" data-view="photobooth" title="Photobooth">
+            <i data-icon="aperture"></i><span class="rail-label">Photobooth</span>
+          </button>
+          <button type="button" class="rail-item" data-view="gallery" title="Gallery">
+            <i data-icon="images"></i><span class="rail-label">Gallery</span>
+            <span class="rail-badge" data-gallery-count hidden>0</span>
+          </button>
+          <button type="button" class="rail-item" data-view="sites" title="Locations">
+            <i data-icon="pin"></i><span class="rail-label">Locations</span>
+          </button>
+        </nav>
+        <button id="railToggle" type="button" class="rail-toggle" aria-label="Expand menu">
+          <i data-icon="expand" class="when-collapsed"></i>
+          <i data-icon="collapse" class="when-expanded"></i>
+          <span class="rail-label">Collapse menu</span>
+        </button>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <div class="topbar-title">
+            <p id="viewKicker" class="kicker">Virtual try-on</p>
+            <h1><span id="viewTitle">Try on</span><span class="accent-dot">.</span></h1>
+          </div>
+          <div class="topbar-actions">
+            <p class="status-row">
+              <span id="status" class="badge" data-kind="info"></span>
+              <button id="retry" type="button" class="btn btn-outline btn-sm" hidden>Retry</button>
+            </p>
+            <button id="handToggle" type="button" class="btn btn-outline hand-toggle" aria-pressed="false">
+              <i data-icon="hand"></i><span>Hand control</span>
+            </button>
+            <div id="modes" class="pill-tabs" aria-label="Rendering mode">
+              <button id="modeLocal" type="button" class="pill-tab is-active">On device</button>
+              <button id="modeAi" type="button" class="pill-tab"><i data-icon="sparkles"></i>Decart AI</button>
+            </div>
+            <button id="accountButton" type="button" class="account-pill" aria-label="Account">
+              <span id="accountTrial" class="account-trial"></span>
+              <span id="accountInitials" class="avatar"></span>
+            </button>
+          </div>
+        </header>
+
+        <main class="main">
+          <section id="dashboardView" class="dashboard" hidden>
+            <div class="dash-toolbar">
+              <p class="field-hint">Counts the captures saved on this device.</p>
+              <div id="dashPeriod" class="pill-tabs" role="group" aria-label="Period">
+                <button type="button" class="pill-tab" data-days="7">7 days</button>
+                <button type="button" class="pill-tab" data-days="30">30 days</button>
+              </div>
+            </div>
+
+            <div class="dash-hero">
+              <section class="hero-card">
+                <p id="dashPeriodLabel" class="kicker"></p>
+                <p id="dashTotal" class="hero-value">0</p>
+                <p id="dashDelta" class="hero-delta"></p>
+                <div id="dashChart"></div>
+              </section>
+              <section id="dashAttention" class="card attention-card" aria-live="polite"></section>
+            </div>
+
+            <div id="dashStats" class="stat-row stat-row--cards"></div>
+
+            <div class="dash-lists">
+              <section class="card">
+                <header class="card-head">
+                  <div>
+                    <h2 class="card-title">Top points</h2>
+                    <p class="card-desc">Captures per point in the chosen period.</p>
+                  </div>
+                </header>
+                <div id="dashPoints" class="card-body rank-list"></div>
+              </section>
+              <section class="card">
+                <header class="card-head">
+                  <div>
+                    <h2 class="card-title">By location</h2>
+                    <p class="card-desc">Every point in a location, added up.</p>
+                  </div>
+                </header>
+                <div id="dashLocations" class="card-body rank-list"></div>
+              </section>
+            </div>
+
+            <section class="card">
+              <header class="card-head">
+                <div>
+                  <h2 class="card-title">Recent captures</h2>
+                  <p class="card-desc">The latest snapshots and sheets, with the point that took them.</p>
+                </div>
+                <button id="dashOpenGallery" type="button" class="btn btn-outline btn-sm">Open gallery</button>
+              </header>
+              <div id="dashRecent" class="card-body recent-grid"></div>
+            </section>
+          </section>
+
+          <section id="stageView" class="stage-layout">
+            <div class="stage-card">
+              <div class="stage">
+                <video id="cam" autoplay muted playsinline></video>
+                <canvas id="overlay"></canvas>
+                <video id="remote" autoplay muted playsinline hidden></video>
+              </div>
+              <div id="boothHud" class="booth-hud" hidden>
+                <span id="boothShotLabel" class="hud-badge"></span>
+                <span id="boothDots" class="hud-dots"></span>
+              </div>
+              <div id="boothCountdown" class="booth-countdown" hidden></div>
+              <div id="boothFlash" class="booth-flash" aria-hidden="true"></div>
+              <p id="handHint" class="hand-hint" hidden>
+                <span>☝️ Move</span><span>🤏 Pinch to click</span><span>✌️ Hold to capture</span>
+              </p>
+              <div id="boothPreview" class="sheet-float" hidden>
+                <span class="sheet-float-label">Preview</span>
+              </div>
+            </div>
+
+            <div class="inspector">
+              <section class="card device-card">
+                <span class="tile tile--ink"><i data-icon="point"></i></span>
+                <div class="device-text">
+                  <p class="kicker">This device</p>
+                  <p id="deviceName" class="device-name">No point set</p>
+                  <p id="deviceMeta" class="card-desc">Captures are not linked to a point.</p>
+                </div>
+                <button id="deviceChange" type="button" class="btn btn-outline btn-sm">Set point</button>
+              </section>
+              <div id="tryonPanel" class="panel-stack">
+                <section class="card">
+                  <header class="card-head">
+                    <div>
+                      <h2 class="card-title">Wear</h2>
+                      <p class="card-desc">One item per category, worn together. Tap a worn item to take it off.</p>
+                    </div>
+                  </header>
+                  <div class="card-body">
+                    <nav id="tabs" class="pill-tabs pill-tabs--full" aria-label="Item category"></nav>
+                    <div id="strip" class="item-grid" aria-label="Items"></div>
+                    <button id="stripMore" type="button" class="btn btn-outline btn-sm btn-block" hidden></button>
+                    <label class="size">
+                      <span>Size</span>
+                      <input id="size" type="range" min="70" max="150" step="1" value="100" />
+                      <output id="sizeValue">100%</output>
+                    </label>
+                  </div>
+                  <footer class="card-foot">
+                    <label class="btn btn-outline">
+                      <i data-icon="upload"></i>Upload PNG
+                      <input id="upload" type="file" accept="image/png" hidden />
+                    </label>
+                    <button id="snap" type="button" class="btn btn-primary"><i data-icon="camera"></i>Snapshot</button>
+                  </footer>
+                </section>
+
+                <section id="aiPanel" class="card" hidden>
+                  <header class="card-head">
+                    <div>
+                      <h2 class="card-title">Decart AI</h2>
+                      <p class="card-desc">A hosted model repaints every frame with the garment worn.</p>
+                    </div>
+                  </header>
+                  <div class="card-body">
+                    <div class="field-row">
+                      <input
+                        id="apiKey"
+                        class="input"
+                        type="password"
+                        placeholder="Decart API key"
+                        autocomplete="off"
+                        spellcheck="false"
+                      />
+                      <button id="aiConnect" type="button" class="btn btn-secondary">Connect</button>
+                    </div>
+                    <p class="callout">
+                      <strong>Streams your camera.</strong> Decart bills per second of streaming, and this mode
+                      changes clothing only. The key stays in this tab and is dropped when you close it.
+                    </p>
+                  </div>
+                </section>
+
+                <p class="tip">Hold up ✌️ to start a 3 second snapshot countdown. Snapshots land in the gallery.</p>
+              </div>
+
+              <div id="boothPanel" class="panel-stack" hidden>
+                <section class="card booth-flow">
+                  <header class="card-head">
+                    <div>
+                      <h2 class="card-title">Photobooth</h2>
+                      <p id="boothStepHint" class="card-desc"></p>
+                    </div>
+                    <span id="boothStepCount" class="step-count"></span>
+                  </header>
+                  <div class="card-body">
+                    <nav id="boothSteps" class="stepper" aria-label="Photobooth steps">
+                      <button type="button" class="step" data-step="0"><span class="step-num">1</span><span class="step-label">Layout</span></button>
+                      <button type="button" class="step" data-step="1"><span class="step-num">2</span><span class="step-label">Background</span></button>
+                      <button type="button" class="step" data-step="2"><span class="step-num">3</span><span class="step-label">Stickers</span></button>
+                      <button type="button" class="step" data-step="3"><span class="step-num">4</span><span class="step-label">Print</span></button>
+                    </nav>
+
+                    <div class="step-panel" data-panel="0">
+                      <div id="boothLayouts" class="layout-grid">
+                        <button type="button" class="layout-tile is-active" data-layout="strip">
+                          <span class="layout-diagram layout-diagram--strip"><i></i><i></i><i></i><i></i></span>
+                          <span class="layout-name">Strip</span><span class="layout-meta">4 shots</span>
+                        </button>
+                        <button type="button" class="layout-tile" data-layout="grid">
+                          <span class="layout-diagram layout-diagram--grid"><i></i><i></i><i></i><i></i></span>
+                          <span class="layout-name">Grid</span><span class="layout-meta">4 shots</span>
+                        </button>
+                        <button type="button" class="layout-tile" data-layout="single">
+                          <span class="layout-diagram layout-diagram--single"><i></i></span>
+                          <span class="layout-name">Single</span><span class="layout-meta">1 shot</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="step-panel" data-panel="1" hidden>
+                      <div id="bgTabs" class="pill-tabs pill-tabs--full">
+                        <button type="button" class="pill-tab is-active" data-bg-tab="scenery">Scenery</button>
+                        <button type="button" class="pill-tab" data-bg-tab="studio">Studio</button>
+                      </div>
+                      <div id="sceneryGrid" class="bg-grid bg-grid--photos"></div>
+                      <div id="boothBackgrounds" class="bg-grid" hidden></div>
+                      <input id="bgUpload" type="file" accept="image/*" hidden />
+                      <p class="field-hint">Hover a backdrop to see it on the camera. Click to use it.</p>
+                    </div>
+
+                    <div class="step-panel" data-panel="2" hidden>
+                      <div id="boothStickers" class="sticker-palette"></div>
+                      <div class="field-head">
+                        <p class="field-hint">Drag them on the camera. Select one to resize or remove it.</p>
+                        <button id="stickerClear" type="button" class="btn btn-ghost btn-sm">Clear</button>
+                      </div>
+                    </div>
+
+                    <div class="step-panel" data-panel="3" hidden>
+                      <div class="field">
+                        <p class="kicker">Frame · <span id="boothFrameName" class="kicker-value">Paper</span></p>
+                        <div id="boothFrames" class="swatches"></div>
+                      </div>
+                      <div class="field">
+                        <p class="kicker">Timer</p>
+                        <div id="boothTimers" class="pill-tabs pill-tabs--full">
+                          <button type="button" class="pill-tab is-active" data-seconds="3">3s</button>
+                          <button type="button" class="pill-tab" data-seconds="5">5s</button>
+                          <button type="button" class="pill-tab" data-seconds="10">10s</button>
+                        </div>
+                      </div>
+                      <label class="field">
+                        <span class="kicker">Caption</span>
+                        <input id="boothCaption" class="input" type="text" maxlength="32" value="Virtual Try-On" />
+                      </label>
+                    </div>
+
+                    <div class="step-panel" data-panel="result" hidden>
+                      <div id="boothResult" class="booth-result"></div>
+                    </div>
+                  </div>
+
+                  <footer id="boothNav" class="card-foot">
+                    <button id="boothBack" type="button" class="btn btn-outline">Back</button>
+                    <button id="boothNext" type="button" class="btn btn-secondary">Continue</button>
+                    <button id="boothStart" type="button" class="btn btn-primary" hidden>
+                      <i data-icon="aperture"></i><span>Start photobooth</span>
+                    </button>
+                  </footer>
+                  <footer id="boothResultActions" class="card-foot" hidden>
+                    <button id="boothOpenGallery" type="button" class="btn btn-ghost"><i data-icon="images"></i>Gallery</button>
+                    <button id="boothAgain" type="button" class="btn btn-outline">New sheet</button>
+                    <button id="boothShare" type="button" class="btn btn-primary"><i data-icon="share"></i>Share</button>
+                  </footer>
+                  <p id="boothMeta" class="tip booth-meta"></p>
+                </section>
+              </div>
+            </div>
+          </section>
+
+          <section id="galleryView" class="gallery-page" hidden>
+            <div class="card page-card">
+              <header class="page-head">
+                <div>
+                  <h2 class="card-title">Captures</h2>
+                  <p id="galleryMeta" class="card-desc"></p>
+                </div>
+                <button id="galleryNewBooth" type="button" class="btn btn-primary">
+                  <i data-icon="aperture"></i>New photobooth
+                </button>
+              </header>
+              <div id="galleryGrid" class="gallery-grid"></div>
+            </div>
+          </section>
+
+          <section id="sitesView" class="sites-page" hidden>
+            <div class="card page-card">
+              <header class="page-head">
+                <div>
+                  <h2 class="card-title">Locations and points</h2>
+                  <p class="card-desc">A location is a store or venue. A point is one kiosk, mirror or booth inside it.</p>
+                </div>
+                <div class="page-actions">
+                  <button id="sitesAddPoint" type="button" class="btn btn-outline"><i data-icon="plus"></i>Add point</button>
+                  <button id="sitesAddLocation" type="button" class="btn btn-primary"><i data-icon="plus"></i>Add location</button>
+                </div>
+              </header>
+              <div id="sitesStats" class="stat-row"></div>
+              <div class="sites-toolbar">
+                <label class="search-pill">
+                  <i data-icon="search"></i>
+                  <input id="sitesSearch" type="search" placeholder="Search locations, cities, points or codes" autocomplete="off" />
+                </label>
+                <div id="sitesLayout" class="pill-tabs" role="group" aria-label="Layout">
+                  <button type="button" class="pill-tab" data-layout="cards" aria-label="Card view"><i data-icon="grid"></i><span>Cards</span></button>
+                  <button type="button" class="pill-tab" data-layout="table" aria-label="Table view"><i data-icon="table"></i><span>Table</span></button>
+                </div>
+              </div>
+              <div id="sitesList" class="sites-grid"></div>
+            </div>
+          </section>
+        </main>
+      </div>
+
+      <nav class="bottombar" aria-label="Main">
+        <button type="button" class="bar-item" data-view="dashboard" aria-label="Dashboard"><i data-icon="dashboard"></i></button>
+        <button type="button" class="bar-item" data-view="tryon" aria-label="Try on"><i data-icon="shirt"></i></button>
+        <button id="barCapture" type="button" class="bar-action" aria-label="Take snapshot"><i data-icon="camera"></i></button>
+        <button type="button" class="bar-item" data-view="photobooth" aria-label="Photobooth"><i data-icon="aperture"></i></button>
+        <button id="barMore" type="button" class="bar-item" aria-label="More: gallery and locations">
+          <i data-icon="more"></i><span class="rail-badge" data-gallery-count hidden>0</span>
+        </button>
+      </nav>
+
+      <div id="shareDialog" class="dialog-root" hidden>
+        <div class="dialog-backdrop" data-close></div>
+        <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+          <span class="sheet-handle" aria-hidden="true"></span>
+          <header class="dialog-head">
+            <div>
+              <h2 id="shareTitle" class="card-title">Share to social</h2>
+              <p class="card-desc">Sized for Instagram. Pick a format, then share or save the soft copy.</p>
+            </div>
+            <button type="button" class="btn btn-ghost btn-icon" data-close aria-label="Close"><i data-icon="close"></i></button>
+          </header>
+          <div class="dialog-body">
+            <div class="share-preview"><canvas id="sharePreview"></canvas></div>
+            <div class="share-controls">
+              <div class="field">
+                <p class="kicker">Format</p>
+                <div id="shareFormats" class="choice-grid">
+                  <button type="button" class="choice is-active" data-format="post"><span class="choice-title">Post</span><span class="choice-meta">4:5 · 1080 × 1350</span></button>
+                  <button type="button" class="choice" data-format="square"><span class="choice-title">Square</span><span class="choice-meta">1:1 · 1080 × 1080</span></button>
+                  <button type="button" class="choice" data-format="story"><span class="choice-title">Story</span><span class="choice-meta">9:16 · 1080 × 1920</span></button>
+                  <button type="button" class="choice" data-format="original"><span class="choice-title">Original</span><span class="choice-meta">As captured</span></button>
+                </div>
+              </div>
+              <div id="shareFillField" class="field">
+                <p class="kicker">Fill</p>
+                <div id="shareFills" class="pill-tabs pill-tabs--full">
+                  <button type="button" class="pill-tab is-active" data-fill="blur">Blur</button>
+                  <button type="button" class="pill-tab" data-fill="paper">Paper</button>
+                  <button type="button" class="pill-tab" data-fill="ink">Ink</button>
+                </div>
+              </div>
+              <p id="shareMeta" class="field-hint"></p>
+            </div>
+          </div>
+          <footer class="dialog-foot">
+            <button id="shareCopy" type="button" class="btn btn-ghost"><i data-icon="copy"></i><span>Copy</span></button>
+            <button id="shareSave" type="button" class="btn btn-outline"><i data-icon="download"></i>Save</button>
+            <button id="shareSend" type="button" class="btn btn-primary"><i data-icon="share"></i>Share</button>
+          </footer>
+        </section>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
