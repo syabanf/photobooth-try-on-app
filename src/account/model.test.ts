@@ -3,7 +3,7 @@ import { initials, suggestPointCode, trialDaysLeft, trialEnd, trialExpired, type
 
 const DAY = 86_400_000;
 const start = Date.UTC(2026, 8, 25, 9);
-const account: Account = { id: 'a', name: 'Rizky', email: 'r@x.io', business: 'Rupa', createdAt: start, trialEndsAt: trialEnd(start) };
+const account: Account = { id: 'a', business: 'Rupa', createdAt: start, trialEndsAt: trialEnd(start) };
 
 describe('trial clock', () => {
   it('counts the last partial day as a day left', () => {

@@ -23,7 +23,7 @@
           <p class="auth-lede">A camera, a browser and your catalog. Run it on kiosks, mirrors and photobooths across every store you manage.</p>
         </div>
         <ul class="auth-perks">
-          <li><span class="perk-icon"><i data-icon="clock"></i></span><span><strong>14 days free.</strong> No card needed.</span></li>
+          <li><span class="perk-icon"><i data-icon="clock"></i></span><span><strong>14 days free.</strong> No card, email or password.</span></li>
           <li><span class="perk-icon"><i data-icon="pin"></i></span><span><strong>Up to 3 locations</strong> and 10 points during the trial.</span></li>
           <li><span class="perk-icon"><i data-icon="aperture"></i></span><span><strong>Try-on and photobooth</strong> run on the device, with no install.</span></li>
         </ul>
@@ -31,42 +31,18 @@
 
       <section class="auth-panel">
         <div class="card auth-card">
-          <div id="authForms">
+          <div id="authAccess">
             <div class="auth-head">
-              <h2 id="authTitle" class="auth-title">Start your free trial<span class="accent-dot">.</span></h2>
-              <p id="authDesc" class="card-desc">Set up your stores and points in a few minutes.</p>
+              <h2 class="auth-title">Quick access<span class="accent-dot">.</span></h2>
+              <p id="authDesc" class="card-desc"></p>
             </div>
-            <div id="authTabs" class="pill-tabs pill-tabs--full">
-              <button type="button" class="pill-tab is-active" data-auth="trial">Start trial</button>
-              <button type="button" class="pill-tab" data-auth="signin">Sign in</button>
-            </div>
+            <p class="field-error" data-error-for="form" hidden></p>
+            <div id="workspaceList" class="pick-group" hidden></div>
 
-            <form id="trialForm" class="form-stack" novalidate>
-              <p class="field-error" data-error-for="form" hidden></p>
-              <label class="field"><span class="field-label">Your name</span>
-                <input class="input" name="name" autocomplete="name" placeholder="Rizky Pratama" /></label>
-              <p class="field-error" data-error-for="name" hidden></p>
-              <label class="field"><span class="field-label">Business</span>
-                <input class="input" name="business" autocomplete="organization" placeholder="Studio Rupa" /></label>
-              <p class="field-error" data-error-for="business" hidden></p>
-              <label class="field"><span class="field-label">Work email</span>
-                <input class="input" name="email" type="email" autocomplete="email" placeholder="you@company.com" /></label>
-              <p class="field-error" data-error-for="email" hidden></p>
-              <label class="field"><span class="field-label">Password</span>
-                <input class="input" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" /></label>
-              <p class="field-error" data-error-for="password" hidden></p>
-              <button type="submit" class="btn btn-primary btn-lg btn-block">Start 14-day trial</button>
-            </form>
-
-            <form id="signInForm" class="form-stack" novalidate hidden>
-              <p class="field-error" data-error-for="form" hidden></p>
-              <label class="field"><span class="field-label">Email</span>
-                <input class="input" name="email" type="email" autocomplete="email" placeholder="you@company.com" /></label>
-              <p class="field-error" data-error-for="email" hidden></p>
-              <label class="field"><span class="field-label">Password</span>
-                <input class="input" name="password" type="password" autocomplete="current-password" /></label>
-              <p class="field-error" data-error-for="password" hidden></p>
-              <button type="submit" class="btn btn-primary btn-lg btn-block">Sign in</button>
+            <form id="quickForm" class="form-stack" novalidate>
+              <label class="field"><span class="field-label">Business name (optional)</span>
+                <input class="input" name="business" autocomplete="organization" maxlength="60" placeholder="Studio Rupa" /></label>
+              <button type="submit" class="btn btn-primary btn-lg btn-block">Enter the app</button>
             </form>
           </div>
 
@@ -74,10 +50,10 @@
             <span class="empty-icon"><i data-icon="clock"></i></span>
             <h2 class="auth-title">Your trial has ended<span class="accent-dot">.</span></h2>
             <p id="authExpiredDesc" class="card-desc"></p>
-            <button id="authSwitch" type="button" class="btn btn-outline btn-block">Sign in with another account</button>
+            <button id="authSwitch" type="button" class="btn btn-outline btn-block">Use another workspace</button>
           </div>
         </div>
-        <p class="auth-note">Trial build: accounts and data stay in this browser.</p>
+        <p class="auth-note">Trial build: workspaces and data stay in this browser, open to anyone who uses it.</p>
       </section>
     </div>
 
@@ -132,7 +108,7 @@
               <button id="modeLocal" type="button" class="pill-tab is-active">On device</button>
               <button id="modeAi" type="button" class="pill-tab"><i data-icon="sparkles"></i>Decart AI</button>
             </div>
-            <button id="accountButton" type="button" class="account-pill" aria-label="Account">
+            <button id="accountButton" type="button" class="account-pill" aria-label="Workspace">
               <span id="accountTrial" class="account-trial"></span>
               <span id="accountInitials" class="avatar"></span>
             </button>
