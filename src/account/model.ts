@@ -1,9 +1,8 @@
 // Accounts, locations and points: the types every backend returns, plus the trial rules.
 
+/** A trial workspace, opened with one tap from the quick access page. */
 export interface Account {
   id: string;
-  name: string;
-  email: string;
   business: string;
   createdAt: number;
   trialEndsAt: number;
@@ -33,13 +32,6 @@ export interface Sites {
   points: Point[];
 }
 
-export interface TrialInput {
-  name: string;
-  business: string;
-  email: string;
-  password: string;
-}
-
 export type LocationInput = Pick<Location, 'name' | 'city' | 'address'> & { id?: string };
 export type PointInput = Pick<Point, 'locationId' | 'name' | 'code' | 'active'> & { id?: string };
 
@@ -56,7 +48,6 @@ export class AccountError extends Error {
 
 export const TRIAL_DAYS = 14;
 export const TRIAL_LIMITS = { locations: 3, points: 10 } as const;
-const MIN_PASSWORD = 8;
 const DAY_MS = 86_400_000;
 
 export function trialEnd(createdAt: number): number {
@@ -70,21 +61,6 @@ export function trialDaysLeft(account: Account, now: number): number {
 
 export function trialExpired(account: Account, now: number): boolean {
   return now >= account.trialEndsAt;
-}
-
-export function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
-
-export function checkTrialInput(input: TrialInput): void {
-  if (!input.name.trim()) throw new AccountError('Enter your name.', 'name');
-  if (!input.business.trim()) throw new AccountError('Enter your business name.', 'business');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(input.email))) {
-    throw new AccountError('Enter a valid email address.', 'email');
-  }
-  if (input.password.length < MIN_PASSWORD) {
-    throw new AccountError(`Use at least ${MIN_PASSWORD} characters.`, 'password');
-  }
 }
 
 /** "Grand Indonesia" with GRA-01 taken gives GRA-02. */

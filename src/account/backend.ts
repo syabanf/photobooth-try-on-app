@@ -1,12 +1,10 @@
 // The account backend. The app talks to the AccountBackend interface only; createLocalBackend is
 // the trial build's implementation and keeps everything in this browser. A server implementation
-// with the same methods replaces it for production, where passwords must never reach the client.
+// with the same methods replaces it for production, where the server decides who opens a workspace.
 
 import {
   AccountError,
   TRIAL_LIMITS,
-  checkTrialInput,
-  normalizeEmail,
   trialEnd,
   trialExpired,
   type Account,
@@ -15,14 +13,16 @@ import {
   type Point,
   type PointInput,
   type Sites,
-  type TrialInput,
 } from './model';
 
 export interface AccountBackend {
   /** The signed-in account, or null. */
   current(): Promise<Account | null>;
-  startTrial(input: TrialInput): Promise<Account>;
-  signIn(email: string, password: string): Promise<Account>;
+  /** Every workspace saved on this device, newest first. */
+  workspaces(): Promise<Account[]>;
+  /** Opens a new trial workspace and signs in to it. A blank name gets a numbered one. */
+  startTrial(business: string): Promise<Account>;
+  signIn(accountId: string): Promise<Account>;
   signOut(): Promise<void>;
   sites(): Promise<Sites>;
   saveLocation(input: LocationInput): Promise<Location>;
@@ -59,29 +59,12 @@ export function browserStore(): KeyValueStore {
   }
 }
 
-interface Credential {
-  account: Account;
-  salt: string;
-  hash: string;
-}
+/** Entries keep the `{ account }` shape of the earlier password build, so its workspaces still open. */
+type SavedAccounts = Record<string, { account: Account }>;
 
 const ACCOUNTS_KEY = 'vto:accounts';
 const SESSION_KEY = 'vto:session';
 const sitesKey = (accountId: string) => `vto:sites:${accountId}`;
-const PBKDF2_ROUNDS = 210_000;
-
-const toHex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-const fromHex = (hex: string) => new Uint8Array(hex.match(/../g)!.map((pair) => parseInt(pair, 16)));
-
-async function hashPassword(password: string, salt: Uint8Array): Promise<string> {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as BufferSource, iterations: PBKDF2_ROUNDS },
-    key,
-    256,
-  );
-  return toHex(new Uint8Array(bits));
-}
 
 function clean(value: string, field: string, label: string): string {
   const trimmed = value.trim();
@@ -95,11 +78,12 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
     return raw ? (JSON.parse(raw) as T) : fallback;
   };
   const write = (key: string, value: unknown) => store.setItem(key, JSON.stringify(value));
-  const credentials = () => read<Record<string, Credential>>(ACCOUNTS_KEY, {});
+  const saved = () => read<SavedAccounts>(ACCOUNTS_KEY, {});
+  const accounts = () => Object.values(saved()).map((entry) => entry.account);
 
   function sessionAccount(): Account | null {
     const id = store.getItem(SESSION_KEY);
-    return Object.values(credentials()).find((entry) => entry.account.id === id)?.account ?? null;
+    return accounts().find((account) => account.id === id) ?? null;
   }
 
   /** Every write goes through here: signed in, and still inside the trial. */
@@ -116,33 +100,30 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
       return sessionAccount();
     },
 
-    async startTrial(input) {
-      checkTrialInput(input);
-      const email = normalizeEmail(input.email);
-      const all = credentials();
-      if (all[email]) throw new AccountError('That email already has a trial. Sign in instead.', 'email');
+    async workspaces() {
+      return accounts().sort((a, b) => b.createdAt - a.createdAt);
+    },
+
+    async startTrial(business) {
+      const all = saved();
       const createdAt = now();
       const account: Account = {
         id: crypto.randomUUID(),
-        name: input.name.trim(),
-        business: input.business.trim(),
-        email,
+        business: business.trim() || `Store ${Object.keys(all).length + 1}`,
         createdAt,
         trialEndsAt: trialEnd(createdAt),
       };
-      const salt = crypto.getRandomValues(new Uint8Array(16));
-      all[email] = { account, salt: toHex(salt), hash: await hashPassword(input.password, salt) };
+      all[account.id] = { account };
       write(ACCOUNTS_KEY, all);
       store.setItem(SESSION_KEY, account.id);
       return account;
     },
 
-    async signIn(email, password) {
-      const entry = credentials()[normalizeEmail(email)];
-      const hash = entry ? await hashPassword(password, fromHex(entry.salt)) : null;
-      if (!entry || hash !== entry.hash) throw new AccountError('Email or password is wrong.', 'password');
-      store.setItem(SESSION_KEY, entry.account.id);
-      return entry.account;
+    async signIn(accountId) {
+      const account = accounts().find((entry) => entry.id === accountId);
+      if (!account) throw new AccountError('That workspace is no longer on this device.');
+      store.setItem(SESSION_KEY, account.id);
+      return account;
     },
 
     async signOut() {

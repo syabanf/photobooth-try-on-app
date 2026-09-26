@@ -22,11 +22,11 @@ Other scripts:
 
 Add `?debug=1` to the URL to draw the landmark indices the anchors use. The Size slider trims the worn item of the active category between 70% and 150%.
 
-## Sign-in and trial
+## Quick access and trial
 
-The app opens on a sign-in page. **Start trial** takes a name, business, work email and a password of 8 or more characters, then opens the app with a 14-day trial that covers up to 3 locations and 10 points. **Sign in** returns to an existing trial. The camera and the tracking models only start after sign-in. The avatar pill in the header shows the days left and opens the account sheet with Sign out. Once the trial ends, sign-in shows a "trial has ended" card instead of the app, and the backend refuses every change while still returning the saved data.
+The app opens on a quick access page with no email or password. **Enter the app** opens a new 14-day trial workspace at once, covering up to 3 locations and 10 points. The business name is optional; left blank, the workspace is called Store 1, Store 2 and so on. Workspaces already saved in this browser show above the form with their days left, and one tap on a tile opens that workspace again. The camera and the tracking models only start after entry. The avatar pill in the header shows the days left and opens the workspace sheet, where **Switch workspace** returns to the quick access page. Opening a workspace whose trial has ended shows a "trial has ended" card instead of the app, and the backend refuses every change while still returning the saved data.
 
-`src/account/backend.ts` defines `AccountBackend`, the one interface the app uses for accounts, locations and points. The trial build ships `createLocalBackend`, which keeps everything in this browser's localStorage and stores each password as a PBKDF2-SHA-256 hash with its own salt. That is a demo backend: anyone with the device can read or edit the data, and nothing syncs between devices. For production, implement the same interface against a server that owns the accounts and issues sessions, and swap it in at `createLocalBackend(browserStore())` in `src/main.ts`.
+`src/account/backend.ts` defines `AccountBackend`, the one interface the app uses for workspaces, locations and points. The trial build ships `createLocalBackend`, which keeps everything in this browser's localStorage. Anyone who uses the browser can open any workspace saved in it, and nothing syncs between devices. Workspaces created by the earlier email and password build still appear and open, since their stored entries keep the same `{ account }` shape. For production, implement the same interface against a server that owns the accounts and issues sessions, and swap it in at `createLocalBackend(browserStore())` in `src/main.ts`.
 
 ## Screens
 
