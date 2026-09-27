@@ -2,16 +2,22 @@
 // flash, progress and sheet preview drawn over the camera.
 
 import { SCENERY, STUDIO_BACKGROUNDS, imageBackground, loadBackground, paintedBackdrop, type Background } from './backgrounds';
+import { readStoredKey, storeKey } from './decart';
 import { icon } from './icons';
 import { FRAMES, shotsFor, type BoothFrame, type BoothLayout } from './photobooth';
 import { STICKERS, type StickerDef } from './stickers';
 import { segmented } from './ui';
+
+/** Swap puts the backdrop behind you live on this device; AI has Decart redraw each shot in it. */
+export type BoothBlend = 'swap' | 'ai';
 
 export interface BoothSettings {
   layout: BoothLayout;
   frame: BoothFrame;
   seconds: number;
   caption: string;
+  blend: BoothBlend;
+  apiKey: string;
 }
 
 export interface BoothPanelHandlers {
@@ -36,6 +42,8 @@ export interface BoothPanel {
   /** The sheet as it would print right now, shown on the camera; null hides it. */
   showPreview(sheet: HTMLCanvasElement | null): void;
   progress(done: number, total: number): void;
+  /** A line on the camera while the sheet is still being made, such as the AI blend. */
+  working(label: string): void;
   countdown(seconds: number | null): void;
   flash(): void;
   hideHud(): void;
@@ -45,7 +53,7 @@ type Step = 0 | 1 | 2 | 3 | 'result';
 
 const STEPS = [
   { hint: 'Pick how the shots sit on the sheet.' },
-  { hint: 'Swap the room behind you, or keep it.' },
+  { hint: 'Swap the room behind you, or have AI blend you into the scene.' },
   { hint: 'Add stickers, then drag them into place on the camera.' },
   { hint: 'Choose the frame, timer and caption, then start.' },
 ] as const;
@@ -75,7 +83,14 @@ export function mountBoothPanel(handlers: BoothPanelHandlers): BoothPanel {
   const previewCanvas = document.createElement('canvas');
   preview.append(previewCanvas);
 
-  const settings: BoothSettings = { layout: 'strip', frame: FRAMES[0], seconds: 3, caption: 'Virtual Try-On' };
+  const settings: BoothSettings = {
+    layout: 'strip',
+    frame: FRAMES[0],
+    seconds: 3,
+    caption: 'Virtual Try-On',
+    blend: 'swap',
+    apiKey: '',
+  };
   let step: Step = 0;
   let running = false;
   let latest: { blob: Blob; url: string } | null = null;
@@ -102,7 +117,8 @@ export function mountBoothPanel(handlers: BoothPanelHandlers): BoothPanel {
   function describeRun(): void {
     const shots = shotsFor(settings.layout);
     const seconds = Math.round(shots * (settings.seconds + 0.7));
-    meta.textContent = `${shots} ${shots === 1 ? 'shot' : 'shots'} · about ${seconds} s · or hold up ✌️ to start hands-free`;
+    const blend = settings.blend === 'ai' ? ' plus the AI blend' : '';
+    meta.textContent = `${shots} ${shots === 1 ? 'shot' : 'shots'} · about ${seconds} s${blend} · or hold up ✌️ to start hands-free`;
   }
 
   function changed(): void {
@@ -138,6 +154,19 @@ export function mountBoothPanel(handlers: BoothPanelHandlers): BoothPanel {
     settings.frame = FRAMES.find((f) => f.id === b.dataset.frame) ?? FRAMES[0];
     $<HTMLElement>('#boothFrameName').textContent = settings.frame.label;
     changed();
+  });
+  const aiBlend = $<HTMLElement>('#aiBlend');
+  const apiKey = $<HTMLInputElement>('#boothApiKey');
+  segmented($('#bgModes'), (b) => {
+    settings.blend = b.dataset.blend as BoothBlend;
+    aiBlend.hidden = settings.blend !== 'ai';
+    // Try on's Decart field may have stored a key since this one was last filled.
+    if (settings.blend === 'ai' && !apiKey.value) apiKey.value = settings.apiKey = readStoredKey();
+    changed();
+  });
+  apiKey.addEventListener('input', () => {
+    settings.apiKey = apiKey.value.trim();
+    storeKey(settings.apiKey);
   });
   $<HTMLInputElement>('#boothCaption').addEventListener('input', (event) => {
     settings.caption = (event.target as HTMLInputElement).value;
@@ -203,6 +232,10 @@ export function mountBoothPanel(handlers: BoothPanelHandlers): BoothPanel {
           return dot;
         }),
       );
+    },
+    working(label) {
+      hud.hidden = false;
+      shotLabel.textContent = label;
     },
     countdown(seconds) {
       countdownEl.hidden = seconds === null;

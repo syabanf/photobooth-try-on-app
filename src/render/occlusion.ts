@@ -3,6 +3,9 @@
 import type { Vec } from '../mls';
 import { SEGMENT, type SegmentMask } from '../tracking/segmenter';
 
+/** How far below the shoulder line, in shoulder spans, the collar still covers skin and jewellery. */
+const COLLAR_DEPTH = 0.3;
+
 export function pointInQuad(p: Vec, quad: readonly Vec[]): boolean {
   let inside = false;
   for (let i = 0, j = quad.length - 1; i < quad.length; j = i++) {
@@ -17,9 +20,11 @@ export function pointInQuad(p: Vec, quad: readonly Vec[]): boolean {
 
 /**
  * Fills `target` with the silhouette the garment is allowed to occupy: the person, minus whatever
- * passes in front of it. Hair, face and accessories always pass in front, and so does bare skin
- * that crosses the torso, which is how a hand raised to the chest covers the shirt. Skin outside
- * the torso stays available, so sleeves keep wrapping the arms they are drawn on.
+ * passes in front of it. Hair and face always pass in front, and so do accessories and bare skin
+ * that cross the torso, which is how a hand raised to the chest covers the shirt. Two exceptions:
+ * skin outside the torso stays available, so sleeves keep wrapping the arms they are drawn on, and
+ * the neck and upper chest stay under the collar, so a neckline or a necklace in the camera does
+ * not punch a hole in the garment.
  *
  * Keeping the garment inside the body outline is what stops it spilling onto the room behind, and
  * it is the difference between a garment that looks worn and one that looks pasted on.
@@ -39,6 +44,15 @@ export function buildGarmentMask(
   const frameX = frame.width / target.width;
   const frameY = frame.height / target.height;
 
+  // Depth below the shoulder line, in shoulder spans, measured toward the hips.
+  const [shoulderL, shoulderR, , hipL] = torso;
+  const ax = shoulderR.x - shoulderL.x;
+  const ay = shoulderR.y - shoulderL.y;
+  const span = ax * ax + ay * ay || 1;
+  const hipSide = Math.sign(ax * (hipL.y - shoulderL.y) - ay * (hipL.x - shoulderL.x)) || 1;
+  const depth = (p: Vec) => (hipSide * (ax * (p.y - shoulderL.y) - ay * (p.x - shoulderL.x))) / span;
+  const underCollar = (p: Vec) => pointInQuad(p, torso) && depth(p) < COLLAR_DEPTH;
+
   for (let y = 0; y < target.height; y++) {
     const maskY = Math.min(mask.height - 1, Math.floor(y * stepY));
     const row = maskY * mask.width;
@@ -46,10 +60,13 @@ export function buildGarmentMask(
       const maskX = Math.min(mask.width - 1, Math.floor(x * stepX));
       const category = mask.data[row + maskX];
       let keep = category !== SEGMENT.BACKGROUND;
-      if (keep && (category === SEGMENT.HAIR || category === SEGMENT.FACE_SKIN || category === SEGMENT.ACCESSORIES)) {
+      if (category === SEGMENT.HAIR || category === SEGMENT.FACE_SKIN) {
         keep = false;
-      } else if (keep && category === SEGMENT.BODY_SKIN) {
-        keep = !pointInQuad({ x: (x + 0.5) * frameX, y: (y + 0.5) * frameY }, torso);
+      } else if (category === SEGMENT.ACCESSORIES) {
+        keep = underCollar({ x: (x + 0.5) * frameX, y: (y + 0.5) * frameY });
+      } else if (category === SEGMENT.BODY_SKIN) {
+        const p = { x: (x + 0.5) * frameX, y: (y + 0.5) * frameY };
+        keep = !pointInQuad(p, torso) || underCollar(p);
       }
       pixels[(y * target.width + x) * 4 + 3] = keep ? 255 : 0;
     }

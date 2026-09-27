@@ -1,5 +1,6 @@
 // Photobooth backdrops: scenery photos, a blur of the room, painted studio sweeps, or a photo of your own.
 
+import { coverCrop } from './fit';
 import { token } from './theme';
 
 export type BackgroundKind = 'none' | 'blur' | 'paint' | 'image';
@@ -82,7 +83,7 @@ export const NO_BACKGROUND = STUDIO_BACKGROUNDS[0];
 const COMMONS = 'https://thumb.wikimedia.org/wikipedia/commons/thumb/';
 
 /** A Wikimedia Commons file at one of the widths Commons serves. */
-function commons(path: string, width: number): string {
+export function commons(path: string, width: number): string {
   return `${COMMONS}${path}/${width}px-${path.split('/').pop()}`;
 }
 
@@ -142,6 +143,15 @@ export function paintedBackdrop(background: Background, width: number, height: n
     painted.set(key, canvas);
   }
   return canvas;
+}
+
+/** Draws a photo or painted backdrop so it covers width × height, cropping what spills over. */
+export function drawBackdrop(ctx: CanvasRenderingContext2D, background: Background, width: number, height: number): void {
+  const source = background.kind === 'image' && background.image ? background.image : paintedBackdrop(background, width, height);
+  const sourceWidth = source instanceof HTMLImageElement ? source.naturalWidth : source.width;
+  const sourceHeight = source instanceof HTMLImageElement ? source.naturalHeight : source.height;
+  const crop = coverCrop(sourceWidth, sourceHeight, height / width);
+  ctx.drawImage(source, crop.x, crop.y, crop.w, crop.h, 0, 0, width, height);
 }
 
 export function imageBackground(image: HTMLImageElement): Background {

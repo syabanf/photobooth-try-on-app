@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  FACE,
-  glassesAnchor,
-  hatAnchor,
-  itemRect,
-  lineAnchor,
-  smoothAnchor,
-  type LandmarkLike,
-} from './anchors';
+import { FACE, FACE_OVAL, faceOutline, glassesFrame, hatFrame, itemRect, packFrame, unpackFrame, type LandmarkLike } from './anchors';
 
 function landmarks(points: Record<number, LandmarkLike>, size = 478): LandmarkLike[] {
   const out: LandmarkLike[] = Array.from({ length: size }, () => ({ x: 0, y: 0 }));
@@ -15,88 +7,102 @@ function landmarks(points: Record<number, LandmarkLike>, size = 478): LandmarkLi
   return out;
 }
 
-describe('lineAnchor', () => {
-  it('is level for horizontal points', () => {
-    const a = lineAnchor({ x: 0, y: 10 }, { x: 100, y: 10 });
-    expect(a.cx).toBe(50);
-    expect(a.cy).toBe(10);
-    expect(a.angle).toBeCloseTo(0);
-    expect(a.width).toBe(100);
+/** A head facing the camera: eyes level, chin under the forehead. */
+const frontal = {
+  [FACE.EYE_L]: { x: 0.4, y: 0.5 },
+  [FACE.EYE_R]: { x: 0.6, y: 0.5 },
+  [FACE.FOREHEAD_TOP]: { x: 0.5, y: 0.3 },
+  [FACE.CHIN]: { x: 0.5, y: 0.8 },
+  [FACE.SIDE_L]: { x: 0.3, y: 0.55 },
+  [FACE.SIDE_R]: { x: 0.7, y: 0.55 },
+};
+
+describe('glassesFrame', () => {
+  it('sits between the eyes with unit axes when the head faces the camera', () => {
+    const f = glassesFrame(landmarks(frontal), 1000, 1000);
+    expect(f.origin).toEqual({ x: 500, y: 500 });
+    expect(f.right.x).toBeCloseTo(1);
+    expect(f.right.y).toBeCloseTo(0);
+    expect(f.down.x).toBeCloseTo(0);
+    expect(f.down.y).toBeCloseTo(1);
+    expect(f.width).toBeCloseTo(200);
   });
 
-  it('reports a 30 degree tilt', () => {
-    const a = lineAnchor({ x: 0, y: 0 }, { x: Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) });
-    expect(a.angle).toBeCloseTo(Math.PI / 6);
-    expect(a.width).toBeCloseTo(1);
+  it('shortens the right axis but not the width when the head turns', () => {
+    // One eye corner sits further from the camera: the eye line now has depth.
+    const turned = landmarks({ ...frontal, [FACE.EYE_R]: { x: 0.56, y: 0.5, z: 0.12 } });
+    const f = glassesFrame(turned, 1000, 1000);
+    expect(f.right.x).toBeCloseTo(0.8);
+    expect(f.down.y).toBeCloseTo(1);
+    expect(f.width).toBeCloseTo(200);
+  });
+
+  it('rotates both axes with a tilted head', () => {
+    const angle = Math.PI / 6;
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    const tilted = landmarks({
+      ...frontal,
+      [FACE.EYE_L]: { x: 0.5 - 0.1 * c, y: 0.5 - 0.1 * s },
+      [FACE.EYE_R]: { x: 0.5 + 0.1 * c, y: 0.5 + 0.1 * s },
+      [FACE.FOREHEAD_TOP]: { x: 0.5 + 0.2 * s, y: 0.5 - 0.2 * c },
+      [FACE.CHIN]: { x: 0.5 - 0.3 * s, y: 0.5 + 0.3 * c },
+    });
+    const f = glassesFrame(tilted, 1000, 1000);
+    expect(f.right.x).toBeCloseTo(c);
+    expect(f.right.y).toBeCloseTo(s);
+    expect(f.down.x).toBeCloseTo(-s);
+    expect(f.down.y).toBeCloseTo(c);
+  });
+
+  it('keeps down square to right when the chin is off centre', () => {
+    const f = glassesFrame(landmarks({ ...frontal, [FACE.CHIN]: { x: 0.6, y: 0.8 } }), 1000, 1000);
+    expect(f.right.x * f.down.x + f.right.y * f.down.y).toBeCloseTo(0);
   });
 });
 
-describe('glassesAnchor', () => {
-  it('scales width with landmark distance', () => {
-    const near = glassesAnchor(landmarks({ [FACE.EYE_L]: { x: 0.4, y: 0.5 }, [FACE.EYE_R]: { x: 0.6, y: 0.5 } }), 1000, 1000);
-    const far = glassesAnchor(landmarks({ [FACE.EYE_L]: { x: 0.45, y: 0.5 }, [FACE.EYE_R]: { x: 0.55, y: 0.5 } }), 1000, 1000);
-    expect(near.width).toBeCloseTo(far.width * 2);
+describe('hatFrame', () => {
+  it('starts on the forehead and measures the head at the sides', () => {
+    const f = hatFrame(landmarks(frontal), 100, 200);
+    expect(f.origin).toEqual({ x: 50, y: 60 });
+    expect(f.width).toBeCloseTo(40);
+    expect(f.right.x).toBeCloseTo(1);
   });
 });
 
-describe('hatAnchor', () => {
-  it('centers on the forehead and takes width from the head sides', () => {
-    const a = hatAnchor(
-      landmarks({
-        [FACE.EYE_L]: { x: 0.4, y: 0.5 },
-        [FACE.EYE_R]: { x: 0.6, y: 0.5 },
-        [FACE.FOREHEAD_TOP]: { x: 0.5, y: 0.3 },
-        [FACE.SIDE_L]: { x: 0.3, y: 0.5 },
-        [FACE.SIDE_R]: { x: 0.7, y: 0.5 },
-      }),
-      100,
-      200,
-    );
-    expect(a.cx).toBeCloseTo(50);
-    expect(a.cy).toBeCloseTo(60);
-    expect(a.width).toBeCloseTo(40);
-    expect(a.angle).toBeCloseTo(0);
+describe('faceOutline', () => {
+  it('follows the oval landmarks in order', () => {
+    const lm = landmarks({ [FACE_OVAL[0]]: { x: 0.5, y: 0.1 }, [FACE_OVAL[18]]: { x: 0.5, y: 0.9 } });
+    const outline = faceOutline(lm, 100, 100);
+    expect(outline).toHaveLength(FACE_OVAL.length);
+    expect(outline[0]).toEqual({ x: 50, y: 10 });
+    expect(outline[18]).toEqual({ x: 50, y: 90 });
   });
 });
 
-describe('smoothAnchor', () => {
-  const target = { cx: 10, cy: 20, angle: 0.5, width: 30 };
-
-  it('returns the sample when there is no history', () => {
-    expect(smoothAnchor(null, target, 0.35)).toEqual(target);
-  });
-
-  it('converges to a constant input', () => {
-    let s = smoothAnchor(null, { cx: 0, cy: 0, angle: 0, width: 0 }, 0.35);
-    for (let i = 0; i < 60; i++) s = smoothAnchor(s, target, 0.35);
-    expect(s.cx).toBeCloseTo(10, 3);
-    expect(s.angle).toBeCloseTo(0.5, 3);
-  });
-
-  it('crosses the +/- pi boundary the short way', () => {
-    const prev = { cx: 0, cy: 0, angle: Math.PI - 0.1, width: 1 };
-    const next = { ...prev, angle: -Math.PI + 0.1 };
-    const s = smoothAnchor(prev, next, 0.5);
-    expect(s.angle).toBeCloseTo(Math.PI);
+describe('packFrame', () => {
+  it('round trips through a flat list', () => {
+    const f = glassesFrame(landmarks(frontal), 640, 480);
+    expect(unpackFrame(packFrame(f))).toEqual(f);
   });
 });
 
 describe('itemRect', () => {
-  const anchor = { cx: 0, cy: 0, angle: 0, width: 100 };
+  const frame = { width: 100 };
   const img = { width: 200, height: 100 };
 
-  it('centers on the anchor with pivotY 0.5', () => {
-    const r = itemRect(anchor, { scale: 1.5, offsetX: 0, offsetY: 0, pivotY: 0.5 }, img);
+  it('centers on the origin with pivotY 0.5', () => {
+    const r = itemRect(frame, { scale: 1.5, offsetX: 0, offsetY: 0, pivotY: 0.5 }, img);
     expect(r).toEqual({ x: -75, y: -37.5, w: 150, h: 75 });
   });
 
-  it('hangs the bottom edge on the anchor with pivotY 1', () => {
-    const r = itemRect(anchor, { scale: 1, offsetX: 0, offsetY: 0, pivotY: 1 }, img);
+  it('hangs the bottom edge on the origin with pivotY 1', () => {
+    const r = itemRect(frame, { scale: 1, offsetX: 0, offsetY: 0, pivotY: 1 }, img);
     expect(r.y).toBe(-r.h);
   });
 
-  it('applies offsets in anchor-width units', () => {
-    const r = itemRect(anchor, { scale: 1, offsetX: 0.1, offsetY: -0.05, pivotY: 0 }, img);
+  it('applies offsets in frame-width units', () => {
+    const r = itemRect(frame, { scale: 1, offsetX: 0.1, offsetY: -0.05, pivotY: 0 }, img);
     expect(r.x).toBe(-50 + 10);
     expect(r.y).toBe(-5);
   });

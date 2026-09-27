@@ -1,8 +1,7 @@
 // Replaces the room behind the wearer. The backdrop is drawn over the video with a hole where the
 // person is, so the live camera shows through that hole.
 
-import { paintedBackdrop, type Background } from '../backgrounds';
-import { coverCrop } from '../fit';
+import { drawBackdrop, type Background } from '../backgrounds';
 import type { SegmentMask } from '../tracking/segmenter';
 import { buildBackgroundMask } from './occlusion';
 import { sizeCanvas } from './overlay';
@@ -46,14 +45,10 @@ export class BackgroundLayer {
       ctx.drawImage(this.small, 0, 0, width, height);
     } else {
       // The stage mirrors the canvas, so flip the backdrop here to have it read the right way round.
-      const source = background.kind === 'image' && background.image ? background.image : paintedBackdrop(background, width, height);
-      const sourceWidth = source instanceof HTMLImageElement ? source.naturalWidth : source.width;
-      const sourceHeight = source instanceof HTMLImageElement ? source.naturalHeight : source.height;
-      const crop = coverCrop(sourceWidth, sourceHeight, height / width);
       ctx.save();
       ctx.translate(width, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(source, crop.x, crop.y, crop.w, crop.h, 0, 0, width, height);
+      drawBackdrop(ctx, background, width, height);
       ctx.restore();
     }
 

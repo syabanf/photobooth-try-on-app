@@ -1,4 +1,4 @@
-import { CATEGORY_LABELS, type CatalogItem, type Category } from './catalog';
+import { CATEGORY_LABELS, loadImage, type CatalogItem, type Category } from './catalog';
 import { openDialog } from './dialogs';
 import { hydrateIcons, icon, type IconName } from './icons';
 
@@ -59,6 +59,26 @@ const VIEWS: Record<View, { kicker: string; title: string; capture: string }> = 
 
 /** Items shown before "Show all", so the grid stays short on a phone. */
 const STRIP_PAGE = 6;
+const TILE_SIZE = 160;
+
+const tilePictures = new Map<string, Promise<string>>();
+
+/** A small copy of the prepared item, so a product photo loses its backdrop on the tile too. */
+function tilePicture(src: string): Promise<string> {
+  let pending = tilePictures.get(src);
+  if (!pending) {
+    pending = loadImage(src).then(({ source, width, height }) => {
+      const scale = TILE_SIZE / Math.max(width, height);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(width * scale);
+      canvas.height = Math.round(height * scale);
+      canvas.getContext('2d')!.drawImage(source, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL();
+    });
+    tilePictures.set(src, pending);
+  }
+  return pending;
+}
 const RAIL_KEY = 'rail-expanded';
 
 /** A per-device preference. Storage can be refused, and then the setting is forgotten on reload. */
@@ -127,10 +147,14 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
         button.type = 'button';
         button.className = 'item';
         button.classList.toggle('is-selected', item.id === stripSelected);
-        button.title = item.name;
+        button.title = item.credit ? `${item.name}. ${item.credit}` : item.name;
         const img = document.createElement('img');
+        // Same CORS mode as loadImage, so both share one download.
+        img.crossOrigin = 'anonymous';
         img.src = item.src;
         img.alt = '';
+        // A photo that cannot be read keeps its original picture.
+        tilePicture(item.src).then((url) => (img.src = url), () => {});
         const label = document.createElement('span');
         label.className = 'item-name';
         label.textContent = item.name;

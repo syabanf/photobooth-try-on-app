@@ -1,38 +1,41 @@
 import './style.css';
 import type { FaceLandmarker, GestureRecognizer, ImageSegmenter, NormalizedLandmark, PoseLandmarker } from '@mediapipe/tasks-vision';
-import { glassesAnchor, hatAnchor, itemRect, smoothAnchor, type Anchor } from './anchors';
+import { faceOutline, glassesFrame, hatFrame, itemRect, packFrame, unpackFrame, type HeadFrame } from './anchors';
 import { CAMERA_MESSAGES, classifyCameraError, startCamera } from './camera';
 import { CaptureTrigger, type TriggerState } from './capture-trigger';
 import { DEFAULT_ITEMS, createUploadItem, loadImage, placementOf, type CatalogItem, type Category, type ItemImage } from './catalog';
 import { DEBUG, drawLandmarkDots } from './debug';
-import { NOMINAL_SHAPE, garmentControls, readBody, smoothControls, torsoQuad } from './garment';
-import { mlsSimilarity, type ControlPair } from './mls';
+import { CONTROL, NOMINAL_SHAPE, garmentControls, readBody, torsoQuad } from './garment';
+import { OneEuroFilter } from './filter';
+import { mlsSimilarity, type ControlPair, type Vec } from './mls';
 import { GarmentLayer } from './render/garment-layer';
-import { Overlay, canvasToBlob, captureFrame } from './render/overlay';
+import { Overlay, canvasToBlob, captureFrame, type ItemShadow } from './render/overlay';
 import { detectFace, getFaceLandmarker } from './tracking/face';
 import { NO_HAND, getGestureRecognizer, readHand } from './tracking/gesture';
 import { HandCursor } from './hand-cursor';
 import { detectPose, getPoseLandmarker } from './tracking/pose';
 import { getSegmenter, segmentForVideo, type SegmentMask } from './tracking/segmenter';
 import { nextTimestamp } from './tracking/vision';
-import { loadStoreCatalog } from './store-catalog';
+import { COMMONS_HATS, loadStoreCatalog } from './store-catalog';
 import { CAMERA_VIEWS, mountUi, type Mode, type StatusKind, type View } from './ui';
 import { mountBoothPanel } from './booth-panel';
-import { NO_BACKGROUND, type Background } from './backgrounds';
+import { NO_BACKGROUND, drawBackdrop, type Background } from './backgrounds';
 import { BackgroundLayer } from './render/background-layer';
-import { StickerLayer, drawStickers } from './stickers';
+import { StickerLayer, drawStickers, type PlacedSticker } from './stickers';
+import { coverCrop } from './fit';
 import { countByPoint, saveShot } from './gallery';
 import { mountGalleryView } from './gallery-view';
 import { mountShareDialog } from './share-dialog';
 import { composeBooth, runBoothSession, shotsFor } from './photobooth';
-import { connect as connectDecart, readStoredKey, storeKey, wearGarment } from './decart';
+import { blendIntoScene, connect as connectDecart, readStoredKey, storeKey, wearGarment } from './decart';
 import type { RealTimeClient } from '@decartai/sdk';
 import { browserStore, createLocalBackend } from './account/backend';
 import { mountAccountButton, signedIn } from './auth-screen';
 import { mountSitesView, type SitesView } from './sites-view';
 import { mountDashboard, type DashboardView } from './dashboard-view';
 
-const SMOOTHING = 0.35;
+/** One Euro settings for landmarks in pixels: steady while the wearer holds still, quick to follow a turn. */
+const TRACK_FILTER = { minCutoff: 1.2, beta: 0.01 };
 const LOST_FRAME_GRACE = 8;
 /** Frames between segmentation passes. The body silhouette drifts slowly next to the landmarks. */
 const SEGMENT_EVERY = 2;
@@ -46,10 +49,20 @@ type RigidCategory = 'glasses' | 'hat';
 type Detector = 'face' | 'pose';
 
 const DETECTOR_OF: Record<Category, Detector> = { glasses: 'face', hat: 'face', clothing: 'pose' };
-const ANCHOR_OF: Record<RigidCategory, (lm: NormalizedLandmark[], w: number, h: number) => Anchor> = {
-  glasses: glassesAnchor,
-  hat: hatAnchor,
+const FRAME_OF: Record<RigidCategory, (lm: NormalizedLandmark[], w: number, h: number) => HeadFrame> = {
+  glasses: glassesFrame,
+  hat: hatFrame,
 };
+/** The shadow each item casts on the face, in frame widths: a brim falls further than a pair of frames. */
+const SHADOW_OF: Record<RigidCategory, ItemShadow> = {
+  glasses: { drop: 0.03, blur: 0.02, alpha: 0.25 },
+  hat: { drop: 0.06, blur: 0.05, alpha: 0.35 },
+};
+const frameFilters: Record<RigidCategory, OneEuroFilter> = {
+  glasses: new OneEuroFilter(TRACK_FILTER),
+  hat: new OneEuroFilter(TRACK_FILTER),
+};
+const garmentFilter = new OneEuroFilter(TRACK_FILTER);
 
 const video = document.querySelector<HTMLVideoElement>('#cam')!;
 const remoteVideo = document.querySelector<HTMLVideoElement>('#remote')!;
@@ -65,11 +78,13 @@ const boothTrigger = new CaptureTrigger({ gestures: ['Victory'], holdFrames: 8, 
 
 const state = {
   activeTab: 'glasses' as Category,
-  items: [...DEFAULT_ITEMS],
+  items: [...COMMONS_HATS, ...DEFAULT_ITEMS],
   worn: { glasses: null, hat: null, clothing: null } as Record<Category, CatalogItem | null>,
   images: { glasses: null, hat: null, clothing: null } as Record<Category, ItemImage | null>,
   /** Rigid placement for face items; clothing uses the garment mesh instead. */
-  smoothed: { glasses: null, hat: null } as Record<RigidCategory, Anchor | null>,
+  smoothed: { glasses: null, hat: null } as Record<RigidCategory, HeadFrame | null>,
+  /** The face oval on screen, which keeps an item's shadow off the room behind the head. */
+  faceOutline: null as Vec[] | null,
   garment: null as ControlPair[] | null,
   /** Live size trim per category, so one catalog suits different builds and camera distances. */
   size: { glasses: 1, hat: 1, clothing: 1 } as Record<Category, number>,
@@ -249,6 +264,33 @@ function boothFrame(): HTMLCanvasElement {
   return frame;
 }
 
+/** The backdrop as a still at camera size, for Decart's reference; null for blur, which has no picture. */
+async function scenePicture(background: Background): Promise<Blob | null> {
+  if (background.kind === 'blur') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  drawBackdrop(canvas.getContext('2d')!, background, canvas.width, canvas.height);
+  return canvasToBlob(canvas, 'image/jpeg', 0.9);
+}
+
+/** Has Decart redraw one shot in the scene, fits the result back to the shot's size, then adds the stickers. */
+async function blendShot(
+  shot: HTMLCanvasElement,
+  placed: readonly PlacedSticker[],
+  apiKey: string,
+  scene: Promise<Blob | null>,
+): Promise<HTMLCanvasElement> {
+  const blended = await createImageBitmap(await blendIntoScene(apiKey, await canvasToBlob(shot, 'image/jpeg', 0.92), await scene));
+  const out = document.createElement('canvas');
+  out.width = shot.width;
+  out.height = shot.height;
+  const crop = coverCrop(blended.width, blended.height, out.height / out.width);
+  out.getContext('2d')!.drawImage(blended, crop.x, crop.y, crop.w, crop.h, 0, 0, out.width, out.height);
+  drawStickers(out, placed);
+  return out;
+}
+
 function shownBackground(): Background {
   return state.hoverBackground ?? state.background;
 }
@@ -291,7 +333,19 @@ async function startPhotobooth(): Promise<void> {
     return;
   }
   const settings = booth.settings();
+  const blend = settings.blend === 'ai';
+  if (blend && state.background.kind === 'none') {
+    setStatus('Pick a backdrop for the AI blend.', 'warn');
+    return;
+  }
+  if (blend && !settings.apiKey) {
+    setStatus('Paste your Decart API key for the AI blend.', 'warn');
+    return;
+  }
   const total = shotsFor(settings.layout);
+  // Each blend starts as soon as its shot is taken, so Decart works through the next countdown.
+  const scene = blend ? scenePicture(state.background) : Promise.resolve(null);
+  const blends: Promise<HTMLCanvasElement>[] = [];
   state.booth.running = true;
   state.booth.cancelled = false;
   booth.setRunning(true);
@@ -300,17 +354,30 @@ async function startPhotobooth(): Promise<void> {
 
   try {
     const shots = await runBoothSession(total, settings.seconds, {
-      capture: boothFrame,
+      // The blend adds the stickers after Decart, so the model never redraws them.
+      capture: blend ? currentFrame : boothFrame,
       countdown: (seconds) => booth.countdown(seconds),
       flash: () => booth.flash(),
-      shot: (index) => booth.progress(index + 1, total),
+      shot: (index, _total, frame) => {
+        booth.progress(index + 1, total);
+        if (!blend) return;
+        const pending = blendShot(frame, [...stickers.list()], settings.apiKey, scene);
+        // Handled by Promise.all below; this stops a failure during the run, or after a cancel, going unhandled.
+        pending.catch(() => {});
+        blends.push(pending);
+      },
       cancelled: () => state.booth.cancelled,
     });
     if (!shots) {
       setStatus('Photobooth cancelled.', 'info');
       return;
     }
-    const sheet = await composeBooth(shots, settings.layout, settings.frame, settings.caption, new Date());
+    if (blend) {
+      booth.working('Blending with AI…');
+      setStatus(`Decart is blending ${total} ${total === 1 ? 'shot' : 'shots'} into the scene…`, 'info');
+    }
+    const final = blend ? await Promise.all(blends) : shots;
+    const sheet = await composeBooth(final, settings.layout, settings.frame, settings.caption, new Date());
     const blob = await canvasToBlob(sheet);
     await saveShot(blob, 'photobooth', devicePoint(), settings.layout);
     booth.setResult(blob);
@@ -318,7 +385,9 @@ async function startPhotobooth(): Promise<void> {
     setStatus('Sheet saved to the gallery.', 'ok');
   } catch (e) {
     console.error(e);
-    setStatus('Photobooth failed.', 'error');
+    // The Decart SDK rejects with plain { code, message } objects rather than Errors.
+    const reason = (e as { message?: string } | null)?.message ?? String(e);
+    setStatus(blend ? `AI blend failed: ${reason}` : 'Photobooth failed.', 'error');
   } finally {
     state.booth.running = false;
     state.booth.armed = false;
@@ -407,8 +476,13 @@ function refreshUi(): void {
 }
 
 function forget(category: Category): void {
-  if (category === 'clothing') state.garment = null;
-  else state.smoothed[category] = null;
+  if (category === 'clothing') {
+    state.garment = null;
+    garmentFilter.reset();
+  } else {
+    state.smoothed[category] = null;
+    frameFilters[category].reset();
+  }
 }
 
 function takeOff(category: Category): void {
@@ -524,11 +598,23 @@ function drawRigid(category: RigidCategory, lm: NormalizedLandmark[] | null, wid
   const image = state.images[category];
   if (!item || !image) return;
 
-  if (lm) state.smoothed[category] = smoothAnchor(state.smoothed[category], ANCHOR_OF[category](lm, width, height), SMOOTHING);
-  else if (state.lostFrames.face > LOST_FRAME_GRACE) state.smoothed[category] = null;
+  if (lm) {
+    const raw = packFrame(FRAME_OF[category](lm, width, height));
+    state.smoothed[category] = unpackFrame(frameFilters[category].filter(raw, performance.now() / 1000));
+  } else if (state.lostFrames.face > LOST_FRAME_GRACE) {
+    forget(category);
+  }
 
-  const anchor = state.smoothed[category];
-  if (anchor) overlay.draw(anchor, image.source, itemRect(anchor, placementOf(item, state.size[category]), image));
+  const frame = state.smoothed[category];
+  if (!frame) return;
+  overlay.draw({
+    frame,
+    image: image.source,
+    rect: itemRect(frame, placementOf(item, state.size[category]), image),
+    shadow: SHADOW_OF[category],
+    face: state.faceOutline,
+    video,
+  });
 }
 
 /** Warps the garment onto the pose skeleton so it follows the torso and the arms. */
@@ -541,9 +627,10 @@ function drawClothing(lm: NormalizedLandmark[] | null, width: number, height: nu
   if (body) {
     const shape = image.shape ?? NOMINAL_SHAPE;
     const next = garmentControls(shape, body, item.scale * state.size.clothing, image);
-    state.garment = smoothControls(state.garment, next, SMOOTHING);
+    const eased = garmentFilter.filter(next.flatMap((c) => [c.to.x, c.to.y]), performance.now() / 1000);
+    state.garment = next.map((c, i) => ({ from: c.from, to: { x: eased[i * 2], y: eased[i * 2 + 1] } }));
   } else if (state.lostFrames.pose > LOST_FRAME_GRACE) {
-    state.garment = null;
+    forget('clothing');
   }
 
   if (!state.garment) return;
@@ -556,6 +643,7 @@ function drawClothing(lm: NormalizedLandmark[] | null, width: number, height: nu
     width,
     height,
     mask: state.mask,
+    neck: state.garment[CONTROL.NECK].to,
     torso: torsoQuad(state.garment),
   });
   overlay.ctx.drawImage(layer, 0, 0);
@@ -624,6 +712,8 @@ function frame(): void {
   for (const detector of ['face', 'pose'] as const) {
     state.lostFrames[detector] = landmarks[detector] ? 0 : state.lostFrames[detector] + 1;
   }
+  if (landmarks.face) state.faceOutline = faceOutline(landmarks.face, width, height);
+  else if (state.lostFrames.face > LOST_FRAME_GRACE) state.faceOutline = null;
 
   state.frameCount += 1;
   if (!(needed.has('pose') || backgroundActive()) || !state.segmenter) state.mask = null;

@@ -47,8 +47,8 @@ describe('buildGarmentMask', () => {
     expect(alphaAt(target, 0, 0, 4)).toBe(0);
   });
 
-  it('drops hair, face and accessories so they pass in front', () => {
-    for (const category of [SEGMENT.HAIR, SEGMENT.FACE_SKIN, SEGMENT.ACCESSORIES]) {
+  it('drops hair and face so they pass in front', () => {
+    for (const category of [SEGMENT.HAIR, SEGMENT.FACE_SKIN]) {
       expect(run(new Array(16).fill(category)).data.some((v, i) => i % 4 === 3 && v > 0)).toBe(false);
     }
   });
@@ -58,6 +58,15 @@ describe('buildGarmentMask', () => {
     // Mask cell (2,2) maps to frame (25,25), inside the quad; cell (0,0) maps to (5,5), outside.
     expect(alphaAt(target, 2, 2, 4)).toBe(0);
     expect(alphaAt(target, 0, 0, 4)).toBe(255);
+  });
+
+  it('keeps the collar over skin and jewellery just below the shoulder line', () => {
+    // Cell (2,1) maps to (25,15): inside the quad, a quarter of a shoulder span below the shoulders.
+    for (const category of [SEGMENT.BODY_SKIN, SEGMENT.ACCESSORIES]) {
+      const target = run(new Array(16).fill(category));
+      expect(alphaAt(target, 2, 1, 4)).toBe(255);
+      expect(alphaAt(target, 2, 2, 4)).toBe(0);
+    }
   });
 });
 
