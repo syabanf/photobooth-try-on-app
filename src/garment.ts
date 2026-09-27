@@ -303,19 +303,3 @@ function direction(from: Vec, to: Vec): Vec {
   const d = distance(from, to) || 1;
   return { x: (to.x - from.x) / d, y: (to.y - from.y) / d };
 }
-
-/** Eases control targets toward their new positions so landmark jitter does not shake the garment. */
-export function smoothControls(
-  previous: readonly ControlPair[] | null,
-  next: readonly ControlPair[],
-  alpha: number,
-): ControlPair[] {
-  if (!previous || previous.length !== next.length) return next.map((c) => ({ from: c.from, to: { ...c.to } }));
-  return next.map((c, i) => ({
-    from: c.from,
-    to: {
-      x: previous[i].to.x + alpha * (c.to.x - previous[i].to.x),
-      y: previous[i].to.y + alpha * (c.to.y - previous[i].to.y),
-    },
-  }));
-}

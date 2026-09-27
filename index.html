@@ -292,6 +292,24 @@
                     </div>
 
                     <div class="step-panel" data-panel="1" hidden>
+                      <div id="bgModes" class="pill-tabs pill-tabs--full">
+                        <button type="button" class="pill-tab is-active" data-blend="swap">Swap background</button>
+                        <button type="button" class="pill-tab" data-blend="ai"><i data-icon="sparkles"></i>AI blend</button>
+                      </div>
+                      <div id="aiBlend" class="form-stack" hidden>
+                        <input
+                          id="boothApiKey"
+                          class="input"
+                          type="password"
+                          placeholder="Decart API key"
+                          autocomplete="off"
+                          spellcheck="false"
+                        />
+                        <p class="callout">
+                          <strong>Each shot goes to Decart</strong> with the backdrop you pick, and comes back redrawn in that
+                          scene with its light and shadows. Decart bills per image, and the key stays in this tab.
+                        </p>
+                      </div>
                       <div id="bgTabs" class="pill-tabs pill-tabs--full">
                         <button type="button" class="pill-tab is-active" data-bg-tab="scenery">Scenery</button>
                         <button type="button" class="pill-tab" data-bg-tab="studio">Studio</button>

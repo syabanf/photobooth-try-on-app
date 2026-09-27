@@ -1,6 +1,6 @@
 import type { Placement } from './anchors';
 import { measureGarment, type GarmentShape } from './garment';
-import { traceSilhouette } from './image-bounds';
+import { clearBackdrop, traceSilhouette } from './image-bounds';
 
 export type Category = 'glasses' | 'hat' | 'clothing';
 
@@ -16,6 +16,8 @@ export interface CatalogItem {
   offsetY: number;
   /** Fraction of the image height that sits on the anchor point. Unused by clothing. */
   pivotY?: number;
+  /** Photo credit, for items under a license that asks for one. */
+  credit?: string;
 }
 
 export const CATEGORY_LABELS: Record<Category, string> = {
@@ -25,8 +27,8 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 };
 
 export const CATEGORY_DEFAULTS: Record<Category, Placement> = {
-  glasses: { scale: 1.5, offsetX: 0, offsetY: 0, pivotY: 0.5 },
-  hat: { scale: 1.4, offsetX: 0, offsetY: 0.1, pivotY: 1 },
+  glasses: { scale: 1.7, offsetX: 0, offsetY: 0, pivotY: 0.5 },
+  hat: { scale: 1.4, offsetX: 0, offsetY: 0.2, pivotY: 1 },
   // Clothing is warped onto the pose skeleton, so only `scale` applies. Pose shoulder landmarks
   // mark the joint centers, which sit well inside the shoulder outline, so a garment that covers
   // the body has to reach about half again as wide.
@@ -34,8 +36,8 @@ export const CATEGORY_DEFAULTS: Record<Category, Placement> = {
 };
 
 export const DEFAULT_ITEMS: CatalogItem[] = [
-  { id: 'glasses-round', name: 'Round', category: 'glasses', src: '/items/glasses-round.png', scale: 1.5, offsetX: 0, offsetY: 0 },
-  { id: 'glasses-aviator', name: 'Aviator', category: 'glasses', src: '/items/glasses-aviator.png', scale: 1.55, offsetX: 0, offsetY: 0.02 },
+  { id: 'glasses-round', name: 'Round', category: 'glasses', src: '/items/glasses-round.png', scale: 1.7, offsetX: 0, offsetY: 0 },
+  { id: 'glasses-aviator', name: 'Aviator', category: 'glasses', src: '/items/glasses-aviator.png', scale: 1.75, offsetX: 0, offsetY: 0.02 },
   { id: 'hat-cap', name: 'Cap', category: 'hat', src: '/items/hat-cap.png', scale: 1.4, offsetX: 0, offsetY: 0.12 },
   { id: 'hat-beanie', name: 'Beanie', category: 'hat', src: '/items/hat-beanie.png', scale: 1.35, offsetX: 0, offsetY: 0.1 },
   { id: 'shirt-tee', name: 'Tee', category: 'clothing', src: '/items/shirt-tee.png', scale: 1.45, offsetX: 0, offsetY: 0 },
@@ -76,7 +78,10 @@ export function loadImage(src: string): Promise<ItemImage> {
   return pending;
 }
 
-/** Crops the transparent padding and measures the garment, so sizing follows the item itself. */
+/**
+ * Clears a plain photo backdrop, crops the transparent padding and measures the garment, so sizing
+ * follows the item itself.
+ */
 function prepareImage(img: HTMLImageElement): ItemImage {
   const full = document.createElement('canvas');
   full.width = img.naturalWidth;
@@ -84,13 +89,15 @@ function prepareImage(img: HTMLImageElement): ItemImage {
   const ctx = full.getContext('2d')!;
   ctx.drawImage(img, 0, 0);
 
-  let data: Uint8ClampedArray;
+  let pixels: ImageData;
   try {
-    data = ctx.getImageData(0, 0, full.width, full.height).data;
+    pixels = ctx.getImageData(0, 0, full.width, full.height);
   } catch {
     // Cross-origin without CORS headers: draw the photo as it came.
     return { source: img, width: img.naturalWidth, height: img.naturalHeight, shape: null };
   }
+  const { data } = pixels;
+  if (clearBackdrop(data, full.width, full.height)) ctx.putImageData(pixels, 0, 0);
 
   const { bounds, rows } = traceSilhouette(data, full.width, full.height);
   const cropped = document.createElement('canvas');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { garmentControls, measureGarment, readBody, smoothControls, walkPolyline, type Body, type GarmentShape } from './garment';
+import { garmentControls, measureGarment, readBody, walkPolyline, type Body, type GarmentShape } from './garment';
 import type { RowEdges } from './image-bounds';
 import type { ControlPair } from './mls';
 
@@ -186,22 +186,5 @@ describe('garmentControls', () => {
 
   it('skips an arm the pose did not report', () => {
     expect(garmentControls(shape, { ...body, armLeft: null }, 1.2, image)).toHaveLength(6);
-  });
-});
-
-describe('smoothControls', () => {
-  const next = [{ from: { x: 0, y: 0 }, to: { x: 10, y: 10 } }];
-
-  it('adopts the first frame as is', () => {
-    expect(smoothControls(null, next, 0.35)[0].to).toEqual({ x: 10, y: 10 });
-  });
-
-  it('eases toward the new target', () => {
-    const eased = smoothControls([{ from: { x: 0, y: 0 }, to: { x: 0, y: 0 } }], next, 0.5);
-    expect(eased[0].to).toEqual({ x: 5, y: 5 });
-  });
-
-  it('restarts when the control count changes', () => {
-    expect(smoothControls([], next, 0.5)[0].to).toEqual({ x: 10, y: 10 });
   });
 });
