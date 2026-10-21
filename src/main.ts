@@ -889,6 +889,7 @@ async function startBusiness(account: Awaited<ReturnType<typeof signedIn>>): Pro
     const id = sites?.devicePointId();
     if (id && heartbeats) ops.heartbeat(id, ops.camera?.state() ?? { connected: state.cameraLive, battery: null, applied: null });
     else ops.checkAlerts();
+    ops.expirePayments();
     void ops.outbox.flush();
   };
   void tick();

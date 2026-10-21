@@ -17,7 +17,6 @@ export interface QrisCharge {
   reference: string;
   qrString: string;
   amount: number;
-  expiresAt: number;
 }
 
 export type PaidListener = (reference: string) => void;
@@ -26,14 +25,13 @@ export interface PaymentGateway {
   readonly label: string;
   /** True when no money moves: the booth shows a "Simulate payment" control. */
   readonly simulated: boolean;
-  createQris(amount: number, reference: string): Promise<QrisCharge>;
+  /** A dynamic QR for the amount. The real gateway also takes the expiry the settings give. */
+  createQris(amount: number, reference: string, expiresInMs: number): Promise<QrisCharge>;
   /** The gateway's callback, delivered to the booth that showed the QR. */
   onPaid(listener: PaidListener): () => void;
   /** Simulator only: what the gateway callback would do once the customer pays. */
   simulatePaid?(reference: string): void;
 }
-
-const QR_LIFETIME_MS = 15 * 60_000;
 
 export class SimulatedGateway implements PaymentGateway {
   readonly simulated = true;
@@ -41,7 +39,7 @@ export class SimulatedGateway implements PaymentGateway {
   private channel: BroadcastChannel | null = null;
 
   constructor(
-    readonly label: string,
+    private readonly name: () => string,
     private readonly merchant: () => { name: string; city: string },
     key: string,
   ) {
@@ -54,12 +52,16 @@ export class SimulatedGateway implements PaymentGateway {
     }
   }
 
+  /** The provider and mode from Settings, so the till and the booth name the right gateway. */
+  get label(): string {
+    return this.name();
+  }
+
   async createQris(amount: number, reference: string): Promise<QrisCharge> {
     const { name, city } = this.merchant();
     return {
       reference,
       amount,
-      expiresAt: Date.now() + QR_LIFETIME_MS,
       qrString: qrisPayload({ merchantName: `${name || 'BOOTH'} SIMULATOR`.toUpperCase(), merchantCity: (city || 'JAKARTA').toUpperCase(), merchantId: 'SIMULATOR000000', amount, reference }),
     };
   }

@@ -6,7 +6,8 @@ import { SHOT_LABELS, listShots, type Shot } from '../../../gallery';
 import { iconButton } from '../../../icons';
 import { printDocument, printImage } from '../../adapters';
 import { amountDue, lineGross } from '../../cart';
-import { PAYMENT_LABELS, SESSION_MODES, type Order, type PaperSize, type PaymentMethod, type SessionMode } from '../../model';
+import { PAYMENT_LABELS, SESSION_MODES, type Order, type PaperSize, type Payment, type PaymentMethod, type SessionMode } from '../../model';
+import { allowedMethods } from '../../payments';
 import type { CartLine, Ops } from '../../ops';
 import { PAPER } from '../../printing';
 import { shiftSlip, type ShiftSlip } from '../../shift';
@@ -247,9 +248,32 @@ export function renderPos(context: PageContext): HTMLElement {
   return view.root;
 }
 
+/** "Valid for 14:59", counting down, or the state the QR ended in. */
+export function qrClock(ops: Ops, orderId: string, paymentId: string, onEnd: (status: Payment['status']) => void): HTMLElement {
+  const line = el('p', 'card-desc qr-clock');
+  const tick = () => {
+    const payment = ops.order(orderId).payments.find((entry) => entry.id === paymentId);
+    if (!payment) return;
+    if (payment.status !== 'pending') {
+      clearInterval(timer);
+      onEnd(payment.status);
+      return;
+    }
+    const left = Math.max(0, (payment.expiresAt ?? 0) - Date.now());
+    if (left === 0) ops.expirePayments();
+    const minutes = Math.floor(left / 60_000);
+    const seconds = Math.floor((left % 60_000) / 1000);
+    line.textContent = `Valid for ${minutes}:${String(seconds).padStart(2, '0')}`;
+  };
+  const timer = setInterval(tick, 1000);
+  tick();
+  return line;
+}
+
 function paymentDialog(context: PageContext, orderId: string): void {
   const { ops } = context;
-  let method: PaymentMethod = 'cash';
+  const methods = allowedMethods(ops.payments, 'cashier');
+  let method: PaymentMethod = methods[0] ?? 'cash';
   const body = el('div', 'pay-body');
   const error = el('p', 'field-error');
   error.hidden = true;
@@ -267,12 +291,16 @@ function paymentDialog(context: PageContext, orderId: string): void {
     body.replaceChildren(
       el('p', 'pay-due', money(due)),
       el('p', 'card-desc', `${order.number} · ${order.lines.length} ${order.lines.length === 1 ? 'item' : 'items'}`),
-      pills((['cash', 'qris', 'card', 'ewallet'] as PaymentMethod[]).map((value) => ({ value, label: PAYMENT_LABELS[value] })), method, (value) => {
+      pills(methods.map((value) => ({ value, label: PAYMENT_LABELS[value] })), method, (value) => {
         method = value;
         draw();
       }),
     );
     error.hidden = true;
+    if (methods.length === 0) {
+      body.append(el('p', 'field-error', 'Every payment method is switched off for the till. Turn one on under Payments → Methods and fees.'));
+      return;
+    }
     if (method === 'cash') {
       const tendered = el('input', 'input pay-input');
       tendered.inputMode = 'numeric';
@@ -303,7 +331,17 @@ function paymentDialog(context: PageContext, orderId: string): void {
       body.append(area);
       area.append(el('p', 'card-desc', 'Creating the QR…'));
       void ops.chargeQris(orderId).then((payment) => {
-        area.replaceChildren(qrCanvas(payment.qrString ?? '', 240), el('p', 'card-desc', `Scan with any bank or e-wallet app. ${payment.gateway} · ${payment.reference}`));
+        const ended = (status: Payment['status']) => {
+          if (status === 'paid') return;
+          const again = actionButton('New QR', 'btn btn-primary btn-sm');
+          again.addEventListener('click', draw);
+          area.replaceChildren(el('p', 'field-error', status === 'expired' ? 'This QR ran out.' : 'This QR was cancelled.'), again);
+        };
+        area.replaceChildren(
+          qrCanvas(payment.qrString ?? '', 240),
+          el('p', 'card-desc', `Scan with any bank or e-wallet app. ${payment.gateway} · ${payment.reference}`),
+          qrClock(ops, orderId, payment.id, ended),
+        );
         broadcast(ops, { type: 'qris', qr: payment.qrString, amount: payment.amount, reference: payment.reference });
         if (ops.gateway.simulated) {
           const simulate = actionButton('Simulate payment', 'btn btn-outline btn-sm');
@@ -319,12 +357,16 @@ function paymentDialog(context: PageContext, orderId: string): void {
         area.replaceChildren(el('p', 'field-error', (e as Error).message));
       });
     } else {
+      // Card payments name the terminal that took them; e-wallet payments name the wallet.
+      const choices = method === 'card' ? ops.payments.terminals.filter((terminal) => terminal.branchId === order.branchId).map((terminal) => ({ value: terminal.id, label: terminal.name })) : ops.payments.wallets.map((wallet) => ({ value: wallet, label: wallet }));
+      let picked = choices[0]?.value ?? '';
+      if (choices.length) body.append(pills(choices, picked, (value) => (picked = value)));
       const reference = el('input', 'input pay-input');
       reference.placeholder = method === 'card' ? 'EDC approval code' : 'E-wallet reference';
       const take = actionButton(`Record ${PAYMENT_LABELS[method]} payment`, 'btn btn-primary btn-block');
       take.addEventListener('click', () => {
         try {
-          ops.pay(orderId, method as 'card' | 'ewallet', due, reference.value);
+          ops.pay(orderId, method as 'card' | 'ewallet', due, reference.value, method === 'card' ? { terminalId: picked || undefined } : { wallet: picked || undefined });
           done(ops.order(orderId));
         } catch (e) {
           error.textContent = (e as Error).message;

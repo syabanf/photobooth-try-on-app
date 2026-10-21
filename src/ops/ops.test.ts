@@ -123,3 +123,54 @@ describe('queue and alerts', () => {
     expect(ops.state.notifications.map((n) => n.channel).sort()).toEqual(['email', 'whatsapp']);
   });
 });
+
+describe('managing payments', () => {
+  it('records the fee and the wallet, and refuses a method switched off for the channel', () => {
+    const { ops } = setup();
+    ops.openShift('mall', 0);
+    const line = { kind: 'session' as const, refId: 'photobox', label: 'GIF', unitPrice: 30_000, qty: 1 };
+    const order = ops.createOrder({ lines: [line], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null });
+    expect(() => ops.pay(order.id, 'ewallet', 30_000, 'GP-1')).toThrow('Pick the e-wallet');
+    ops.pay(order.id, 'ewallet', 30_000, 'GP-1', { wallet: 'GoPay' });
+    expect(ops.order(order.id).payments[0]).toMatchObject({ status: 'paid', wallet: 'GoPay', fee: 450 });
+
+    ops.savePaymentSettings((draft) => (draft.methods.card.cashier = false), 'No cards at the till');
+    const next = ops.createOrder({ lines: [line], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null });
+    expect(() => ops.pay(next.id, 'card', 30_000, 'APPR')).toThrow('Card is switched off for the till');
+    const booth = ops.createOrder({ lines: [line], presetId: null, voucherCode: '', channel: 'booth', branchId: 'mall', boothId: 'k1' });
+    expect(() => ops.pay(booth.id, 'cash', 30_000)).toThrow('Cash is switched off for the booth');
+  });
+
+  it('expires a QR after its time, cancels one with a reason, and confirms one by hand with a PIN', async () => {
+    let now = Date.UTC(2026, 9, 19, 5);
+    const store = new OpsStore(memoryStore(), account.id, account.business, () => now);
+    const ops = new Ops(store, account, { toast: () => {}, devicePointId: () => 'k1' });
+    ops.sites = { locations: [{ id: 'mall', name: 'Mall', city: 'Jakarta', address: '', createdAt: 0 }], points: [{ id: 'k1', locationId: 'mall', name: 'Kiosk 1', code: 'K1', active: true, createdAt: 0 }] };
+    ops.savePaymentSettings((draft) => (draft.gateway.qrExpiryMinutes = 5), 'Short QR life');
+    const line = { kind: 'session' as const, refId: 'photobox', label: 'GIF', unitPrice: 30_000, qty: 1 };
+
+    const first = ops.createOrder({ lines: [line], presetId: null, voucherCode: '', channel: 'booth', branchId: 'mall', boothId: 'k1' });
+    const qr = await ops.chargeQris(first.id);
+    expect(qr.expiresAt).toBe(now + 5 * 60_000);
+    expect(qr.gateway).toBe('Midtrans sandbox');
+    expect(ops.expirePayments()).toBe(0);
+    now += 6 * 60_000;
+    expect(ops.expirePayments()).toBe(1);
+    expect(ops.order(first.id).payments[0].status).toBe('expired');
+    expect(ops.order(first.id).status).toBe('open');
+
+    const second = await ops.chargeQris(first.id);
+    expect(() => ops.cancelPayment(first.id, second.id, '')).toThrow('Enter a reason');
+    ops.cancelPayment(first.id, second.id, 'Customer left');
+    expect(ops.order(first.id).payments[1]).toMatchObject({ status: 'cancelled', note: 'Customer left' });
+    expect(() => ops.cancelPayment(first.id, second.id, 'Again')).toThrow('is cancelled');
+
+    await ops.saveStaff({ name: 'Sari', role: 'supervisor', branchIds: [], email: '', phone: '', onDuty: true, active: true }, '2468');
+    const third = await ops.chargeQris(first.id);
+    await expect(ops.confirmPayment(first.id, third.id, 'BCA 7781', '0000')).rejects.toThrow('does not belong to a supervisor');
+    await ops.confirmPayment(first.id, third.id, 'BCA 7781', '2468');
+    expect(ops.order(first.id).status).toBe('paid');
+    expect(ops.order(first.id).payments[2].note).toBe('Confirmed by Sari from BCA 7781');
+    expect(ops.state.activity[0].kind).toBe('payment.confirm');
+  });
+});

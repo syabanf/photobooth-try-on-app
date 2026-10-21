@@ -110,6 +110,8 @@ export interface OrderLine {
 
 export type PaymentMethod = 'cash' | 'qris' | 'card' | 'ewallet';
 
+export const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'qris', 'card', 'ewallet'];
+
 export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   cash: 'Cash',
   qris: 'QRIS',
@@ -117,18 +119,70 @@ export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   ewallet: 'E-wallet',
 };
 
+export type PaymentStatus = 'pending' | 'paid' | 'expired' | 'failed' | 'cancelled';
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  pending: 'Waiting',
+  paid: 'Paid',
+  expired: 'Expired',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+};
+
 export interface Payment {
   id: string;
   method: PaymentMethod;
   amount: Rupiah;
-  status: 'pending' | 'paid' | 'expired' | 'failed';
+  status: PaymentStatus;
   /** Gateway order id, EDC approval code or e-wallet reference. */
   reference: string;
   gateway?: string;
   qrString?: string;
+  /** When a pending QR stops being valid. */
+  expiresAt?: number;
   tendered?: Rupiah;
+  /** The e-wallet brand, or the EDC terminal, the payment went through. */
+  wallet?: string;
+  terminalId?: string;
+  /** The processing fee (MDR) at the rate set when the payment was made. */
+  fee?: Rupiah;
+  /** Why it was cancelled, or who confirmed it by hand. */
+  note?: string;
   createdAt: number;
   paidAt?: number;
+}
+
+export interface PaymentMethodRule {
+  enabled: boolean;
+  /** Where the method is offered. */
+  cashier: boolean;
+  booth: boolean;
+  /** Processing fee as a percentage, such as 0.7 for QRIS MDR. */
+  feePercent: number;
+}
+
+export interface GatewaySettings {
+  provider: 'midtrans' | 'xendit' | 'doku';
+  mode: 'sandbox' | 'production';
+  merchantId: string;
+  /** The browser-safe client key. The server key never belongs in the app. */
+  clientKey: string;
+  qrExpiryMinutes: number;
+}
+
+export interface Terminal {
+  id: string;
+  name: string;
+  branchId: string;
+  provider: string;
+}
+
+export interface PaymentSettings {
+  gateway: GatewaySettings;
+  methods: Record<PaymentMethod, PaymentMethodRule>;
+  /** E-wallet brands the till can record, such as GoPay or OVO. */
+  wallets: string[];
+  terminals: Terminal[];
 }
 
 export type Channel = 'cashier' | 'booth';
@@ -453,7 +507,7 @@ export interface ActivityEntry {
 export interface Settings {
   shiftsEnabled: boolean;
   retentionDays: number;
-  gateway: 'midtrans' | 'xendit' | 'doku';
+  payments: PaymentSettings;
   idleSeconds: number;
   adsEnabled: boolean;
   receiptFooter: string;
