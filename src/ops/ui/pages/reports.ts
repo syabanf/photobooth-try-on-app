@@ -1,15 +1,18 @@
-// Reports per day, branch, booth, shift, frame and mode with CSV and XLSX export, best sellers,
-// and the settlement check of a gateway export against the ledger.
+// Reports per day, branch, booth, shift, frame and mode with CSV and XLSX export, payments by
+// method with fees, cash per shift, best sellers, and the settlement check of a gateway export
+// against the ledger.
 
 import { seesBranch } from '../../access';
 import { xlsx } from '../../encoders';
-import { SESSION_MODES, type SessionMode } from '../../model';
+import { PAYMENT_LABELS, PAYMENT_METHODS, SESSION_MODES, type PaymentMethod, type SessionMode } from '../../model';
+import { paymentReport, type PaymentGroup } from '../../payments';
+import { shiftSlip } from '../../shift';
 import { bestSellers, parseGatewayCsv, reconcileSettlement, revenueReport, toCsv, type GroupBy, type ReportRow, type Settlement } from '../../reports';
 import { localTimeZone, zonedTime } from '../../time';
 import type { PageContext } from '../router';
 import { act, badge, downloadBytes, downloadText, el, fileInput, money, notice, page, pills, section, statRow, table } from '../kit';
 
-const view = { groupBy: 'day' as GroupBy, from: '', to: '', settlement: null as Settlement | null, fileName: '' };
+const view = { groupBy: 'day' as GroupBy, payGroup: 'method' as PaymentGroup, from: '', to: '', settlement: null as Settlement | null, fileName: '' };
 
 const GROUPS: { value: GroupBy; label: string }[] = [
   { value: 'day', label: 'Day' },
@@ -99,6 +102,79 @@ export function renderReports({ ops, redraw }: PageContext): HTMLElement {
     ),
   );
 
+  // ---------- payments ----------
+  const refunds = state.refunds.filter((refund) => inRange(refund.at) && orders.some((order) => order.id === refund.orderId));
+  const payRows = paymentReport(
+    { orders, refunds, dayOf: (time) => zonedTime(time, zone).date, label: (group, key) => (group === 'method' ? PAYMENT_LABELS[key as PaymentMethod] : label(group, key)) },
+    view.payGroup,
+  );
+  const payTotals = payRows.reduce((sum, row) => ({ count: sum.count + row.count, gross: sum.gross + row.gross, fees: sum.fees + row.fees, refunds: sum.refunds + row.refunds, net: sum.net + row.net }), { count: 0, gross: 0, fees: 0, refunds: 0, net: 0 });
+  const PAY_GROUPS: { value: PaymentGroup; label: string }[] = [
+    { value: 'method', label: 'Method' },
+    { value: 'day', label: 'Day' },
+    { value: 'branch', label: 'Branch' },
+    { value: 'booth', label: 'Booth' },
+    { value: 'shift', label: 'Shift' },
+  ];
+  const pays = section('Payments', 'What came in by each method, the processing fees it cost, and what reaches the bank or the drawer after refunds. Same dates as above.');
+  const payHeaders = ['Group', 'Payments', 'Gross', 'Fees', 'Refunds', 'Net'];
+  const payCells = (row: (typeof payRows)[number]) => [row.label, row.count, row.gross, row.fees, row.refunds, row.net];
+  const payFile = `payments-${view.payGroup}-${view.from}-to-${view.to}`;
+  pays.actions.append(
+    act('CSV', 'btn btn-outline btn-sm', () => downloadText(toCsv(payHeaders, payRows.map(payCells)), `${payFile}.csv`), 'download'),
+    act('XLSX', 'btn btn-outline btn-sm', () => downloadBytes(xlsx('Payments', payHeaders, payRows.map(payCells)), `${payFile}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'), 'download'),
+  );
+  pays.body.append(
+    pills(PAY_GROUPS, view.payGroup, (group) => {
+      view.payGroup = group;
+      redraw();
+    }),
+    statRow([
+      ...PAYMENT_METHODS.map((method) => {
+        const row = paymentReport({ orders, refunds, dayOf: () => '', label: () => '' }, 'method').find((entry) => entry.key === method);
+        return { label: PAYMENT_LABELS[method], value: money(row?.gross ?? 0), hint: row ? `${row.count} payments · fees ${money(row.fees)}` : 'None' };
+      }),
+    ]),
+    table(
+      [
+        { label: PAY_GROUPS.find((group) => group.value === view.payGroup)!.label, cell: (row) => row.label },
+        { label: 'Payments', className: 'num', cell: (row) => String(row.count) },
+        { label: 'Gross', className: 'num', cell: (row) => money(row.gross) },
+        { label: 'Fees', className: 'num', cell: (row) => (row.fees ? `−${money(row.fees)}` : '—') },
+        { label: 'Refunds', className: 'num', cell: (row) => (row.refunds ? `−${money(row.refunds)}` : '—') },
+        { label: 'Net', className: 'num', cell: (row) => money(row.net) },
+      ],
+      payRows,
+      { empty: 'No payments in these dates.' },
+    ),
+    el('p', 'field-hint', `${payTotals.count} payments · gross ${money(payTotals.gross)} · fees ${money(payTotals.fees)} · refunds ${money(payTotals.refunds)} · net ${money(payTotals.net)}`),
+  );
+
+  // ---------- cash per shift ----------
+  const shifts = state.shifts.filter((shift) => seesBranch(actor, shift.branchId) && inRange(shift.openedAt)).sort((a, b) => b.openedAt - a.openedAt);
+  const deposits = section('Cash per shift', 'The drawer at the end of each shift: what should be in it, what was counted, and the difference. Open shifts show the expected amount so far.');
+  const slips = shifts.map((shift) => ({ shift, slip: shiftSlip(shift, state.orders, state.refunds) }));
+  const depositHeaders = ['Branch', 'Opened', 'Closed', 'Opening cash', 'Cash in', 'Cash refunds', 'Expected', 'Counted', 'Difference'];
+  const depositCells = ({ shift, slip }: (typeof slips)[number]) => [ops.branchName(shift.branchId), new Date(shift.openedAt).toISOString(), shift.closedAt ? new Date(shift.closedAt).toISOString() : '', slip.openingCash, slip.byMethod.cash, slip.refundsByMethod.cash, slip.expectedCash, slip.countedCash ?? '', slip.variance ?? ''];
+  deposits.actions.append(act('CSV', 'btn btn-outline btn-sm', () => downloadText(toCsv(depositHeaders, slips.map(depositCells)), `cash-shifts-${view.from}-to-${view.to}.csv`), 'download'));
+  deposits.body.append(
+    table(
+      [
+        { label: 'Branch', cell: ({ shift }: (typeof slips)[number]) => ops.branchName(shift.branchId) },
+        { label: 'Opened', cell: ({ shift }) => new Date(shift.openedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) },
+        { label: 'Closed', cell: ({ shift }) => (shift.closedAt ? new Date(shift.closedAt).toLocaleTimeString(undefined, { timeStyle: 'short' }) : badge('Open', 'ok')) },
+        { label: 'Opening', className: 'num', cell: ({ slip }) => money(slip.openingCash) },
+        { label: 'Cash in', className: 'num', cell: ({ slip }) => money(slip.byMethod.cash) },
+        { label: 'Cash refunds', className: 'num', cell: ({ slip }) => (slip.refundsByMethod.cash ? `−${money(slip.refundsByMethod.cash)}` : '—') },
+        { label: 'Expected', className: 'num', cell: ({ slip }) => money(slip.expectedCash) },
+        { label: 'Counted', className: 'num', cell: ({ slip }) => (slip.countedCash === null ? '—' : money(slip.countedCash)) },
+        { label: 'Difference', className: 'num', cell: ({ slip }) => (slip.variance === null ? '—' : badge(slip.variance === 0 ? 'Matches' : `${slip.variance > 0 ? '+' : ''}${money(slip.variance)}`, slip.variance === 0 ? 'ok' : 'warn')) },
+      ],
+      slips,
+      { empty: 'No shifts in these dates.' },
+    ),
+  );
+
   // ---------- best sellers ----------
   const best = section('Best sellers', 'By quantity, refunded lines left out. Frames rank by sessions in the Frame report above.');
   best.body.append(table([{ label: 'Item', cell: (row) => row.label }, { label: 'Sold', className: 'num', cell: (row) => String(row.qty) }, { label: 'Revenue', className: 'num', cell: (row) => money(row.revenue) }], bestSellers(orders).slice(0, 10), { empty: 'Nothing sold yet.' }));
@@ -159,6 +235,6 @@ export function renderReports({ ops, redraw }: PageContext): HTMLElement {
       'download'),
     );
   }
-  root.body.append(best.root, settle.root);
+  root.body.append(pays.root, deposits.root, best.root, settle.root);
   return root.root;
 }

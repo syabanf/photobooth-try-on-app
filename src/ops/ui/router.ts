@@ -7,6 +7,7 @@ import { renderBranding } from './pages/branding';
 import { renderDevices } from './pages/devices';
 import { renderFleet } from './pages/fleet';
 import { renderFrames } from './pages/frames';
+import { renderPayments } from './pages/payments';
 import { renderPos } from './pages/pos';
 import { renderQueue } from './pages/queue';
 import { renderReports } from './pages/reports';
@@ -30,6 +31,7 @@ const PAGES: Record<OpsView, { render: Render; permission: Permission }> = {
   pos: { render: renderPos, permission: 'pos.sell' },
   queue: { render: renderQueue, permission: 'queue.run' },
   sales: { render: renderSales, permission: 'history.view' },
+  payments: { render: renderPayments, permission: 'history.view' },
   reports: { render: renderReports, permission: 'reports.view' },
   vouchers: { render: renderVouchers, permission: 'vouchers.manage' },
   frames: { render: renderFrames, permission: 'frames.manage' },
@@ -73,15 +75,14 @@ export function mountOpsRouter(ops: Ops, nav: (view: View) => void): OpsRouter {
     return !!active && container.contains(active) && active.matches('input:not([type=checkbox]):not([type=radio]), textarea, select');
   };
 
+  // Dialogs live outside the container, so a redraw under one is harmless; only typing holds it.
   ops.store.subscribe(() => {
     if (!current || container.hidden) return;
-    if (typing() || document.querySelector('body > .dialog-root')) pending = true;
+    if (typing()) pending = true;
     else draw();
   });
-  // Catch up once the person stops typing or closes the dialog that held the redraw back.
-  const catchUp = () => setTimeout(() => pending && !typing() && !document.querySelector('body > .dialog-root') && draw());
-  container.addEventListener('focusout', catchUp);
-  new MutationObserver(catchUp).observe(document.body, { childList: true });
+  // Catch up once the person stops typing.
+  container.addEventListener('focusout', () => setTimeout(() => pending && !typing() && draw()));
 
   return {
     show(view) {

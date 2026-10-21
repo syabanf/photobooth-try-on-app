@@ -67,7 +67,7 @@ export function renderToday(ops: Ops, nav: (view: View) => void): HTMLElement {
   body.append(grid);
 
   const links = el('div', 'page-actions');
-  for (const [label, view] of [['Point of sale', 'pos'], ['Transactions', 'sales'], ['Devices', 'devices']] as const) {
+  for (const [label, view] of [['Point of sale', 'pos'], ['Transactions', 'sales'], ['Payments', 'payments'], ['Devices', 'devices']] as const) {
     const button = el('button', 'btn btn-outline btn-sm', label);
     button.type = 'button';
     button.addEventListener('click', () => nav(view));

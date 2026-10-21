@@ -4,6 +4,7 @@
 
 import type { KeyValueStore } from '../account/backend';
 import type { ActivityEntry, Branding, OpsState, Preset, Settings } from './model';
+import { DEFAULT_PAYMENTS, withPaymentDefaults } from './payments';
 
 const DEFAULT_BRANDING: Branding = {
   brandName: '',
@@ -22,7 +23,7 @@ const DEFAULT_BRANDING: Branding = {
 const DEFAULT_SETTINGS: Settings = {
   shiftsEnabled: true,
   retentionDays: 30,
-  gateway: 'midtrans',
+  payments: DEFAULT_PAYMENTS,
   idleSeconds: 60,
   adsEnabled: false,
   receiptFooter: 'Thank you! Show this receipt at the booth.',
@@ -121,7 +122,10 @@ export class OpsStore {
       if (!raw) return null;
       const saved = JSON.parse(raw) as OpsState;
       // Fields added after a workspace was created get their defaults.
-      return { ...starter('', `owner-${this.accountId}`), ...saved, settings: { ...DEFAULT_SETTINGS, ...saved.settings }, branding: { ...DEFAULT_BRANDING, ...saved.branding } };
+      // Workspaces saved before payment settings existed carried only the provider name.
+      const legacy = saved.settings as Partial<Settings> & { gateway?: string };
+      const payments = withPaymentDefaults(legacy?.payments, legacy?.gateway);
+      return { ...starter('', `owner-${this.accountId}`), ...saved, settings: { ...DEFAULT_SETTINGS, ...saved.settings, payments }, branding: { ...DEFAULT_BRANDING, ...saved.branding } };
     } catch {
       return null;
     }

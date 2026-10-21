@@ -20,6 +20,7 @@ import type {
   PaperSize,
   Payment,
   PaymentMethod,
+  PaymentSettings,
   Rupiah,
   SessionMode,
   Shift,
@@ -27,7 +28,9 @@ import type {
   Ticket,
   Voucher,
 } from './model';
+import { PAYMENT_LABELS } from './model';
 import { Outbox } from './outbox';
+import { feeFor, gatewayLabel, isExpired, methodAllowed } from './payments';
 import { afterPrint, noPrinterReason, pickPrinter } from './printing';
 import { callNext, checkIn, completeTicket, issueTicket, moveTicket, reRegister, recallTicket, skipTicket, ticketNumber } from './queue';
 import { shiftSlip, type ShiftSlip } from './shift';
@@ -73,7 +76,7 @@ export class Ops {
     const key = store.key;
     this.actorKey = `${key}:actor`;
     this.gateway = new SimulatedGateway(
-      this.gatewayLabel(),
+      () => gatewayLabel(this.state.settings.payments),
       () => ({ name: this.state.branding.brandName || account.business, city: this.sites.locations[0]?.city ?? '' }),
       key,
     );
@@ -84,10 +87,6 @@ export class Ops {
 
   get state(): OpsState {
     return this.store.state;
-  }
-
-  private gatewayLabel(): string {
-    return { midtrans: 'Midtrans', xendit: 'Xendit', doku: 'DOKU' }[this.state.settings.gateway];
   }
 
   private now(): number {
@@ -320,15 +319,39 @@ export class Ops {
     return order;
   }
 
-  /** Cash, card or e-wallet: paid on the spot. Returns the change for cash. */
-  pay(orderId: string, method: Exclude<PaymentMethod, 'qris'>, amount: Rupiah, reference = ''): Rupiah {
-    const order = this.order(orderId);
+  get payments(): PaymentSettings {
+    return this.state.settings.payments;
+  }
+
+  private requireMethod(order: Order, method: PaymentMethod): void {
     if (order.status !== 'open') throw new Error(`Order ${order.number} is ${order.status}.`);
+    if (!methodAllowed(this.payments, method, order.channel)) {
+      throw new Error(`${PAYMENT_LABELS[method]} is switched off for the ${order.channel === 'booth' ? 'booth' : 'till'}. Change it on the Payments page.`);
+    }
+  }
+
+  /** Cash, card or e-wallet: paid on the spot. Returns the change for cash. */
+  pay(orderId: string, method: Exclude<PaymentMethod, 'qris'>, amount: Rupiah, reference = '', via: { wallet?: string; terminalId?: string } = {}): Rupiah {
+    const order = this.order(orderId);
+    this.requireMethod(order, method);
     const due = amountDue(order);
     if (method === 'cash' && amount <= 0) throw new Error('Enter the cash received.');
     if (method !== 'cash' && !reference.trim()) throw new Error('Enter the approval or reference number.');
+    if (method === 'ewallet' && this.payments.wallets.length && !via.wallet) throw new Error('Pick the e-wallet.');
     const applied = method === 'cash' ? Math.min(amount, due) : Math.min(amount || due, due);
-    const payment: Payment = { id: this.store.id(), method, amount: applied, status: 'paid', reference: reference.trim(), tendered: method === 'cash' ? amount : undefined, createdAt: this.now(), paidAt: this.now() };
+    const payment: Payment = {
+      id: this.store.id(),
+      method,
+      amount: applied,
+      status: 'paid',
+      reference: reference.trim(),
+      tendered: method === 'cash' ? amount : undefined,
+      wallet: via.wallet,
+      terminalId: via.terminalId,
+      fee: feeFor(this.payments, method, applied),
+      createdAt: this.now(),
+      paidAt: this.now(),
+    };
     this.store.update((draft) => draft.orders.find((entry) => entry.id === orderId)!.payments.push(payment));
     if (amountDue(this.order(orderId)) === 0) this.finalize(orderId);
     return method === 'cash' ? changeFor(amount, due) : 0;
@@ -337,11 +360,24 @@ export class Ops {
   /** Starts a dynamic QRIS charge for what is due. The gateway callback finishes it. */
   async chargeQris(orderId: string): Promise<Payment> {
     const order = this.order(orderId);
+    this.requireMethod(order, 'qris');
     const due = amountDue(order);
     if (due <= 0) throw new Error('Nothing is due.');
     const reference = `${order.number}-${order.payments.length + 1}`;
-    const charge = await this.gateway.createQris(due, reference);
-    const payment: Payment = { id: this.store.id(), method: 'qris', amount: due, status: 'pending', reference, gateway: this.gateway.label, qrString: charge.qrString, createdAt: this.now() };
+    const expiresInMs = this.payments.gateway.qrExpiryMinutes * 60_000;
+    const charge = await this.gateway.createQris(due, reference, expiresInMs);
+    const payment: Payment = {
+      id: this.store.id(),
+      method: 'qris',
+      amount: due,
+      status: 'pending',
+      reference,
+      gateway: this.gateway.label,
+      qrString: charge.qrString,
+      expiresAt: this.now() + expiresInMs,
+      fee: feeFor(this.payments, 'qris', due),
+      createdAt: this.now(),
+    };
     this.store.update((draft) => {
       const target = draft.orders.find((entry) => entry.id === orderId)!;
       // A new QR replaces any earlier one still waiting.
@@ -355,12 +391,71 @@ export class Ops {
   private qrisPaid(reference: string): void {
     const order = this.state.orders.find((entry) => entry.payments.some((payment) => payment.reference === reference && payment.status === 'pending'));
     if (!order) return;
+    this.settlePending(order.id, reference, '');
+  }
+
+  private settlePending(orderId: string, reference: string, note: string): void {
     this.store.update((draft) => {
-      const payment = draft.orders.find((entry) => entry.id === order.id)!.payments.find((entry) => entry.reference === reference)!;
+      const payment = draft.orders.find((entry) => entry.id === orderId)!.payments.find((entry) => entry.reference === reference)!;
       payment.status = 'paid';
       payment.paidAt = this.now();
+      if (note) payment.note = note;
     });
-    if (amountDue(this.order(order.id)) === 0) this.finalize(order.id);
+    if (amountDue(this.order(orderId)) === 0) this.finalize(orderId);
+  }
+
+  private findPayment(orderId: string, paymentId: string): { order: Order; payment: Payment } {
+    const order = this.order(orderId);
+    const payment = order.payments.find((entry) => entry.id === paymentId);
+    if (!payment) throw new Error('That payment is gone.');
+    return { order, payment };
+  }
+
+  /**
+   * The bank app says paid but the callback never came: a supervisor confirms it by hand, with
+   * the bank's reference, and the audit log keeps who did it.
+   */
+  async confirmPayment(orderId: string, paymentId: string, bankReference: string, pin: string): Promise<void> {
+    const { order, payment } = this.findPayment(orderId, paymentId);
+    if (payment.status !== 'pending') throw new Error(`This payment is ${payment.status}.`);
+    if (!bankReference.trim()) throw new Error('Enter the reference from the bank or wallet app.');
+    const approver = await findApprover(this.state.staff, pin);
+    if (!approver) throw new Error('That PIN does not belong to a supervisor.');
+    const note = `Confirmed by ${approver.name} from ${bankReference.trim()}`;
+    this.settlePending(orderId, payment.reference, note);
+    this.commit('payment.confirm', `${order.number}: QRIS ${payment.reference} confirmed by hand. ${note}.`, () => {}, { amount: payment.amount, branchId: order.branchId, sync: { orderId, paymentId, note } });
+  }
+
+  /** Stops a QR that is still waiting, for a customer who walked away or paid another way. */
+  cancelPayment(orderId: string, paymentId: string, reason: string): void {
+    const { order, payment } = this.findPayment(orderId, paymentId);
+    if (payment.status !== 'pending') throw new Error(`This payment is ${payment.status}.`);
+    if (!reason.trim()) throw new Error('Enter a reason.');
+    this.commit(
+      'payment.cancel',
+      `${order.number}: QRIS ${payment.reference} cancelled. ${reason.trim()}.`,
+      (draft) => {
+        const target = draft.orders.find((entry) => entry.id === orderId)!.payments.find((entry) => entry.id === paymentId)!;
+        target.status = 'cancelled';
+        target.note = reason.trim();
+      },
+      { branchId: order.branchId },
+    );
+  }
+
+  /** Marks every QR past its time as expired. Runs on the telemetry tick and when a page opens. */
+  expirePayments(): number {
+    const now = this.now();
+    const stale = this.state.orders.flatMap((order) => order.payments.filter((payment) => isExpired(payment, now)).map((payment) => ({ order, payment })));
+    if (stale.length === 0) return 0;
+    this.store.update((draft) => {
+      for (const order of draft.orders) for (const payment of order.payments) if (isExpired(payment, now)) payment.status = 'expired';
+    });
+    return stale.length;
+  }
+
+  savePaymentSettings(change: (draft: PaymentSettings) => void, message: string): void {
+    this.edit('settings.manage', 'payments.settings', message, (draft) => change(draft.settings.payments));
   }
 
   cancelOrder(orderId: string): void {

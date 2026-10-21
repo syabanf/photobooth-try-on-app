@@ -186,7 +186,7 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
   presets.body.append(table([{ label: 'Preset', cell: (row) => row.name }, { label: 'Discount', className: 'num', cell: (row) => (row.kind === 'percent' ? `${row.value}%` : money(row.value)) }], state.presets, { empty: 'No presets yet.', onRow: (row) => editPreset(row.id) }));
 
   // ---------- operations ----------
-  const rules = section('Operations', 'Shifts, retention, payments and the queue.');
+  const rules = section('Operations', 'Shifts, retention and the queue.');
   const s = state.settings;
   rules.actions.append(
     act('Edit', 'btn btn-outline btn-sm', () =>
@@ -196,7 +196,6 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
         fields: [
           { name: 'shiftsEnabled', label: 'Require an open shift to sell', value: s.shiftsEnabled, hint: 'Turn off for a booth with no cashier.' },
           { name: 'retentionDays', label: 'Keep customer photos for (days)', value: String(s.retentionDays), type: 'number', hint: '0 keeps them forever. Older files are deleted every day; the sales record stays.' },
-          { name: 'gateway', label: 'QRIS gateway', value: s.gateway, options: [{ value: 'midtrans', label: 'Midtrans' }, { value: 'xendit', label: 'Xendit' }, { value: 'doku', label: 'DOKU' }], hint: 'This build simulates the gateway. The server integration uses your merchant keys.' },
           { name: 'queuePrefix', label: 'Queue number prefix', value: s.queuePrefix },
           {
             name: 'faceLibrary',
@@ -214,7 +213,6 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
             Object.assign(draft.settings, {
               shiftsEnabled: values.shiftsEnabled as boolean,
               retentionDays,
-              gateway: values.gateway as never,
               queuePrefix: String(values.queuePrefix).trim().toUpperCase().slice(0, 3) || 'A',
               faceLibrary: values.faceLibrary as 'all' | 'visit',
               receiptFooter: String(values.receiptFooter).trim(),
@@ -229,7 +227,7 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
   for (const [label, value] of [
     ['Shifts', s.shiftsEnabled ? 'Required to sell' : 'Off'],
     ['Photo retention', s.retentionDays ? `${s.retentionDays} days, then deleted` : 'Kept forever'],
-    ['QRIS gateway', `${{ midtrans: 'Midtrans', xendit: 'Xendit', doku: 'DOKU' }[s.gateway]} (simulated)`],
+    ['Payments', 'Methods, fees and the gateway live on the Payments page'],
     ['Queue numbers', `${s.queuePrefix}001, ${s.queuePrefix}002 …`],
     ['Face list', s.faceLibrary === 'all' ? `Every face captured (${state.faces.length} kept)` : 'Current customer only'],
   ]) {

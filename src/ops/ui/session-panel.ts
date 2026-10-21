@@ -12,7 +12,9 @@ import { composeFrame } from '../frames';
 import { NO_EFFECTS, SESSION_MODES, type BoothSession, type Effects, type Frame, type PaperSize, type SessionMode, type Voucher } from '../model';
 import type { CartLine, Ops } from '../ops';
 import { formDialog } from '../../dialogs';
+import { methodAllowed } from '../payments';
 import { availableFrames } from '../vouchers';
+import { qrClock } from './pages/pos';
 import { act, actionButton, badge, el, money, notice, pills, qrCanvas } from './kit';
 
 export interface SessionHooks {
@@ -172,6 +174,19 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
     const qrArea = el('div', 'pay-qris');
     if (flow.qr) {
       qrArea.append(qrCanvas(flow.qr, 260), el('p', 'card-desc', `Scan with any bank or e-wallet app · ${ops.gateway.label}`));
+      const payment = ops.order(flow.orderId!).payments.find((entry) => entry.reference === flow.reference);
+      if (payment) {
+        qrArea.append(
+          qrClock(ops, flow.orderId!, payment.id, (status) => {
+            // The QR ran out or the cashier cancelled it: the customer can ask for a new one.
+            if (status === 'paid') return;
+            flow.qr = '';
+            flow.reference = '';
+            notice(status === 'expired' ? 'The QR ran out. Tap Pay for a new one.' : 'The cashier cancelled that QR. Tap Pay for a new one.', 'warn');
+            draw();
+          }),
+        );
+      }
       if (ops.gateway.simulated) {
         const simulate = actionButton('Simulate payment', 'btn btn-outline btn-sm');
         simulate.addEventListener('click', () => ops.gateway.simulatePaid!(flow.reference));
@@ -179,13 +194,17 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       }
     }
 
+    const qrisOff = !methodAllowed(ops.payments, 'qris', 'booth');
     const next = total === 0
       ? act('Start', 'btn btn-primary btn-block', () => go('style'))
-      : act(flow.qr ? 'Waiting for payment…' : `Pay ${money(total)} with QRIS`, 'btn btn-primary btn-block', async () => {
+      : qrisOff
+        ? el('p', 'callout', 'Pay at the cashier and type the code from your receipt here.')
+        : act(flow.qr ? 'Waiting for payment…' : `Pay ${money(total)} with QRIS`, 'btn btn-primary btn-block', async () => {
           if (flow.qr) return;
           const lines: CartLine[] = [{ kind: 'session', refId: ops.profile(id).categoryId, label: SESSION_MODES[flow.mode].label, unitPrice: flow.price, qty: 1, mode: flow.mode }];
           if (flow.extraPrints) lines.push({ kind: 'print', refId: printSize(), label: `Extra print ${printSize()}`, unitPrice: printPrice(), qty: flow.extraPrints, size: printSize() });
-          const order = ops.createOrder({ lines, presetId: null, voucherCode: flow.voucher?.code ?? '', channel: 'booth', branchId: ops.branchOf(id) ?? '', boothId: id });
+          // A retry after an expired QR reuses the open order.
+          const order = flow.orderId ? ops.order(flow.orderId) : ops.createOrder({ lines, presetId: null, voucherCode: flow.voucher?.code ?? '', channel: 'booth', branchId: ops.branchOf(id) ?? '', boothId: id });
           flow.orderId = order.id;
           if (order.status === 'paid') return go('style');
           const payment = await ops.chargeQris(order.id);
