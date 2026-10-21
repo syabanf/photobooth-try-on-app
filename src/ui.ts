@@ -3,10 +3,15 @@ import { openDialog } from './dialogs';
 import { hydrateIcons, icon, type IconName } from './icons';
 
 export type Mode = 'local' | 'ai';
-export type View = 'dashboard' | 'tryon' | 'photobooth' | 'gallery' | 'sites';
+export type OpsView = 'pos' | 'queue' | 'sales' | 'reports' | 'vouchers' | 'frames' | 'branding' | 'devices' | 'staff' | 'fleet' | 'settings';
+export type View = 'dashboard' | 'tryon' | 'photobooth' | 'gallery' | 'sites' | 'session' | 'presets' | OpsView;
 
 /** Views that show the camera stage. */
-export const CAMERA_VIEWS: readonly View[] = ['tryon', 'photobooth'];
+export const CAMERA_VIEWS: readonly View[] = ['tryon', 'photobooth', 'session', 'presets'];
+
+/** Business pages, drawn by src/ops/ui into one container. */
+export const OPS_VIEWS: readonly OpsView[] = ['pos', 'queue', 'sales', 'reports', 'vouchers', 'frames', 'branding', 'devices', 'staff', 'fleet', 'settings'];
+export const isOpsView = (view: View): view is OpsView => (OPS_VIEWS as readonly string[]).includes(view);
 export type StatusKind = 'info' | 'warn' | 'error' | 'ok';
 
 export interface UiHandlers {
@@ -55,7 +60,28 @@ const VIEWS: Record<View, { kicker: string; title: string; capture: string }> = 
   photobooth: { kicker: 'Timed shots', title: 'Photobooth', capture: 'Start photobooth' },
   gallery: { kicker: 'Saved on this device', title: 'Gallery', capture: 'Open camera' },
   sites: { kicker: 'Master data', title: 'Locations', capture: 'Open camera' },
+  session: { kicker: 'Customer session', title: 'Booth', capture: 'Open camera' },
+  presets: { kicker: 'Your face in every template', title: 'AI presets', capture: 'Open camera' },
+  pos: { kicker: 'Cashier', title: 'Point of sale', capture: 'Open camera' },
+  queue: { kicker: 'Customers waiting', title: 'Queue', capture: 'Open camera' },
+  sales: { kicker: 'Every rupiah', title: 'Transactions', capture: 'Open camera' },
+  reports: { kicker: 'Per shift, day, booth and frame', title: 'Reports', capture: 'Open camera' },
+  vouchers: { kicker: 'Codes and events', title: 'Vouchers', capture: 'Open camera' },
+  frames: { kicker: 'Print templates', title: 'Frames', capture: 'Open camera' },
+  branding: { kicker: 'Booth screens and gallery', title: 'Branding', capture: 'Open camera' },
+  devices: { kicker: 'Printers, cameras and alerts', title: 'Devices', capture: 'Open camera' },
+  staff: { kicker: 'Roles and PINs', title: 'Staff', capture: 'Open camera' },
+  fleet: { kicker: 'Updates, support and sync', title: 'Fleet', capture: 'Open camera' },
+  settings: { kicker: 'Prices, retention and payments', title: 'Settings', capture: 'Open camera' },
 };
+
+/** Every page in the More sheet, grouped, with the icon its row shows. */
+const MENU: { group: string; items: [View, string, IconName][] }[] = [
+  { group: 'Floor', items: [['session', 'Booth', 'booth'], ['presets', 'AI presets', 'sparkles'], ['pos', 'Point of sale', 'cart'], ['queue', 'Queue', 'queue'], ['tryon', 'Try on', 'shirt'], ['photobooth', 'Photobooth', 'aperture'], ['gallery', 'Gallery', 'images']] },
+  { group: 'Sales', items: [['sales', 'Transactions', 'receipt'], ['reports', 'Reports', 'chart'], ['vouchers', 'Vouchers', 'ticket']] },
+  { group: 'Content', items: [['frames', 'Frames', 'frame'], ['branding', 'Branding', 'palette']] },
+  { group: 'Operations', items: [['sites', 'Locations', 'pin'], ['devices', 'Devices and alerts', 'printer'], ['staff', 'Staff and roles', 'users'], ['fleet', 'Fleet and support', 'rocket'], ['settings', 'Settings', 'settings']] },
+];
 
 /** Items shown before "Show all", so the grid stays short on a phone. */
 const STRIP_PAGE = 6;
@@ -193,31 +219,43 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
     button.addEventListener('click', () => handlers.onView(button.dataset.view as View));
   }
 
-  // Phones: the bottom bar has room for five slots, so Gallery and Locations sit behind More.
-  const more = $<HTMLButtonElement>('#barMore');
-  const MORE_VIEWS: [View, string, IconName][] = [
-    ['gallery', 'Gallery', 'images'],
-    ['sites', 'Locations', 'pin'],
-  ];
-  more.addEventListener('click', () => {
-    const rows = MORE_VIEWS.map(([view, label, iconName]) => {
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'pick-row';
-      row.dataset.close = '';
-      const tile = document.createElement('span');
-      tile.className = 'tile tile--soft';
-      tile.append(icon(iconName));
-      const name = document.createElement('span');
-      name.className = 'pick-name pick-text';
-      name.textContent = label;
-      row.append(tile, name, icon('chevron'));
-      row.addEventListener('click', () => handlers.onView(view));
-      return row;
+  // The rail and the phone bar hold the busiest pages; More opens a sheet with the rest, leaving out
+  // whatever the visible bar already shows.
+  const moreButtons = [$<HTMLButtonElement>('#barMore'), $<HTMLButtonElement>('#railMore')];
+  const openMore = () => {
+    const onBar = new Set(navButtons.filter((button) => button.offsetParent !== null).map((button) => button.dataset.view));
+    const body = MENU.flatMap(({ group, items }) => {
+      const rows = items
+        .filter(([view]) => !onBar.has(view))
+        .map(([view, label, iconName]) => {
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'pick-row';
+          row.dataset.close = '';
+          const tile = document.createElement('span');
+          tile.className = 'tile tile--soft';
+          tile.append(icon(iconName));
+          const name = document.createElement('span');
+          name.className = 'pick-name pick-text';
+          name.textContent = label;
+          row.append(tile, name, icon('chevron'));
+          row.addEventListener('click', () => handlers.onView(view));
+          return row;
+        });
+      if (rows.length === 0) return [];
+      const section = document.createElement('div');
+      section.className = 'pick-group';
+      const heading = document.createElement('p');
+      heading.className = 'kicker';
+      heading.textContent = group;
+      section.append(heading, ...rows);
+      return [section];
     });
     // data-close on each row shuts the sheet after the view switches.
-    openDialog({ title: 'More', body: rows, footer: [] });
-  });
+    openDialog({ title: 'More', body, footer: [] });
+  };
+  for (const button of moreButtons) button.addEventListener('click', openMore);
+  const onMore = (view: View) => !navButtons.some((button) => button.dataset.view === view && button.offsetParent !== null);
 
   const setRailExpanded = (expanded: boolean) => {
     rail.classList.toggle('is-expanded', expanded);
@@ -265,7 +303,7 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
     },
     setView(view) {
       for (const button of navButtons) button.dataset.active = String(button.dataset.view === view);
-      more.dataset.active = String(view === 'gallery' || view === 'sites');
+      for (const button of moreButtons) button.dataset.active = String(onMore(view));
       $<HTMLElement>('#viewKicker').textContent = VIEWS[view].kicker;
       $<HTMLElement>('#viewTitle').textContent = VIEWS[view].title;
       const camera = CAMERA_VIEWS.includes(view);
@@ -273,6 +311,9 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
       $<HTMLElement>('#galleryView').hidden = view !== 'gallery';
       $<HTMLElement>('#sitesView').hidden = view !== 'sites';
       $<HTMLElement>('#dashboardView').hidden = view !== 'dashboard';
+      $<HTMLElement>('#opsView').hidden = !isOpsView(view);
+      $<HTMLElement>('#sessionPanel').hidden = view !== 'session';
+      $<HTMLElement>('#presetPanel').hidden = view !== 'presets';
       $<HTMLElement>('#tryonPanel').hidden = view !== 'tryon';
       $<HTMLElement>('#boothPanel').hidden = view !== 'photobooth';
       $<HTMLElement>('#modes').hidden = !camera;

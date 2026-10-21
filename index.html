@@ -69,6 +69,18 @@
           <button type="button" class="rail-item" data-view="dashboard" title="Dashboard">
             <i data-icon="dashboard"></i><span class="rail-label">Dashboard</span>
           </button>
+          <button type="button" class="rail-item" data-view="session" title="Booth">
+            <i data-icon="booth"></i><span class="rail-label">Booth</span>
+          </button>
+          <button type="button" class="rail-item" data-view="presets" title="AI presets">
+            <i data-icon="sparkles"></i><span class="rail-label">AI presets</span>
+          </button>
+          <button type="button" class="rail-item" data-view="pos" title="Point of sale">
+            <i data-icon="cart"></i><span class="rail-label">Point of sale</span>
+          </button>
+          <button type="button" class="rail-item" data-view="queue" title="Queue">
+            <i data-icon="queue"></i><span class="rail-label">Queue</span>
+          </button>
           <button type="button" class="rail-item" data-view="tryon" title="Try on">
             <i data-icon="shirt"></i><span class="rail-label">Try on</span>
           </button>
@@ -79,8 +91,8 @@
             <i data-icon="images"></i><span class="rail-label">Gallery</span>
             <span class="rail-badge" data-gallery-count hidden>0</span>
           </button>
-          <button type="button" class="rail-item" data-view="sites" title="Locations">
-            <i data-icon="pin"></i><span class="rail-label">Locations</span>
+          <button id="railMore" type="button" class="rail-item" title="More">
+            <i data-icon="more"></i><span class="rail-label">More</span>
           </button>
         </nav>
         <button id="railToggle" type="button" class="rail-toggle" aria-label="Expand menu">
@@ -124,6 +136,8 @@
                 <button type="button" class="pill-tab" data-days="30">30 days</button>
               </div>
             </div>
+
+            <div id="dashToday"></div>
 
             <div class="dash-hero">
               <section class="hero-card">
@@ -172,6 +186,9 @@
 
           <section id="stageView" class="stage-layout">
             <div class="stage-card">
+              <button id="cameraPick" type="button" class="stage-tool" title="Camera source">
+                <i data-icon="camera"></i><span id="cameraName">Camera</span>
+              </button>
               <div class="stage">
                 <video id="cam" autoplay muted playsinline></video>
                 <canvas id="overlay"></canvas>
@@ -192,6 +209,8 @@
             </div>
 
             <div class="inspector">
+              <div id="sessionPanel" class="panel-stack" hidden></div>
+              <div id="presetPanel" class="panel-stack" hidden></div>
               <section class="card device-card">
                 <span class="tile tile--ink"><i data-icon="point"></i></span>
                 <div class="device-text">
@@ -370,6 +389,8 @@
             </div>
           </section>
 
+          <section id="opsView" class="ops-view" hidden></section>
+
           <section id="galleryView" class="gallery-page" hidden>
             <div class="card page-card">
               <header class="page-head">
@@ -419,7 +440,7 @@
         <button type="button" class="bar-item" data-view="tryon" aria-label="Try on"><i data-icon="shirt"></i></button>
         <button id="barCapture" type="button" class="bar-action" aria-label="Take snapshot"><i data-icon="camera"></i></button>
         <button type="button" class="bar-item" data-view="photobooth" aria-label="Photobooth"><i data-icon="aperture"></i></button>
-        <button id="barMore" type="button" class="bar-item" aria-label="More: gallery and locations">
+        <button id="barMore" type="button" class="bar-item" aria-label="More pages">
           <i data-icon="more"></i><span class="rail-badge" data-gallery-count hidden>0</span>
         </button>
       </nav>

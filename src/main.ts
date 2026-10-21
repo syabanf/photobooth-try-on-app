@@ -2,6 +2,10 @@ import './style.css';
 import type { FaceLandmarker, GestureRecognizer, ImageSegmenter, NormalizedLandmark, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { faceOutline, glassesFrame, hatFrame, itemRect, packFrame, unpackFrame, type HeadFrame } from './anchors';
 import { CAMERA_MESSAGES, classifyCameraError, startCamera } from './camera';
+import { describeSource, readSource, type OpenedSource } from './camera-source';
+import { pickCamera } from './camera-picker';
+import { cropFace } from './faces';
+import { mountPresetPanel } from './ops/ui/preset-panel';
 import { CaptureTrigger, type TriggerState } from './capture-trigger';
 import { DEFAULT_ITEMS, createUploadItem, loadImage, placementOf, type CatalogItem, type Category, type ItemImage } from './catalog';
 import { DEBUG, drawLandmarkDots } from './debug';
@@ -17,7 +21,7 @@ import { detectPose, getPoseLandmarker } from './tracking/pose';
 import { getSegmenter, segmentForVideo, type SegmentMask } from './tracking/segmenter';
 import { nextTimestamp } from './tracking/vision';
 import { COMMONS_HATS, loadStoreCatalog } from './store-catalog';
-import { CAMERA_VIEWS, mountUi, type Mode, type StatusKind, type View } from './ui';
+import { CAMERA_VIEWS, isOpsView, mountUi, type Mode, type StatusKind, type View } from './ui';
 import { mountBoothPanel } from './booth-panel';
 import { NO_BACKGROUND, drawBackdrop, type Background } from './backgrounds';
 import { BackgroundLayer } from './render/background-layer';
@@ -33,6 +37,14 @@ import { browserStore, createLocalBackend } from './account/backend';
 import { mountAccountButton, signedIn } from './auth-screen';
 import { mountSitesView, type SitesView } from './sites-view';
 import { mountDashboard, type DashboardView } from './dashboard-view';
+import { OpsStore } from './ops/store';
+import { Ops } from './ops/ops';
+import { SimulatedEdsdk, WebcamDriver } from './ops/adapters';
+import { mountOpsRouter, type OpsRouter } from './ops/ui/router';
+import { mountSessionPanel } from './ops/ui/session-panel';
+import { displayRoute, renderDisplay } from './ops/ui/displays';
+import { renderToday } from './ops/ui/today';
+import { notice } from './ops/ui/kit';
 
 /** One Euro settings for landmarks in pixels: steady while the wearer holds still, quick to follow a turn. */
 const TRACK_FILTER = { minCutoff: 1.2, beta: 0.01 };
@@ -142,7 +154,8 @@ const ui = mountUi(document.body, {
   onCapture() {
     if (state.view === 'photobooth') void startPhotobooth();
     else if (state.view === 'tryon') void takeSnapshot();
-    else showView('tryon');
+    // The booth flow has its own start button; the accent button leaves it alone mid-session.
+    else if (state.view !== 'session') showView('tryon');
   },
   onMode: switchMode,
   onConnectAi: connectAi,
@@ -229,6 +242,12 @@ function showView(view: View): void {
   if (view === 'gallery') void gallery.refresh();
   if (view === 'sites') void sites?.refresh();
   if (view === 'dashboard') void dashboard?.refresh();
+  if (isOpsView(view)) business?.router.show(view);
+  else business?.router.hide();
+  if (view === 'session') business?.session.show();
+  else business?.session.hide();
+  if (view === 'presets') business?.presets.show();
+  else business?.presets.hide();
   syncLoop();
 }
 
@@ -770,13 +789,37 @@ async function loadStoreItems(): Promise<void> {
   }
 }
 
+/** The open camera source, closed before a different one starts. */
+let camera: OpenedSource | null = null;
+
+const cameraName = document.querySelector<HTMLElement>('#cameraName')!;
+document.querySelector('#cameraPick')!.addEventListener('click', () => void pickCamera(() => void boot()));
+// The Devices page opens the same picker.
+document.addEventListener('vto:pick-camera', () => void pickCamera(() => void boot()));
+
+/** A 4:5 headshot of the person facing the camera, for AI presets. */
+async function captureFace(): Promise<HTMLCanvasElement> {
+  if (!state.cameraLive) throw new Error('The camera is not running.');
+  state.face ??= await getFaceLandmarker();
+  const landmarks = detectFace(state.face, video, nextTimestamp());
+  if (!landmarks) throw new Error('No face found. Look straight at the camera and try again.');
+  return cropFace(video, landmarks);
+}
+
 async function boot(): Promise<void> {
   ui.setSnapshotEnabled(false);
-  setStatus('Starting camera…');
+  const source = readSource();
+  cameraName.textContent = describeSource(source);
+  setStatus(`Starting ${describeSource(source).toLowerCase()}…`);
+  camera?.close();
+  camera = null;
+  state.cameraLive = false;
   try {
-    await startCamera(video);
+    camera = await startCamera(video, source);
   } catch (e) {
-    setStatus(CAMERA_MESSAGES[classifyCameraError(e)], 'error', true);
+    // IP camera failures carry their own explanation; browser errors map to a known message.
+    const own = e instanceof Error && e.name === 'Error';
+    setStatus(own ? (e as Error).message : CAMERA_MESSAGES[classifyCameraError(e)], 'error', true);
     console.error(e);
     return;
   }
@@ -796,7 +839,94 @@ setInterval(() => void refreshPreview(), 1000);
 ui.setAiKey(readStoredKey());
 void loadStoreItems();
 
+/** The booth business layer, set up once someone signs in. */
+let business: { ops: Ops; router: OpsRouter; session: ReturnType<typeof mountSessionPanel>; presets: ReturnType<typeof mountPresetPanel> } | null = null;
+/** Heartbeats wait for the first camera start, so a page load never reports a camera as unplugged. */
+let heartbeats = false;
+
+async function startBusiness(account: Awaited<ReturnType<typeof signedIn>>): Promise<Ops> {
+  const store = new OpsStore(browserStore(), account.id, account.business);
+  const ops = new Ops(store, account, {
+    toast: (message, kind) => notice(message, kind),
+    devicePointId: () => sites?.devicePointId() ?? null,
+  });
+  ops.sites = await backend.sites();
+  const router = mountOpsRouter(ops, showView);
+  const session = mountSessionPanel(ops, {
+    grab: currentFrame,
+    countdown: (seconds) => booth.countdown(seconds),
+    flash: () => booth.flash(),
+    stage: stageEl,
+    stageCard: document.querySelector<HTMLElement>('.stage-card')!,
+    cameraLive: () => state.cameraLive,
+    onSaved: () => void gallery.refresh(),
+    openLocations: () => showView('sites'),
+  });
+  const presets = mountPresetPanel(ops, {
+    captureFace,
+    countdown: (seconds) => booth.countdown(seconds),
+    flash: () => booth.flash(),
+    share: (blob, name) => void shareDialog.open(blob, name),
+    onSaved: () => void gallery.refresh(),
+  });
+  business = { ops, router, session, presets };
+
+  // The device's camera: a Canon over EDSDK when its booth says so, the webcam otherwise.
+  const boothId = sites?.devicePointId();
+  const profile = boothId ? ops.cameraProfile(boothId) : null;
+  ops.camera = profile?.driver === 'edsdk'
+    ? new SimulatedEdsdk(() => ops.cameraProfile(boothId!).preview)
+    : new WebcamDriver(() => (video.srcObject as MediaStream | null)?.getVideoTracks()[0] ?? null);
+  if (profile) void ops.camera.apply('preview', profile.preview).catch(() => {});
+  ops.camera.onChange((camera) => {
+    const id = sites?.devicePointId();
+    if (id && heartbeats) ops.heartbeat(id, camera);
+  });
+
+  // Telemetry, alerts and sync every 30 seconds; the retention purge on start and every 6 hours.
+  const tick = async () => {
+    ops.sites = await backend.sites();
+    const id = sites?.devicePointId();
+    if (id && heartbeats) ops.heartbeat(id, ops.camera?.state() ?? { connected: state.cameraLive, battery: null, applied: null });
+    else ops.checkAlerts();
+    void ops.outbox.flush();
+  };
+  void tick();
+  setInterval(() => void tick(), 30_000);
+  window.addEventListener('online', () => void ops.outbox.retryNow());
+  void ops.purgeExpired();
+  setInterval(() => void ops.purgeExpired(), 6 * 3_600_000);
+  return ops;
+}
+
+/** A display window (customer screen, queue TV, photo page, check-in) has no camera and no menu. */
+async function startDisplay(): Promise<boolean> {
+  const route = displayRoute(location.hash);
+  if (!route) return false;
+  const current = await backend.current();
+  const candidates = current ? [current, ...(await backend.workspaces())] : await backend.workspaces();
+  // A photo link or ticket belongs to whichever workspace on this device holds its token.
+  const holds = (candidateId: string, business: string): boolean => {
+    if (route.kind === 'customer' || route.kind === 'queue') return candidateId === current?.id;
+    const saved = new OpsStore(browserStore(), candidateId, business).state;
+    const id = 'id' in route ? route.id : '';
+    if (route.kind === 'gallery') return saved.sessions.some((session) => session.token === id);
+    if (route.kind === 'event') return saved.events.some((event) => event.id === id);
+    return saved.tickets.some((ticket) => ticket.token === id);
+  };
+  const account = candidates.find((candidate) => holds(candidate.id, candidate.business)) ?? current ?? candidates[0];
+  if (!account) {
+    document.body.textContent = 'Open the app and pick a workspace first.';
+    return true;
+  }
+  const ops = new Ops(new OpsStore(browserStore(), account.id, account.business), account, { toast: () => {}, devicePointId: () => null });
+  ops.sites = await backend.sites();
+  await renderDisplay(ops, route);
+  return true;
+}
+
 async function start(): Promise<void> {
+  if (await startDisplay()) return;
   const account = await signedIn(backend);
   document.querySelector<HTMLElement>('.shell')!.hidden = false;
   mountAccountButton(backend, account);
@@ -806,19 +936,30 @@ async function start(): Promise<void> {
     onDevicePoint: () => {
       if (state.view === 'dashboard') void dashboard?.refresh();
     },
+    onSites: (latest) => {
+      if (business) business.ops.sites = latest;
+    },
   });
   await sites.refresh();
+  const ops = await startBusiness(account);
   dashboard = mountDashboard(backend, account, {
     devicePointId: () => sites!.devicePointId(),
     pointLabel: (id) => sites!.pointLabel(id),
     onNavigate: showView,
     onPickPoint: () => sites!.pickDevicePoint(),
+    today: () => renderToday(ops, showView),
   });
-  // A kiosk linked to a point opens on the camera; a manager's device opens on the dashboard.
-  if (!sites.devicePointId()) showView('dashboard');
+  ops.store.subscribe(() => {
+    if (state.view === 'dashboard') void dashboard?.refresh();
+  });
+  // A kiosk linked to a point opens on the booth flow; a manager's device opens on the dashboard.
+  showView(sites.devicePointId() ? 'session' : 'dashboard');
   void gallery.refresh();
   await wear(DEFAULT_ITEMS[0]);
   await boot();
+  heartbeats = true;
+  const id = sites.devicePointId();
+  if (id && ops.camera) ops.heartbeat(id, ops.camera.state());
 }
 
 void start();

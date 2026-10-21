@@ -3,7 +3,20 @@
 
 import type { BoothLayout } from './photobooth';
 
-export type ShotKind = 'photobooth' | 'snapshot';
+export type ShotKind = 'photobooth' | 'snapshot' | 'gif' | 'video' | 'live' | 'bts' | 'preset';
+
+export const SHOT_LABELS: Record<ShotKind, string> = {
+  photobooth: 'Photobooth',
+  snapshot: 'Snapshot',
+  gif: 'GIF',
+  video: 'Video',
+  live: 'Live photo',
+  bts: 'Behind the scenes',
+  preset: 'AI preset',
+};
+
+/** Kinds stored as video; the rest are images. */
+export const isMotion = (shot: Pick<Shot, 'blob'>) => shot.blob.type.startsWith('video/');
 
 export interface Shot {
   id: string;
@@ -13,6 +26,8 @@ export interface Shot {
   blob: Blob;
   /** The point the device ran as. Missing on shots saved before points existed. */
   pointId?: string | null;
+  /** The paid booth session the shot belongs to, for its soft-file page. */
+  sessionId?: string | null;
 }
 
 const DB_NAME = 'virtual-try-on';
@@ -48,8 +63,9 @@ export async function saveShot(
   kind: ShotKind,
   pointId: string | null,
   layout: BoothLayout | null = null,
+  sessionId: string | null = null,
 ): Promise<Shot> {
-  const shot: Shot = { id: crypto.randomUUID(), kind, layout, createdAt: Date.now(), blob, pointId };
+  const shot: Shot = { id: crypto.randomUUID(), kind, layout, createdAt: Date.now(), blob, pointId, sessionId };
   const db = await openDatabase();
   if (db) await run(db, 'readwrite', (store) => store.put(shot));
   else memory.set(shot.id, shot);
@@ -61,6 +77,11 @@ export async function listShots(): Promise<Shot[]> {
   const db = await openDatabase();
   const shots = db ? await run<Shot[]>(db, 'readonly', (store) => store.getAll()) : [...memory.values()];
   return shots.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function getShots(ids: readonly string[]): Promise<Shot[]> {
+  const wanted = new Set(ids);
+  return (await listShots()).filter((shot) => wanted.has(shot.id)).reverse();
 }
 
 export async function deleteShot(id: string): Promise<void> {

@@ -46,6 +46,92 @@ The scenery photos come from Wikimedia Commons and are each released as CC0 or p
 
 `src/photobooth.ts` holds the sheet geometry (tested), the compositing and the timed run. `src/render/background-layer.ts` draws the backdrop over the video with a hole where the segmenter found the person, so the live camera shows through; the mask is feathered at mask resolution, where a 1 px blur is cheap. `src/stickers.ts` keeps the stickers in a layer outside the mirrored stage, maps their positions through the `object-fit: contain` letterboxing, and stamps them onto each captured frame. `src/gallery.ts` stores captures in IndexedDB and falls back to memory when the browser refuses storage.
 
+## Booth business
+
+Everything a photobooth operator runs beside the camera: the customer's session at the booth, payments, the cashier, the queue, the owner's dashboard, and device health. It runs in this browser build today. The parts a browser cannot reach (the Canon and DNP SDKs, a payment gateway's server key, OTA and remote-access agents, email and WhatsApp) sit behind adapters with simulators, listed under [Going to production](#going-to-production).
+
+The rail holds Dashboard, Booth, Point of sale, Queue, Try on, Photobooth and Gallery; **More** opens the rest, grouped: Transactions, Reports, Vouchers, Frames, Branding, Locations, Devices, Staff, Fleet and Settings. A device linked to a booth opens on the Booth flow; any other device opens on the Dashboard.
+
+### Booth client
+
+- **Booth flow** (the Booth page, beside the camera): pick a mode, pay, choose a frame and a look, shoot, print, then scan the QR for the soft files. Five modes, each priced per booth category in Settings: **photo strip**, **GIF** (a 12-frame boomerang, encoded in `src/ops/encoders.ts`), **video booth** (an 8 second clip), **live photo** (a still plus a 3 second clip) and **original / vintage** (a single film-toned print).
+- **Effects:** filters (Natural, Mono, Warm, Cool, Vintage, Vivid), brightness, contrast and colour, mirror on or off, and zoom by slider or by pinching the camera. The preview shows them live, and `applyEffects` bakes the same values into every captured frame.
+- **Capture engine:** each booth has a preview profile and a capture profile (ISO, aperture, shutter, white balance, exposure compensation, picture style), set on Devices → Cameras. The capture profile goes on for the shot, then preview comes back. Drivers re-apply the saved preview profile when the camera powers up. `WebcamDriver` maps what a webcam can take onto its track; `SimulatedEdsdk` stands in for a Canon body, with power and battery controls on the Cameras tab.
+- **Behind-the-scenes camera:** pick a second camera per booth, and every session records a BTS clip from it, saved with the session.
+- **Printing:** sizes 2R, 3R, 4R, 5R, 6R, 8R, A4, A3, panoramic and custom. A booth can have several printers, and one printer can serve several booths. Each job goes to a working printer at that booth that takes the size and has paper, the fullest first. Printing uses the browser's print queue with the page size set, so Chrome started with `--kiosk-printing` prints without a dialog. Customers can buy extra prints before the session (on the pay step) or after it (Buy prints, by QRIS).
+- **Offline queue:** every sale, session, refund and shift is written to a local outbox first and only leaves when the cloud acknowledges it, in order, with exponential backoff. A reconnect or "Sync now" retries at once. Fleet → Cloud sync has a "Simulate offline" switch to try it.
+- **Idle-screen ads:** upload images or clips in Settings and switch them on; a booth waiting on its start screen plays them after the idle time, and a tap returns to the start.
+- **OTA updates:** Fleet → Releases stages a version to a share of booths. Each booth's bucket is fixed per release, so widening a rollout only adds booths. A rollback sends a release's booths back to the version below it.
+- **Remote support:** a booth requests support and shows a six-digit code. The operator allows the connection, and every session is logged.
+
+### Payments
+
+- **QRIS:** the booth and the till show a dynamic QR for the amount due. The gateway's callback marks the payment paid, which unlocks the session or completes the sale. The simulator builds an EMVCo-shaped payload marked SIMULATOR, and a "Simulate payment" button stands in for the customer's bank app.
+- **Cash, card and e-wallet:** cash at the till with change, and card or e-wallet with the EDC approval code or the e-wallet reference.
+- **Vouchers:** single-session codes, multi-booth codes with a use limit, date windows and happy hours checked on each booth's own time zone, frames only a code unlocks, free event mode (every session at the listed booths is free while it runs), and batches of single-use codes exported to CSV. Every session sold at the till prints its own single-use code.
+- **Settlement:** Reports → Settlement reads the gateway's settlement export and matches it against the QRIS payments recorded here. It shows matches, amount differences, payments only the gateway has, and payments that never settled, plus fees.
+
+### Digital delivery
+
+- **Soft files:** the QR at the end of a session opens the customer's page with every photo, GIF and clip, single downloads, "Download all" (a ZIP), and Share, which hands the file to the phone's share sheet for Instagram and TikTok.
+- **Branded page:** logo, colours, a heading and social links, edited on Branding with a live preview. The share buttons stay off until the customer agrees to public sharing, at the booth or on the page.
+- **Links:** a custom domain per workspace (the QR then points there), email delivery of the link from the booth, and per-event gallery pages that collect the shared sessions of an event.
+- **Retention:** photos older than the retention period (Settings, default 30 days) are deleted on start and every six hours. The sales record stays.
+
+### POS / cashier
+
+- **One cart** for sessions per booth category, extra prints, merchandise with stock, and paid reprints of past photos. Discount presets need the discount permission.
+- **Receipt:** prints at 80 mm or goes by email, with the per-session codes and the queue number.
+- **Refunds:** per item, with a reason and a supervisor's PIN. Each refund goes on the audit log, puts merchandise back in stock, and voids an unused session code.
+- **Shifts** (optional, in Settings): open with a cash count, close with the drawer count. The slip shows gross, refunds, net, each payment method, expected cash and the difference.
+- **Customer screen:** "Customer screen" opens a second window with the live cart, a large QRIS and the queue number after payment.
+
+### Queue
+
+- Tickets carry a number and a QR. Booked customers check themselves in by scanning it.
+- One ticket can wait for several booths. The first free booth calls it, and it leaves every other line, so nobody is called twice.
+- Operators can drag to reorder, re-call a ticket (it flashes on the TV), mark a no-show, and put a late customer back at the front or the back.
+- A customer who leaves a WhatsApp number or email gets a message when called. "TV display" opens the waiting-area screen.
+
+### Cloud dashboard
+
+- **Dashboard:** today's revenue per branch and booth, booths online, open alerts, the queue and items waiting to sync, above the capture charts.
+- **Transactions:** orders with per-line refunds, booth sessions, refunds, shifts with their slips, and the activity log of every sale, refund, voucher, shift, alert and setting change.
+- **Frames:** upload a PNG with transparent windows. Smart Frame finds each window and the shots fill them in reading order. Frames have categories and session counts.
+- **Reports:** by day, branch, booth, shift, frame or mode, for any date range, with CSV and XLSX export (`xlsx` in `src/ops/encoders.ts` writes a real workbook) and best sellers.
+- **Roles:** owner, admin, supervisor, cashier and booth operator. A person with branches listed only sees those branches. Switching user on a device takes the person's PIN.
+
+### Device telemetry and alerts
+
+- The device linked to a booth sends a heartbeat every 30 seconds with its camera state and version. A booth silent for two minutes shows as offline.
+- Alerts open once per problem and resolve on their own: low paper (DNP reads its count from the SDK; other brands count down from a manual count), printer errors, a disconnected camera, a low camera battery, and an offline booth.
+- With no rule, an alert pops up on the booth and goes by email and WhatsApp to the owner and the staff on duty at that branch. Branch rules on Devices → Alert routing narrow the channels and the people. Messages sent lists every email and WhatsApp the app produced.
+
+### Cameras and AI presets
+
+- **Camera source:** the camera button on the stage, or Devices → Cameras → Camera source, picks this device's picture: the default camera, any USB or built-in camera by name, or an **IP camera** by link. An MJPEG link streams through an image; an HLS, MP4 or WebM link plays through a video element. Either way, `src/camera-source.ts` turns the picture into a normal camera stream, so try-on, recording, face capture and Decart all work on it. Browsers cannot open RTSP, so an RTSP camera goes through a bridge such as go2rtc or MediaMTX, which serves it as MJPEG or HLS (`http://bridge:1984/api/stream.mjpeg?src=booth1`). The camera or the bridge must send CORS headers (go2rtc: `api: origin: "*"`), or the browser hides the pixels and the app says so. The choice is saved per device.
+- **AI presets** (rail → AI presets): the customer taps **Capture my face**, and after a 3 second countdown the face tracker crops a 4:5 headshot (`src/faces.ts`). The **Faces** page then lists every face captured on this device, newest first, with the new one picked. Tap to pick one or several, or Select all, or delete a face. **Templates** shows every active preset already filled with the picked faces, plus every active frame from the Frames page with the faces in its windows. It suggests one: Squad for several faces, else the first single-face layout. Picking a template opens it large. **Make it with AI** sends it to Decart's image model with the preset's prompt, keeping every face as it is, and the result can be saved to the gallery, shared in the Instagram sizes, or printed.
+- **Presets:** five built-in layouts, drawn on the device at 1080 × 1350 (`src/ops/presets.ts`): magazine cover, Polaroid, movie poster, VIP pass, and a squad page for up to four faces. Owners edit prompts, switch presets off and add their own (any layout, or an uploaded frame) under Frames → AI presets.
+- **Face list and privacy:** Settings → Operations → "Face list" chooses between every face captured (as asked, so regulars can reuse theirs) and only the current customer's faces. A public booth should use the second, since the first shows every customer's face to the next one. Captured faces follow the photo retention window and are deleted with the photos.
+
+### Code
+
+`src/ops/` holds the business: `model.ts` (every record), engines with tests (`vouchers`, `cart`, `shift`, `queue`, `outbox`, `printing`, `telemetry`, `access`, `fleet`, `reports`, `encoders`, `frames`), `adapters.ts` (the edges and their simulators), `store.ts` (one JSON document per workspace with an activity log, broadcast to other windows), `ops.ts` (every action, logged and queued for sync), `capture.ts` (effects, GIF bursts, clips), and `ui/` (the pages, the Booth flow and the standalone screens). `src/ops/ops.test.ts` runs a day at the till end to end.
+
+### Going to production
+
+| In this build | For production |
+|---|---|
+| `SimulatedGateway` builds a QRIS-shaped payload; "Simulate payment" stands in for the bank | A server that creates the charge with the Midtrans, Xendit or DOKU server key and pushes its payment callback to the booth that showed the QR |
+| `SimulatedEdsdk` keeps settings and a battery | A native bridge (Electron, or a local helper service) to Canon EDSDK, implementing `CameraDriver` |
+| DNP paper is read from a manual entry | The same bridge reads DNP's SDK and writes `paperLeft` |
+| `printImage` uses the browser print queue | Chrome with `--kiosk-printing`, or the native bridge sending jobs to the printer driver |
+| `SimulatedCloud` acknowledges the outbox locally | The cloud API the outbox posts to, deduplicating by item id |
+| Emails and WhatsApp messages are listed on Devices → Messages sent | An email provider and the WhatsApp Business API sending them |
+| The photo page opens on the booth that took the photos | The cloud serving `/g/<token>` from object storage, on the client's custom domain |
+| Releases and support sessions are recorded | An update agent that installs the target version between sessions, and a remote-access agent (such as RustDesk) that takes the code |
+| Staff PINs are PBKDF2 hashes in this browser | Accounts and PINs on the server, with sessions per device |
+
 ## Two modes
 
 **On device** is the default and everything below describes it. It runs entirely in the browser, costs nothing and sends no video anywhere.
