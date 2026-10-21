@@ -4,7 +4,8 @@ import type { AccountBackend } from './account/backend';
 import { TRIAL_LIMITS, trialDaysLeft, type Account, type Location, type Point, type Sites } from './account/model';
 import { percentChange, summarize, type DayCount, type Ranked, type Summary } from './dashboard-stats';
 import { actionButton, el, stat } from './dom';
-import { listShots, type Shot } from './gallery';
+import { SHOT_LABELS, listShots, type Shot } from './gallery';
+import { shotMedia } from './gallery-view';
 import { icon, type IconName } from './icons';
 import { readStored, segmented, writeStored, type View } from './ui';
 
@@ -13,6 +14,8 @@ export interface DashboardHandlers {
   pointLabel(id: string | null | undefined): string | null;
   onNavigate(view: View): void;
   onPickPoint(): void;
+  /** The business card: today's revenue, booths online, alerts, queue. */
+  today(): HTMLElement;
 }
 
 export interface DashboardView {
@@ -233,15 +236,13 @@ export function mountDashboard(backend: AccountBackend, account: Account, handle
             urls.push(url);
             const card = el('button', 'recent-shot');
             card.type = 'button';
-            const img = el('img');
-            img.src = url;
-            img.alt = '';
+            const media = shotMedia(shot, url);
             const meta = el('span', 'recent-meta');
             meta.append(
-              el('span', 'rank-name', shot.kind === 'photobooth' ? 'Photobooth' : 'Snapshot'),
+              el('span', 'rank-name', SHOT_LABELS[shot.kind]),
               el('span', 'rank-meta', handlers.pointLabel(shot.pointId) ?? 'No point'),
             );
-            card.append(img, meta);
+            card.append(media, meta);
             card.addEventListener('click', () => handlers.onNavigate('gallery'));
             return card;
           })
@@ -253,6 +254,7 @@ export function mountDashboard(backend: AccountBackend, account: Account, handle
     async refresh() {
       const [sites, shots] = await Promise.all([backend.sites(), listShots()]);
       const summary = summarize(shots, sites, days, Date.now());
+      $('#dashToday').replaceChildren(handlers.today());
       renderHero(summary);
       renderAttention(summary, sites);
       renderStats(summary, sites);

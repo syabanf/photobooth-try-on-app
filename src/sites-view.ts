@@ -13,6 +13,8 @@ export interface SitesHandlers {
   onOpenSites(): void;
   /** This device was linked to a point, moved to another one, or unlinked. */
   onDevicePoint(): void;
+  /** Locations or points changed, so other parts of the app can pick up the new lists. */
+  onSites?(sites: Sites): void;
 }
 
 export interface SitesView {
@@ -451,6 +453,7 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
       writeStored(deviceKey, null);
     }
     render();
+    handlers.onSites?.(sites);
   }
 
   addLocation.addEventListener('click', () => editLocation());

@@ -80,11 +80,13 @@ export function clearErrors(form: HTMLElement): void {
 
 /** Shows an AccountError under the input it names, anything else at the top of the form. */
 export function showError(form: HTMLElement, error: unknown): void {
-  if (!(error instanceof AccountError)) console.error(error);
+  if (!(error instanceof Error && (error instanceof AccountError || error.name === 'Error'))) console.error(error);
   const named = error instanceof AccountError && error.field ? error.field : null;
   const field = named && form.querySelector(`[data-error-for="${named}"]`) ? named : 'form';
   const slot = form.querySelector<HTMLElement>(`[data-error-for="${field}"]`)!;
-  slot.textContent = error instanceof AccountError ? error.message : 'Something went wrong. Try again.';
+  // Plain Errors carry messages written for people; TypeErrors and the like do not.
+  const readable = error instanceof AccountError || (error instanceof Error && error.name === 'Error');
+  slot.textContent = readable ? (error as Error).message : 'Something went wrong. Try again.';
   slot.hidden = false;
   const input = form.querySelector<HTMLElement>(`[name="${field}"]`);
   input?.setAttribute('aria-invalid', 'true');
@@ -101,17 +103,23 @@ function errorSlot(field: string): HTMLParagraphElement {
 
 // ---------- form dialog ----------
 
-export type FieldValue = string | boolean;
+export type FieldValue = string | boolean | string[];
 
 export interface FormField {
   name: string;
   label: string;
+  /**
+   * A switch when boolean, a row of checkboxes when an array (pick several of `options`), a select
+   * when `options` are given for a string, otherwise an input of `type`.
+   */
   value: FieldValue;
-  /** A select when options are given, a switch when the value is boolean, text otherwise. */
   options?: { value: string; label: string }[];
+  type?: 'text' | 'number' | 'date' | 'time' | 'email' | 'tel' | 'password' | 'color' | 'textarea';
   placeholder?: string;
   hint?: string;
 }
+
+type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLFieldSetElement;
 
 interface FormDialogOptions {
   title: string;
@@ -127,7 +135,32 @@ export interface FormDialogHandle extends DialogHandle {
   input(name: string): HTMLInputElement | HTMLSelectElement;
 }
 
-function control(field: FormField): HTMLInputElement | HTMLSelectElement {
+function control(field: FormField): Control {
+  if (Array.isArray(field.value)) {
+    const group = document.createElement('fieldset');
+    group.className = 'check-group';
+    group.name = field.name;
+    for (const option of field.options ?? []) {
+      const label = document.createElement('label');
+      label.className = 'check';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = option.value;
+      box.checked = field.value.includes(option.value);
+      label.append(box, option.label);
+      group.append(label);
+    }
+    return group;
+  }
+  if (field.type === 'textarea') {
+    const area = document.createElement('textarea');
+    area.className = 'input textarea';
+    area.name = field.name;
+    area.value = String(field.value);
+    area.rows = 3;
+    area.placeholder = field.placeholder ?? '';
+    return area;
+  }
   if (field.options) {
     const select = document.createElement('select');
     select.className = 'input select';
@@ -143,8 +176,9 @@ function control(field: FormField): HTMLInputElement | HTMLSelectElement {
     input.setAttribute('role', 'switch');
     input.checked = field.value;
   } else {
-    input.type = 'text';
-    input.className = 'input';
+    input.type = field.type ?? 'text';
+    input.className = field.type === 'color' ? 'input input-color' : 'input';
+    if (field.type === 'number') input.inputMode = 'numeric';
     input.value = field.value;
     input.placeholder = field.placeholder ?? '';
     input.autocomplete = 'off';
@@ -159,11 +193,12 @@ export function formDialog(options: FormDialogOptions): FormDialogHandle {
   form.noValidate = true;
   form.append(errorSlot('form'));
 
-  const controls = new Map<string, HTMLInputElement | HTMLSelectElement>();
+  const controls = new Map<string, Control>();
   for (const field of options.fields) {
     const element = control(field);
     controls.set(field.name, element);
-    const label = document.createElement('label');
+    // A checkbox group gets a div: a label wrapping several inputs would toggle the first on any click.
+    const label = document.createElement(Array.isArray(field.value) ? 'div' : 'label');
     label.className = typeof field.value === 'boolean' ? 'field field--switch' : 'field';
     const caption = document.createElement('span');
     caption.className = 'field-label';
@@ -191,7 +226,7 @@ export function formDialog(options: FormDialogOptions): FormDialogHandle {
 
   const handle: FormDialogHandle = {
     ...openDialog({ title: options.title, description: options.description, body: [form], footer }),
-    input: (name) => controls.get(name)!,
+    input: (name) => controls.get(name) as HTMLInputElement | HTMLSelectElement,
   };
 
   form.addEventListener('submit', async (event) => {
@@ -199,7 +234,11 @@ export function formDialog(options: FormDialogOptions): FormDialogHandle {
     clearErrors(form);
     const values: Record<string, FieldValue> = {};
     for (const [name, element] of controls) {
-      values[name] = element instanceof HTMLInputElement && element.type === 'checkbox' ? element.checked : element.value;
+      if (element instanceof HTMLFieldSetElement) {
+        values[name] = [...element.querySelectorAll<HTMLInputElement>('input:checked')].map((box) => box.value);
+      } else {
+        values[name] = element instanceof HTMLInputElement && element.type === 'checkbox' ? element.checked : element.value;
+      }
     }
     save.disabled = true;
     try {

@@ -1,6 +1,6 @@
 // The gallery page: every saved snapshot and photobooth sheet, newest first.
 
-import { deleteShot, listShots, type Shot } from './gallery';
+import { SHOT_LABELS, deleteShot, isMotion, listShots, type Shot } from './gallery';
 import { icon, iconButton } from './icons';
 import { downloadBlob } from './render/overlay';
 
@@ -19,7 +19,30 @@ export interface GalleryView {
 const LAYOUT_LABELS = { strip: 'Strip', grid: 'Grid', single: 'Single' } as const;
 
 function describe(shot: Shot): string {
-  return shot.kind === 'photobooth' && shot.layout ? `Photobooth · ${LAYOUT_LABELS[shot.layout]}` : 'Snapshot';
+  return shot.kind === 'photobooth' && shot.layout ? `Photobooth · ${LAYOUT_LABELS[shot.layout]}` : SHOT_LABELS[shot.kind];
+}
+
+export function extensionOf(blob: Blob): string {
+  return { 'image/gif': 'gif', 'image/jpeg': 'jpg', 'video/mp4': 'mp4' }[blob.type.split(';')[0]] ?? (blob.type.startsWith('video/') ? 'webm' : 'png');
+}
+
+/** An image, or a muted looping clip for videos, live photos and BTS recordings. */
+export function shotMedia(shot: Shot, url: string): HTMLElement {
+  if (isMotion(shot)) {
+    const video = document.createElement('video');
+    video.src = url;
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    video.setAttribute('aria-label', describe(shot));
+    return video;
+  }
+  const img = document.createElement('img');
+  img.src = url;
+  img.alt = describe(shot);
+  img.loading = 'lazy';
+  return img;
 }
 
 export function mountGalleryView(handlers: GalleryHandlers): GalleryView {
@@ -57,11 +80,7 @@ export function mountGalleryView(handlers: GalleryHandlers): GalleryView {
     article.className = 'shot';
     const frame = document.createElement('div');
     frame.className = 'shot-image';
-    const img = document.createElement('img');
-    img.src = url;
-    img.alt = describe(shot);
-    img.loading = 'lazy';
-    frame.append(img);
+    frame.append(shotMedia(shot, url));
 
     const when = document.createElement('div');
     when.className = 'shot-when';
@@ -77,9 +96,11 @@ export function mountGalleryView(handlers: GalleryHandlers): GalleryView {
 
     const share = iconButton('share', 'Share');
     share.addEventListener('click', () => handlers.onShare(shot));
+    // The social sizes are laid out from a still, so clips download as they are.
+    share.hidden = isMotion(shot);
 
     const download = iconButton('download', 'Download');
-    download.addEventListener('click', () => downloadBlob(shot.blob, `${shot.kind}-${shot.createdAt}.png`));
+    download.addEventListener('click', () => downloadBlob(shot.blob, `${shot.kind}-${shot.createdAt}.${extensionOf(shot.blob)}`));
 
     // Two taps to delete: the first arms the button, the second removes the shot.
     const remove = iconButton('trash', 'Delete');

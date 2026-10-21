@@ -1,28 +1,17 @@
+import { openSource, type CameraSource, type OpenedSource } from './camera-source';
+
 export type CameraError = 'insecure' | 'denied' | 'not-found' | 'in-use' | 'unknown';
 
-const PREFERRED: MediaStreamConstraints = {
-  video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-  audio: false,
-};
-
-export async function startCamera(video: HTMLVideoElement): Promise<MediaStream> {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new DOMException('Camera API unavailable', 'SecurityError');
-  }
-  let stream: MediaStream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia(PREFERRED);
-  } catch (e) {
-    if (classifyCameraError(e) !== 'not-found') throw e;
-    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-  }
-  video.srcObject = stream;
+/** Opens the source and plays it in the video element, which every tracker and capture reads. */
+export async function startCamera(video: HTMLVideoElement, source: CameraSource): Promise<OpenedSource> {
+  const opened = await openSource(source);
+  video.srcObject = opened.stream;
   await new Promise<void>((resolve) => {
     if (video.readyState >= HTMLMediaElement.HAVE_METADATA) resolve();
     else video.addEventListener('loadedmetadata', () => resolve(), { once: true });
   });
   await video.play();
-  return stream;
+  return opened;
 }
 
 export function classifyCameraError(e: unknown): CameraError {

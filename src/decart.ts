@@ -85,3 +85,15 @@ export async function blendIntoScene(apiKey: string, shot: Blob, scene: Blob | n
     ...(scene && { reference_image: scene }),
   });
 }
+
+/** Keeps the person recognisable whatever the preset asks for. */
+const IDENTITY = ' Keep every face identical to the photo: same identity, features, skin tone and expression.';
+
+/**
+ * Redraws a filled preset template from the preset's prompt, the faces kept as they are. Billed per
+ * image, like the blend.
+ */
+export async function restylePreset(apiKey: string, template: Blob, prompt: string): Promise<Blob> {
+  const client = createDecartClient({ apiKey });
+  return client.process({ model: models.image(BLEND_MODEL), prompt: prompt.trim() + IDENTITY, data: template });
+}
