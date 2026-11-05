@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS: Settings = {
   receiptFooter: 'Thank you! Show this receipt at the booth.',
   queuePrefix: 'A',
   faceLibrary: 'all',
+  presetPrice: 25_000,
 };
 
 const preset = (id: string, name: string, layout: Preset['layout'], prompt: string): Preset => ({ id, name, layout, prompt, frameId: null, active: true, builtIn: true });

@@ -174,3 +174,40 @@ describe('managing payments', () => {
     expect(ops.state.activity[0].kind).toBe('payment.confirm');
   });
 });
+
+describe('a party from the gate to the print', () => {
+  it('photographs the party at the gate, finds them by ticket at the booth and sells the preset', async () => {
+    const { ops } = setup();
+    const ticket = ops.issueTicket({ boothIds: ['k1'], name: 'Dina', phone: '', email: '', checkedIn: false });
+    expect(ops.findTicket(ticket.number).id).toBe(ticket.id);
+    expect(ops.findTicket(`https://booth.test/#checkin=${ticket.token}`).id).toBe(ticket.id);
+    expect(() => ops.findTicket('A999')).toThrow('A999 is not in the queue');
+
+    // The gate scan checks the ticket in, then the camera's faces are filed under it.
+    expect(ops.arrive(ticket.number).checkedIn).toBe(true);
+    expect(ops.arrive(ticket.number).status).toBe('waiting');
+    const photo = new Blob(['jpeg'], { type: 'image/jpeg' });
+    await ops.addFace(photo, 'k1', ticket.id);
+    await ops.addFace(photo, 'k1', ticket.id);
+    await ops.addFace(photo, 'k1');
+    expect(ops.facesForTicket(ticket.id)).toHaveLength(2);
+    expect(ops.state.activity[0].message).toBe('Kiosk 1 captured a face for AI presets.');
+    expect(ops.state.activity[1].message).toBe(`Kiosk 1 captured a face for ticket ${ticket.number}.`);
+
+    // The booth calls them, and the preset flow finds the ticket it is serving.
+    expect(ops.callNext('k1')?.id).toBe(ticket.id);
+    expect(ops.servingAt('k1')?.number).toBe(ticket.number);
+    expect(ops.servingAt('k2')).toBeNull();
+
+    ops.savePresetPrice(25_000);
+    const order = ops.createOrder({ lines: [{ kind: 'preset', refId: 'cover', label: 'AI preset · Magazine cover', unitPrice: ops.state.settings.presetPrice, qty: 1 }], presetId: null, voucherCode: '', channel: 'booth', branchId: 'mall', boothId: 'k1' });
+    expect(order.total).toBe(25_000);
+    const payment = await ops.chargeQris(order.id);
+    ops.gateway.simulatePaid!(payment.reference);
+    expect(ops.order(order.id).status).toBe('paid');
+
+    ops.savePresetPrice(0);
+    expect(ops.state.activity[0].message).toBe('AI presets are free.');
+  });
+});
+

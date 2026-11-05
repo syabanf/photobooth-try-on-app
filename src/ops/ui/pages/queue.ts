@@ -6,7 +6,7 @@ import { iconButton } from '../../../icons';
 import type { Ticket } from '../../model';
 import { queueFor } from '../../queue';
 import type { PageContext } from '../router';
-import { act, actionButton, badge, el, notice, page, qrCanvas, section } from '../kit';
+import { act, actionButton, badge, count, el, notice, page, qrCanvas, section } from '../kit';
 
 export function renderQueue({ ops }: PageContext): HTMLElement {
   const { tickets } = ops.state;
@@ -77,7 +77,8 @@ export function renderQueue({ ops }: PageContext): HTMLElement {
     });
     const show = iconButton('qr', `Show ${ticket.number}`);
     show.addEventListener('click', () => ticketDialog(ticket));
-    item.append(grip, text, ticket.checkedIn ? badge('Checked in', 'ok') : badge('Not here yet', 'warn'), up, show);
+    const faces = ops.facesForTicket(ticket.id).length;
+    item.append(grip, text, ticket.checkedIn ? badge('Checked in', 'ok') : badge('Not here yet', 'warn'), ...(faces ? [badge(count(faces, 'face'), 'info')] : []), up, show);
     list.append(item);
   }
   list.addEventListener('dragover', (event) => event.preventDefault());

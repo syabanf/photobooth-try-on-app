@@ -6,7 +6,7 @@ import { deleteShot } from '../gallery';
 import { deleteBlob, putBlob } from './blobs';
 import { can, checkPin, findApprover, hashPin, seesBranch, type Permission } from './access';
 import { DEFAULT_CAPTURE, DEFAULT_PREVIEW, printImage, SimulatedCloud, SimulatedGateway, type CameraDriver, type CameraState, type PaymentGateway } from './adapters';
-import { amountDue, changeFor, lineNet, orderNumber, priceLines, refundMethod } from './cart';
+import { amountDue, changeFor, formatRupiah, lineNet, orderNumber, priceLines, refundMethod } from './cart';
 import { sessionsToPurge, targetVersion } from './fleet';
 import type {
   BoothProfile,
@@ -32,7 +32,7 @@ import { PAYMENT_LABELS } from './model';
 import { Outbox } from './outbox';
 import { feeFor, gatewayLabel, isExpired, methodAllowed } from './payments';
 import { afterPrint, noPrinterReason, pickPrinter } from './printing';
-import { callNext, checkIn, completeTicket, issueTicket, moveTicket, reRegister, recallTicket, skipTicket, ticketNumber } from './queue';
+import { callNext, checkIn, completeTicket, findTicket, issueTicket, moveTicket, reRegister, recallTicket, skipTicket, ticketNumber } from './queue';
 import { shiftSlip, type ShiftSlip } from './shift';
 import type { OpsStore } from './store';
 import { reconcileAlerts, routeAlert, wantedAlerts, type BoothRef } from './telemetry';
@@ -635,6 +635,22 @@ export class Ops {
     return this.state.tickets.find((entry) => entry.token === token)!;
   }
 
+  /** A ticket scanned at the entrance or typed at a booth: by number, token or check-in link. */
+  findTicket(code: string): Ticket {
+    return findTicket(this.state.tickets, code);
+  }
+
+  /** The entrance scan: a waiting ticket checks in; one already in is left as it is. */
+  arrive(code: string): Ticket {
+    const ticket = this.findTicket(code);
+    return ticket.status === 'waiting' && !ticket.checkedIn ? this.checkIn(ticket.token) : ticket;
+  }
+
+  /** The ticket this booth is serving right now, if the queue called one here. */
+  servingAt(boothId: string | null): Ticket | null {
+    return this.state.tickets.find((ticket) => ticket.status === 'called' && ticket.calledBoothId === boothId) ?? null;
+  }
+
   /** Tells a called customer by WhatsApp or email when they left a contact. */
   private announce(ticket: Ticket, boothId: string): void {
     const body = `Ticket ${ticket.number}: it's your turn at ${this.boothName(boothId)}.`;
@@ -832,10 +848,22 @@ export class Ops {
   // ---------- faces ----------
 
   /** Keeps a face crop for AI presets. It follows the photo retention window like every capture. */
-  async addFace(image: Blob, boothId: string | null): Promise<FaceRecord> {
-    const face: FaceRecord = { id: this.store.id(), image: await putBlob(image), boothId, createdAt: this.now() };
-    this.commit('face.capture', `${this.boothName(boothId)} captured a face for AI presets.`, (draft) => draft.faces.unshift(face), { branchId: this.branchOf(boothId) });
+  async addFace(image: Blob, boothId: string | null, ticketId: string | null = null): Promise<FaceRecord> {
+    const face: FaceRecord = { id: this.store.id(), image: await putBlob(image), boothId, ticketId, createdAt: this.now() };
+    const ticket = this.state.tickets.find((entry) => entry.id === ticketId);
+    this.commit('face.capture', `${this.boothName(boothId)} captured a face${ticket ? ` for ticket ${ticket.number}` : ' for AI presets'}.`, (draft) => draft.faces.unshift(face), { branchId: this.branchOf(boothId) });
     return face;
+  }
+
+  savePresetPrice(price: Rupiah): void {
+    this.edit('settings.manage', 'preset.price', price ? `A printed AI preset costs ${formatRupiah(price)}.` : 'AI presets are free.', (draft) => {
+      draft.settings.presetPrice = price;
+    });
+  }
+
+  /** The faces the entrance camera took for one ticket, newest first. */
+  facesForTicket(ticketId: string): FaceRecord[] {
+    return this.state.faces.filter((face) => face.ticketId === ticketId);
   }
 
   async deleteFace(id: string): Promise<void> {

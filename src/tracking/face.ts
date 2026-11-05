@@ -1,5 +1,5 @@
 import { FaceLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
-import { MODEL_URLS, createWithFallback, getVisionFileset } from './vision';
+import { MODEL_URLS, createWithFallback, getVisionFileset, nextTimestamp } from './vision';
 
 let instance: Promise<FaceLandmarker> | null = null;
 
@@ -25,4 +25,27 @@ export function detectFace(
   timestamp: number,
 ): NormalizedLandmark[] | null {
   return landmarker.detectForVideo(video, timestamp).faceLandmarks[0] ?? null;
+}
+
+let group: Promise<FaceLandmarker> | null = null;
+
+/**
+ * Up to six faces in the current frame: the whole party at the entrance camera, left to right.
+ * A video-mode landmarker of its own, since the try-on tracker follows one face only.
+ */
+export async function detectFaces(video: HTMLVideoElement): Promise<NormalizedLandmark[][]> {
+  group ??= createWithFallback(async (delegate) =>
+    FaceLandmarker.createFromOptions(await getVisionFileset(), {
+      baseOptions: { modelAssetPath: MODEL_URLS.face, delegate },
+      runningMode: 'VIDEO',
+      numFaces: 6,
+      outputFaceBlendshapes: false,
+      outputFacialTransformationMatrixes: false,
+    }),
+  ).catch((e) => {
+    group = null;
+    throw e;
+  });
+  const faces = (await group).detectForVideo(video, nextTimestamp()).faceLandmarks;
+  return [...faces].sort((a, b) => a[1].x - b[1].x);
 }

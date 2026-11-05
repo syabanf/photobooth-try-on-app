@@ -4386,3 +4386,33 @@ body.display-mode {
   border-radius: 16px;
   background: var(--surface-2);
 }
+
+/* ---------- gate and preset payment ---------- */
+
+.gate-row {
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gate-row:hover {
+  background: var(--surface-2);
+}
+
+.pay-preset {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pay-preset img {
+  width: 72px;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border-radius: 12px;
+  background: var(--surface-2);
+}

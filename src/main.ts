@@ -5,6 +5,7 @@ import { CAMERA_MESSAGES, classifyCameraError, startCamera } from './camera';
 import { describeSource, readSource, type OpenedSource } from './camera-source';
 import { pickCamera } from './camera-picker';
 import { cropFace } from './faces';
+import { mountGatePanel } from './ops/ui/gate-panel';
 import { mountPresetPanel } from './ops/ui/preset-panel';
 import { CaptureTrigger, type TriggerState } from './capture-trigger';
 import { DEFAULT_ITEMS, createUploadItem, loadImage, placementOf, type CatalogItem, type Category, type ItemImage } from './catalog';
@@ -14,7 +15,7 @@ import { OneEuroFilter } from './filter';
 import { mlsSimilarity, type ControlPair, type Vec } from './mls';
 import { GarmentLayer } from './render/garment-layer';
 import { Overlay, canvasToBlob, captureFrame, type ItemShadow } from './render/overlay';
-import { detectFace, getFaceLandmarker } from './tracking/face';
+import { detectFace, detectFaces, getFaceLandmarker } from './tracking/face';
 import { NO_HAND, getGestureRecognizer, readHand } from './tracking/gesture';
 import { HandCursor } from './hand-cursor';
 import { detectPose, getPoseLandmarker } from './tracking/pose';
@@ -248,6 +249,8 @@ function showView(view: View): void {
   else business?.session.hide();
   if (view === 'presets') business?.presets.show();
   else business?.presets.hide();
+  if (view === 'gate') business?.gate.show();
+  else business?.gate.hide();
   syncLoop();
 }
 
@@ -806,6 +809,14 @@ async function captureFace(): Promise<HTMLCanvasElement> {
   return cropFace(video, landmarks);
 }
 
+/** Everyone in front of the entrance camera, one 4:5 headshot each. */
+async function captureFaces(): Promise<HTMLCanvasElement[]> {
+  if (!state.cameraLive) throw new Error('The camera is not running.');
+  const faces = await detectFaces(video);
+  if (faces.length === 0) throw new Error('No face in view. Ask the party to look at the camera.');
+  return faces.map((landmarks) => cropFace(video, landmarks));
+}
+
 async function boot(): Promise<void> {
   ui.setSnapshotEnabled(false);
   const source = readSource();
@@ -840,7 +851,7 @@ ui.setAiKey(readStoredKey());
 void loadStoreItems();
 
 /** The booth business layer, set up once someone signs in. */
-let business: { ops: Ops; router: OpsRouter; session: ReturnType<typeof mountSessionPanel>; presets: ReturnType<typeof mountPresetPanel> } | null = null;
+let business: { ops: Ops; router: OpsRouter; session: ReturnType<typeof mountSessionPanel>; presets: ReturnType<typeof mountPresetPanel>; gate: ReturnType<typeof mountGatePanel> } | null = null;
 /** Heartbeats wait for the first camera start, so a page load never reports a camera as unplugged. */
 let heartbeats = false;
 
@@ -869,7 +880,8 @@ async function startBusiness(account: Awaited<ReturnType<typeof signedIn>>): Pro
     share: (blob, name) => void shareDialog.open(blob, name),
     onSaved: () => void gallery.refresh(),
   });
-  business = { ops, router, session, presets };
+  const gate = mountGatePanel(ops, { captureFaces, flash: () => booth.flash() });
+  business = { ops, router, session, presets, gate };
 
   // The device's camera: a Canon over EDSDK when its booth says so, the webcam otherwise.
   const boothId = sites?.devicePointId();
