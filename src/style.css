@@ -4335,14 +4335,6 @@ body.display-mode {
   transform: scale(0.97);
 }
 
-.face-remove {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 30px;
-  height: 30px;
-  background: rgb(255 255 255 / 0.85);
-}
 
 .preset-grid {
   display: grid;
@@ -4416,3 +4408,88 @@ body.display-mode {
   border-radius: 12px;
   background: var(--surface-2);
 }
+
+/* ---------- face names ---------- */
+
+.face-name {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.face-name.is-empty {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.face-name-btn {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.face-name-btn:hover {
+  background: var(--surface-2);
+}
+
+.face-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.face-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 8px 10px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--surface-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms;
+}
+
+.face-card:active {
+  transform: scale(0.98);
+}
+
+.face-card img {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  margin-bottom: 4px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.face-card .rank-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.face-tag-photo {
+  display: block;
+  width: min(220px, 60%);
+  aspect-ratio: 4 / 5;
+  margin: 0 auto 16px;
+  object-fit: cover;
+  border-radius: 18px;
+  background: var(--surface-2);
+}
+

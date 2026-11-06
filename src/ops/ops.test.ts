@@ -193,6 +193,14 @@ describe('a party from the gate to the print', () => {
     expect(ops.facesForTicket(ticket.id)).toHaveLength(2);
     expect(ops.state.activity[0].message).toBe('Kiosk 1 captured a face for AI presets.');
     expect(ops.state.activity[1].message).toBe(`Kiosk 1 captured a face for ticket ${ticket.number}.`);
+    const [dina] = ops.facesForTicket(ticket.id);
+    ops.tagFace(dina.id, '  Dina  ');
+    expect(ops.facesForTicket(ticket.id)[0].name).toBe('Dina');
+    expect(ops.state.activity[0].message).toBe('Named a face Dina.');
+    ops.tagFace(dina.id, '');
+    expect(ops.state.activity[0].message).toBe('Removed the name from a face.');
+    expect(() => ops.tagFace('gone', 'X')).toThrow('That face is gone.');
+    ops.tagFace(dina.id, 'Dina');
 
     // The booth calls them, and the preset flow finds the ticket it is serving.
     expect(ops.callNext('k1')?.id).toBe(ticket.id);

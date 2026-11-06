@@ -30,6 +30,7 @@ import type {
 } from './model';
 import { PAYMENT_LABELS } from './model';
 import { Outbox } from './outbox';
+import { cleanName } from './face-tags';
 import { feeFor, gatewayLabel, isExpired, methodAllowed } from './payments';
 import { afterPrint, noPrinterReason, pickPrinter } from './printing';
 import { callNext, checkIn, completeTicket, findTicket, issueTicket, moveTicket, reRegister, recallTicket, skipTicket, ticketNumber } from './queue';
@@ -849,7 +850,7 @@ export class Ops {
 
   /** Keeps a face crop for AI presets. It follows the photo retention window like every capture. */
   async addFace(image: Blob, boothId: string | null, ticketId: string | null = null): Promise<FaceRecord> {
-    const face: FaceRecord = { id: this.store.id(), image: await putBlob(image), boothId, ticketId, createdAt: this.now() };
+    const face: FaceRecord = { id: this.store.id(), image: await putBlob(image), boothId, ticketId, name: '', createdAt: this.now() };
     const ticket = this.state.tickets.find((entry) => entry.id === ticketId);
     this.commit('face.capture', `${this.boothName(boothId)} captured a face${ticket ? ` for ticket ${ticket.number}` : ' for AI presets'}.`, (draft) => draft.faces.unshift(face), { branchId: this.branchOf(boothId) });
     return face;
@@ -859,6 +860,20 @@ export class Ops {
     this.edit('settings.manage', 'preset.price', price ? `A printed AI preset costs ${formatRupiah(price)}.` : 'AI presets are free.', (draft) => {
       draft.settings.presetPrice = price;
     });
+  }
+
+  /**
+   * Names a face. Anyone can, with no PIN: customers name their own party at the booth. An empty
+   * name removes it.
+   */
+  tagFace(id: string, name: string): void {
+    const face = this.state.faces.find((entry) => entry.id === id);
+    if (!face) throw new Error('That face is gone.');
+    const clean = cleanName(name);
+    if (clean === face.name) return;
+    this.commit('face.tag', clean ? `Named a face ${clean}.` : 'Removed the name from a face.', (draft) => {
+      draft.faces.find((entry) => entry.id === id)!.name = clean;
+    }, { branchId: this.branchOf(face.boothId) });
   }
 
   /** The faces the entrance camera took for one ticket, newest first. */

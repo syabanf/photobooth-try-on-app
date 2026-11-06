@@ -8,6 +8,7 @@ import { blobUrl } from '../blobs';
 import type { FaceRecord, Ticket } from '../model';
 import type { Ops } from '../ops';
 import { arrivals } from '../queue';
+import { nameButton, tagFaceDialog } from './face-tag';
 import { act, badge, count, el, notice } from './kit';
 
 export interface GateHooks {
@@ -100,16 +101,22 @@ export function mountGatePanel(ops: Ops, hooks: GateHooks) {
     if (pending.has(ticket.id)) body.push(el('p', 'card-desc', 'Photographing…'));
     else if (arrival.error) body.push(el('p', 'callout', arrival.error));
     else {
+      // Names and deletions from the tag panel show at once.
+      const faces = ops.facesForTicket(ticket.id).filter((face) => arrival.faces.some((taken) => taken.id === face.id));
       const grid = el('div', 'face-grid');
-      for (const face of arrival.faces) {
-        const tile = el('span', 'face-tile');
+      for (const face of faces) {
+        const tile = el('button', 'face-tile');
+        tile.type = 'button';
         const img = el('img');
-        img.alt = 'Captured face';
+        img.alt = face.name || 'Captured face';
         void blobUrl(face.image).then((url) => (img.src = url));
         tile.append(img);
-        grid.append(tile);
+        tile.addEventListener('click', () => tagFaceDialog(ops, face));
+        const cell = el('div', 'face-cell');
+        cell.append(tile, nameButton(ops, face));
+        grid.append(cell);
       }
-      body.push(el('p', 'card-desc', `${count(arrival.faces.length, 'face')} saved for ${ticket.number}.`), grid);
+      body.push(el('p', 'card-desc', `${count(faces.length, 'face')} saved for ${ticket.number}. Tap a face to name who it is.`), grid);
     }
     const again = act('Take again', 'btn btn-outline btn-sm', () => photograph(ticket), 'camera');
     again.disabled = pending.has(ticket.id);

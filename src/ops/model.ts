@@ -446,6 +446,8 @@ export interface FaceRecord {
   boothId: string | null;
   /** The queue ticket scanned when the entrance camera took this face, so a group finds its own. */
   ticketId: string | null;
+  /** Who this is, typed by staff or by the customer. Empty until someone names it. */
+  name: string;
   createdAt: number;
 }
 

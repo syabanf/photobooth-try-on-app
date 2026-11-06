@@ -3,14 +3,14 @@ import { openDialog } from './dialogs';
 import { hydrateIcons, icon, type IconName } from './icons';
 
 export type Mode = 'local' | 'ai';
-export type OpsView = 'pos' | 'queue' | 'sales' | 'payments' | 'reports' | 'vouchers' | 'frames' | 'branding' | 'devices' | 'staff' | 'fleet' | 'settings';
+export type OpsView = 'faces' | 'pos' | 'queue' | 'sales' | 'payments' | 'reports' | 'vouchers' | 'frames' | 'branding' | 'devices' | 'staff' | 'fleet' | 'settings';
 export type View = 'dashboard' | 'tryon' | 'photobooth' | 'gallery' | 'sites' | 'session' | 'presets' | 'gate' | OpsView;
 
 /** Views that show the camera stage. */
 export const CAMERA_VIEWS: readonly View[] = ['tryon', 'photobooth', 'session', 'presets', 'gate'];
 
 /** Business pages, drawn by src/ops/ui into one container. */
-export const OPS_VIEWS: readonly OpsView[] = ['pos', 'queue', 'sales', 'payments', 'reports', 'vouchers', 'frames', 'branding', 'devices', 'staff', 'fleet', 'settings'];
+export const OPS_VIEWS: readonly OpsView[] = ['faces', 'pos', 'queue', 'sales', 'payments', 'reports', 'vouchers', 'frames', 'branding', 'devices', 'staff', 'fleet', 'settings'];
 export const isOpsView = (view: View): view is OpsView => (OPS_VIEWS as readonly string[]).includes(view);
 export type StatusKind = 'info' | 'warn' | 'error' | 'ok';
 
@@ -63,6 +63,7 @@ const VIEWS: Record<View, { kicker: string; title: string; capture: string }> = 
   session: { kicker: 'Customer session', title: 'Booth', capture: 'Open camera' },
   presets: { kicker: 'Your face in every template', title: 'AI presets', capture: 'Open camera' },
   gate: { kicker: 'Scan tickets, photograph the party', title: 'Gate', capture: 'Open camera' },
+  faces: { kicker: 'Who is who', title: 'Faces', capture: 'Open camera' },
   pos: { kicker: 'Cashier', title: 'Point of sale', capture: 'Open camera' },
   queue: { kicker: 'Customers waiting', title: 'Queue', capture: 'Open camera' },
   sales: { kicker: 'Every rupiah', title: 'Transactions', capture: 'Open camera' },
@@ -79,7 +80,7 @@ const VIEWS: Record<View, { kicker: string; title: string; capture: string }> = 
 
 /** Every page in the More sheet, grouped, with the icon its row shows. */
 const MENU: { group: string; items: [View, string, IconName][] }[] = [
-  { group: 'Floor', items: [['session', 'Booth', 'booth'], ['presets', 'AI presets', 'sparkles'], ['gate', 'Gate', 'qr'], ['pos', 'Point of sale', 'cart'], ['queue', 'Queue', 'queue'], ['tryon', 'Try on', 'shirt'], ['photobooth', 'Photobooth', 'aperture'], ['gallery', 'Gallery', 'images']] },
+  { group: 'Floor', items: [['session', 'Booth', 'booth'], ['presets', 'AI presets', 'sparkles'], ['gate', 'Gate', 'qr'], ['faces', 'Faces', 'users'], ['pos', 'Point of sale', 'cart'], ['queue', 'Queue', 'queue'], ['tryon', 'Try on', 'shirt'], ['photobooth', 'Photobooth', 'aperture'], ['gallery', 'Gallery', 'images']] },
   { group: 'Sales', items: [['sales', 'Transactions', 'receipt'], ['payments', 'Payments', 'wallet'], ['reports', 'Reports', 'chart'], ['vouchers', 'Vouchers', 'ticket']] },
   { group: 'Content', items: [['frames', 'Frames', 'frame'], ['branding', 'Branding', 'palette']] },
   { group: 'Operations', items: [['sites', 'Locations', 'pin'], ['devices', 'Devices and alerts', 'printer'], ['staff', 'Staff and roles', 'users'], ['fleet', 'Fleet and support', 'rocket'], ['settings', 'Settings', 'settings']] },

@@ -4,7 +4,6 @@
 
 import { readStoredKey, restylePreset, storeKey } from '../../decart';
 import { saveShot } from '../../gallery';
-import { iconButton } from '../../icons';
 import { canvasToBlob } from '../../render/overlay';
 import { blobUrl } from '../blobs';
 import { amountDue } from '../cart';
@@ -13,8 +12,8 @@ import type { Ops } from '../ops';
 import { methodAllowed } from '../payments';
 import { PRESET_SIZE, renderPreset, suggestPreset, type PresetLook } from '../presets';
 import { act, actionButton, badge, count, el, money, notice, qrCanvas } from './kit';
+import { nameButton } from './face-tag';
 import { qrClock } from './pages/pos';
-import { confirmDialog } from '../../dialogs';
 
 export interface PresetHooks {
   /** A 4:5 headshot of whoever faces the camera; throws when no face is found. */
@@ -196,7 +195,7 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
     tile.type = 'button';
     tile.setAttribute('aria-pressed', String(selected.has(face.id)));
     const img = el('img');
-    img.alt = 'Captured face';
+    img.alt = face.name || 'Captured face';
     void blobUrl(face.image).then((url) => (img.src = url));
     tile.append(img);
     if (visit.has(face.id)) tile.append(badge('New', 'ok'));
@@ -205,24 +204,8 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
       else selected.add(face.id);
       draw();
     });
-    const remove = iconButton('trash', 'Delete this face');
-    remove.classList.add('face-remove');
-    remove.addEventListener('click', (event) => {
-      event.stopPropagation();
-      confirmDialog({
-        title: 'Delete this face?',
-        message: 'It leaves the face list and cannot be used again. Photos already made with it stay in the gallery.',
-        confirmLabel: 'Delete',
-        async run() {
-          selected.delete(face.id);
-          visit.delete(face.id);
-          await ops.deleteFace(face.id);
-          draw();
-        },
-      });
-    });
     const wrap = el('div', 'face-cell');
-    wrap.append(tile, remove);
+    wrap.append(tile, nameButton(ops, face));
     return wrap;
   }
 

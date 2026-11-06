@@ -5,6 +5,7 @@ import type { OpsView, View } from '../../ui';
 import type { Ops } from '../ops';
 import { renderBranding } from './pages/branding';
 import { renderDevices } from './pages/devices';
+import { renderFaces } from './pages/faces';
 import { renderFleet } from './pages/fleet';
 import { renderFrames } from './pages/frames';
 import { renderPayments } from './pages/payments';
@@ -28,6 +29,7 @@ export interface PageContext {
 type Render = (context: PageContext) => HTMLElement;
 
 const PAGES: Record<OpsView, { render: Render; permission: Permission }> = {
+  faces: { render: renderFaces, permission: 'queue.run' },
   pos: { render: renderPos, permission: 'pos.sell' },
   queue: { render: renderQueue, permission: 'queue.run' },
   sales: { render: renderSales, permission: 'history.view' },
