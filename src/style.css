@@ -607,6 +607,10 @@ p {
 }
 
 .card .pill-tabs {
+  max-width: 100%;
+  flex-wrap: wrap;
+  /* Rounds like a pill on one row, and stays a soft panel when the options wrap to a second. */
+  border-radius: 21px;
   background: var(--surface);
   box-shadow: none;
 }
@@ -783,6 +787,12 @@ p {
   justify-content: space-between;
   gap: 8px;
   padding: 20px;
+}
+
+/* The title block takes the room left, so a badge beside it stays on the right in a narrow panel. */
+.card-head > div:first-child {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .card-title {
