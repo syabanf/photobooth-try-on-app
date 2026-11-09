@@ -123,3 +123,24 @@ export function aheadOf(tickets: readonly Ticket[], id: string): number {
     (other) => other.position < ticket.position && other.checkedIn && other.boothIds.some((booth) => ticket.boothIds.includes(booth)),
   ).length;
 }
+
+/**
+ * The ticket a scanner or a keyboard names: its number ("A007"), its token, or the check-in link
+ * from its QR. Numbers wrap, so the newest ticket with that number wins.
+ */
+export function findTicket(tickets: readonly Ticket[], code: string): Ticket {
+  const raw = code.trim();
+  const token = /#checkin=([^&\s]+)/.exec(raw)?.[1] ?? raw;
+  const byToken = tickets.find((ticket) => ticket.token === token);
+  if (byToken) return byToken;
+  const number = raw.toUpperCase();
+  const byNumber = tickets.filter((ticket) => ticket.number === number).sort((a, b) => b.createdAt - a.createdAt)[0];
+  if (!byNumber) throw new Error(`Ticket ${raw || '?'} is not in the queue.`);
+  return byNumber;
+}
+
+/** Tickets that checked in since `before`, for the entrance camera to photograph. */
+export function arrivals(before: readonly Ticket[], after: readonly Ticket[]): Ticket[] {
+  const was = new Map(before.map((ticket) => [ticket.id, ticket.checkedIn]));
+  return after.filter((ticket) => ticket.checkedIn && was.get(ticket.id) === false);
+}

@@ -607,6 +607,10 @@ p {
 }
 
 .card .pill-tabs {
+  max-width: 100%;
+  flex-wrap: wrap;
+  /* Rounds like a pill on one row, and stays a soft panel when the options wrap to a second. */
+  border-radius: 21px;
   background: var(--surface);
   box-shadow: none;
 }
@@ -783,6 +787,12 @@ p {
   justify-content: space-between;
   gap: 8px;
   padding: 20px;
+}
+
+/* The title block takes the room left, so a badge beside it stays on the right in a narrow panel. */
+.card-head > div:first-child {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .card-title {
@@ -2535,11 +2545,6 @@ p {
   padding: 24px;
 }
 
-.auth-card #authAccess {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
 
 .auth-title {
   font-size: 24px;
@@ -2552,17 +2557,7 @@ p {
   margin-top: 6px;
 }
 
-.auth-expired {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-}
 
-.auth-expired .empty-icon {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
 
 .auth-note {
   font-size: 12px;
@@ -4335,14 +4330,6 @@ body.display-mode {
   transform: scale(0.97);
 }
 
-.face-remove {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 30px;
-  height: 30px;
-  background: rgb(255 255 255 / 0.85);
-}
 
 .preset-grid {
   display: grid;
@@ -4386,3 +4373,403 @@ body.display-mode {
   border-radius: 16px;
   background: var(--surface-2);
 }
+
+/* ---------- gate and preset payment ---------- */
+
+.gate-row {
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gate-row:hover {
+  background: var(--surface-2);
+}
+
+.pay-preset {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pay-preset img {
+  width: 72px;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+/* ---------- face names ---------- */
+
+.face-name {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.face-name.is-empty {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.face-name-btn {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.face-name-btn:hover {
+  background: var(--surface-2);
+}
+
+.face-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.face-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 8px 10px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--surface-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms;
+}
+
+.face-card:active {
+  transform: scale(0.98);
+}
+
+.face-card img {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  margin-bottom: 4px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.face-card .rank-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.face-tag-photo {
+  display: block;
+  width: min(220px, 60%);
+  aspect-ratio: 4 / 5;
+  margin: 0 auto 16px;
+  object-fit: cover;
+  border-radius: 18px;
+  background: var(--surface-2);
+}
+
+
+/* ---------- sign-in screen and team access ---------- */
+
+#authCard {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.auth-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auth-switch {
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.auth-switch .link,
+.auth-forgot {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.auth-forgot {
+  align-self: flex-end;
+  margin-top: -6px;
+  font-size: 13px;
+}
+
+.auth-switch .link:hover,
+.auth-forgot:hover {
+  text-decoration: underline;
+}
+
+.auth-claim {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.auth-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.auth-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  color: var(--body);
+}
+
+.input-wrap {
+  position: relative;
+  display: block;
+}
+
+.input-wrap .input {
+  width: 100%;
+  padding-right: 48px;
+}
+
+.input-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.input-toggle:hover {
+  background: var(--surface-2);
+  color: var(--foreground);
+}
+
+.input-toggle .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.caps-note {
+  color: var(--warning, #b7791f);
+}
+
+.pw-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pw-rules li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pw-rules li::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--silver);
+  transition: background-color 120ms;
+}
+
+.pw-rules li.is-met {
+  color: var(--foreground);
+}
+
+.pw-rules li.is-met::before {
+  background: var(--success);
+}
+
+.invite-code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--foreground);
+}
+
+.access-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ---------- roles and activity history ---------- */
+
+.role-people {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.role-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 16px;
+}
+
+.role-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.role-row:last-child {
+  border-bottom: 0;
+}
+
+.role-row .switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.history-days {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.history-item:last-child {
+  border-bottom: 0;
+}
+
+.history-time {
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.history-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.history-message {
+  font-size: 14px;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.history-amount {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Phones: the area badge and amount drop under the message. */
+@media (max-width: 767px) {
+  .history-item {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  .history-item .badge,
+  .history-amount {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+.date-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  flex: 0 1 340px;
+}
+
+.ops-filters .date-range .input {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 767px) {
+  .ops-filters .date-range,
+  .ops-filters > .input {
+    flex: 1 1 100%;
+  }
+}
+

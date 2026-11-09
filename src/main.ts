@@ -5,6 +5,7 @@ import { CAMERA_MESSAGES, classifyCameraError, startCamera } from './camera';
 import { describeSource, readSource, type OpenedSource } from './camera-source';
 import { pickCamera } from './camera-picker';
 import { cropFace } from './faces';
+import { mountGatePanel } from './ops/ui/gate-panel';
 import { mountPresetPanel } from './ops/ui/preset-panel';
 import { CaptureTrigger, type TriggerState } from './capture-trigger';
 import { DEFAULT_ITEMS, createUploadItem, loadImage, placementOf, type CatalogItem, type Category, type ItemImage } from './catalog';
@@ -14,7 +15,7 @@ import { OneEuroFilter } from './filter';
 import { mlsSimilarity, type ControlPair, type Vec } from './mls';
 import { GarmentLayer } from './render/garment-layer';
 import { Overlay, canvasToBlob, captureFrame, type ItemShadow } from './render/overlay';
-import { detectFace, getFaceLandmarker } from './tracking/face';
+import { detectFace, detectFaces, getFaceLandmarker } from './tracking/face';
 import { NO_HAND, getGestureRecognizer, readHand } from './tracking/gesture';
 import { HandCursor } from './hand-cursor';
 import { detectPose, getPoseLandmarker } from './tracking/pose';
@@ -34,13 +35,15 @@ import { composeBooth, runBoothSession, shotsFor } from './photobooth';
 import { blendIntoScene, connect as connectDecart, readStoredKey, storeKey, wearGarment } from './decart';
 import type { RealTimeClient } from '@decartai/sdk';
 import { browserStore, createLocalBackend } from './account/backend';
+import type { Account } from './account/model';
 import { mountAccountButton, signedIn } from './auth-screen';
+import { ROLES } from './ops/access';
 import { mountSitesView, type SitesView } from './sites-view';
 import { mountDashboard, type DashboardView } from './dashboard-view';
 import { OpsStore } from './ops/store';
 import { Ops } from './ops/ops';
 import { SimulatedEdsdk, WebcamDriver } from './ops/adapters';
-import { mountOpsRouter, type OpsRouter } from './ops/ui/router';
+import { mayOpen, mountOpsRouter, type OpsRouter } from './ops/ui/router';
 import { mountSessionPanel } from './ops/ui/session-panel';
 import { displayRoute, renderDisplay } from './ops/ui/displays';
 import { renderToday } from './ops/ui/today';
@@ -248,6 +251,8 @@ function showView(view: View): void {
   else business?.session.hide();
   if (view === 'presets') business?.presets.show();
   else business?.presets.hide();
+  if (view === 'gate') business?.gate.show();
+  else business?.gate.hide();
   syncLoop();
 }
 
@@ -806,6 +811,14 @@ async function captureFace(): Promise<HTMLCanvasElement> {
   return cropFace(video, landmarks);
 }
 
+/** Everyone in front of the entrance camera, one 4:5 headshot each. */
+async function captureFaces(): Promise<HTMLCanvasElement[]> {
+  if (!state.cameraLive) throw new Error('The camera is not running.');
+  const faces = await detectFaces(video);
+  if (faces.length === 0) throw new Error('No face in view. Ask the party to look at the camera.');
+  return faces.map((landmarks) => cropFace(video, landmarks));
+}
+
 async function boot(): Promise<void> {
   ui.setSnapshotEnabled(false);
   const source = readSource();
@@ -840,11 +853,11 @@ ui.setAiKey(readStoredKey());
 void loadStoreItems();
 
 /** The booth business layer, set up once someone signs in. */
-let business: { ops: Ops; router: OpsRouter; session: ReturnType<typeof mountSessionPanel>; presets: ReturnType<typeof mountPresetPanel> } | null = null;
+let business: { ops: Ops; router: OpsRouter; session: ReturnType<typeof mountSessionPanel>; presets: ReturnType<typeof mountPresetPanel>; gate: ReturnType<typeof mountGatePanel> } | null = null;
 /** Heartbeats wait for the first camera start, so a page load never reports a camera as unplugged. */
 let heartbeats = false;
 
-async function startBusiness(account: Awaited<ReturnType<typeof signedIn>>): Promise<Ops> {
+async function startBusiness(account: Account): Promise<Ops> {
   const store = new OpsStore(browserStore(), account.id, account.business);
   const ops = new Ops(store, account, {
     toast: (message, kind) => notice(message, kind),
@@ -869,7 +882,8 @@ async function startBusiness(account: Awaited<ReturnType<typeof signedIn>>): Pro
     share: (blob, name) => void shareDialog.open(blob, name),
     onSaved: () => void gallery.refresh(),
   });
-  business = { ops, router, session, presets };
+  const gate = mountGatePanel(ops, { captureFaces, flash: () => booth.flash() });
+  business = { ops, router, session, presets, gate };
 
   // The device's camera: a Canon over EDSDK when its booth says so, the webcam otherwise.
   const boothId = sites?.devicePointId();
@@ -928,9 +942,9 @@ async function startDisplay(): Promise<boolean> {
 
 async function start(): Promise<void> {
   if (await startDisplay()) return;
-  const account = await signedIn(backend);
+  const session = await signedIn(backend);
+  const { account } = session;
   document.querySelector<HTMLElement>('.shell')!.hidden = false;
-  mountAccountButton(backend, account);
   sites = mountSitesView(backend, account, {
     captureCounts: countByPoint,
     onOpenSites: () => showView('sites'),
@@ -943,6 +957,22 @@ async function start(): Promise<void> {
   });
   await sites.refresh();
   const ops = await startBusiness(account);
+  ops.accounts = backend;
+  try {
+    ops.adoptSession(session.member);
+  } catch (error) {
+    // Removed from the team since the last visit: back to the sign-in screen.
+    await backend.signOut();
+    alert((error as Error).message);
+    location.reload();
+    return;
+  }
+  await ops.refreshMembers();
+  mountAccountButton(backend, session, () => ({ label: ROLES[ops.actor()?.role ?? 'operator'].label, seesPlan: ops.can('settings.manage') }));
+  // The menus follow whoever uses the device, including after a PIN switch.
+  const applyAccess = () => ui.setAllowed((view) => mayOpen(ops, view));
+  applyAccess();
+  ops.store.subscribe(applyAccess);
   dashboard = mountDashboard(backend, account, {
     devicePointId: () => sites!.devicePointId(),
     pointLabel: (id) => sites!.pointLabel(id),

@@ -11,6 +11,9 @@ import { formatRupiah } from '../cart';
 export { actionButton, el };
 export const money = formatRupiah;
 
+/** "1 face", "3 faces". */
+export const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+
 export function dateTime(time: number | undefined): string {
   return time ? new Date(time).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 }

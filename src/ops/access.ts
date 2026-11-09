@@ -1,5 +1,6 @@
 // Role-based access: what each role may do, which branches a person sees, and supervisor PINs.
 
+import { checkSecret, hashSecret } from '../account/password';
 import type { Role, Staff } from './model';
 
 export type Permission =
@@ -49,8 +50,50 @@ export const ROLES: Record<Role, { label: string; detail: string; can: Permissio
   operator: { label: 'Booth operator', detail: 'Runs booths and the queue', can: ['booth.run', 'queue.run'] },
 };
 
+export const PERMISSIONS: readonly Permission[] = EVERYTHING;
+
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  'pos.sell': 'Sell at the till',
+  'pos.refund': 'Refund at the till',
+  'pos.discount': 'Give discounts',
+  'shift.run': 'Open and close shifts',
+  'queue.run': 'Run the queue, the gate and faces',
+  'booth.run': 'Run booth sessions',
+  'history.view': 'See transactions and payments',
+  'reports.view': 'See reports and activity history',
+  'vouchers.manage': 'Manage vouchers',
+  'frames.manage': 'Manage frames and AI presets',
+  'branding.manage': 'Manage branding and ads',
+  'devices.manage': 'Manage devices and alerts',
+  'staff.manage': 'Manage people, roles and sign-in',
+  'settings.manage': 'Change prices, locations and settings',
+  'fleet.manage': 'Updates and remote support',
+};
+
+/** Permissions in the groups the Roles page shows them in. */
+export const PERMISSION_GROUPS: { label: string; permissions: Permission[] }[] = [
+  { label: 'Selling', permissions: ['pos.sell', 'pos.discount', 'pos.refund', 'shift.run', 'history.view'] },
+  { label: 'On the floor', permissions: ['queue.run', 'booth.run'] },
+  { label: 'Content', permissions: ['vouchers.manage', 'frames.manage', 'branding.manage'] },
+  { label: 'Running the business', permissions: ['reports.view', 'devices.manage', 'settings.manage', 'staff.manage', 'fleet.manage'] },
+];
+
+/** Roles whose permissions the owner changed on the Roles page. The owner role never changes. */
+let overrides: Partial<Record<Role, Permission[]>> = {};
+
+export function setRoleOverrides(next: Partial<Record<Role, Permission[]>> | undefined): void {
+  overrides = next ?? {};
+}
+
+export function permissionsOf(role: Role): readonly Permission[] {
+  return role === 'owner' ? EVERYTHING : (overrides[role] ?? ROLES[role].can);
+}
+
+/** Whether a role's permissions differ from the ones it ships with. */
+export const roleChanged = (role: Role) => role !== 'owner' && !!overrides[role];
+
 export const can = (staff: Pick<Staff, 'role'> | null, permission: Permission): boolean =>
-  !!staff && ROLES[staff.role].can.includes(permission);
+  !!staff && permissionsOf(staff.role).includes(permission);
 
 /** Refunds need a supervisor's PIN, even when a supervisor runs the till. */
 export const approves = (staff: Pick<Staff, 'role' | 'active'>): boolean =>
@@ -64,28 +107,18 @@ export function seesBranch(staff: Pick<Staff, 'branchIds'> | null, branchId: str
 
 // ---------- PINs ----------
 
-const toHex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-const fromHex = (hex: string) => new Uint8Array((hex.match(/../g) ?? []).map((pair) => parseInt(pair, 16)));
-
-async function derive(pin: string, salt: Uint8Array): Promise<string> {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: salt as BufferSource, iterations: 120_000 }, key, 256);
-  return toHex(new Uint8Array(bits));
-}
-
 function validPin(pin: string): boolean {
   return /^\d{4,8}$/.test(pin);
 }
 
 export async function hashPin(pin: string): Promise<{ pinHash: string; pinSalt: string }> {
   if (!validPin(pin)) throw new Error('A PIN is 4 to 8 digits.');
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  return { pinHash: await derive(pin, salt), pinSalt: toHex(salt) };
+  const { hash, salt } = await hashSecret(pin);
+  return { pinHash: hash, pinSalt: salt };
 }
 
 export async function checkPin(staff: Pick<Staff, 'pinHash' | 'pinSalt'>, pin: string): Promise<boolean> {
-  if (!staff.pinHash || !validPin(pin)) return false;
-  return (await derive(pin, fromHex(staff.pinSalt))) === staff.pinHash;
+  return validPin(pin) && checkSecret(pin, staff.pinHash, staff.pinSalt);
 }
 
 /** The first approver whose PIN matches, so the supervisor on the floor just types theirs. */

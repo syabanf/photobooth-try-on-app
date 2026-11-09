@@ -1,12 +1,13 @@
 // The application layer: every action the pages take, built from the engines, saved through the
 // store, written to the activity log and queued for the cloud.
 
-import type { Account, Sites } from '../account/model';
+import type { AccountBackend } from '../account/backend';
+import type { Account, Invite, Member, Sites } from '../account/model';
 import { deleteShot } from '../gallery';
 import { deleteBlob, putBlob } from './blobs';
-import { can, checkPin, findApprover, hashPin, seesBranch, type Permission } from './access';
+import { can, checkPin, findApprover, hashPin, PERMISSIONS, ROLES, seesBranch, setRoleOverrides, type Permission } from './access';
 import { DEFAULT_CAPTURE, DEFAULT_PREVIEW, printImage, SimulatedCloud, SimulatedGateway, type CameraDriver, type CameraState, type PaymentGateway } from './adapters';
-import { amountDue, changeFor, lineNet, orderNumber, priceLines, refundMethod } from './cart';
+import { amountDue, changeFor, formatRupiah, lineNet, orderNumber, priceLines, refundMethod } from './cart';
 import { sessionsToPurge, targetVersion } from './fleet';
 import type {
   BoothProfile,
@@ -21,6 +22,7 @@ import type {
   Payment,
   PaymentMethod,
   PaymentSettings,
+  Role,
   Rupiah,
   SessionMode,
   Shift,
@@ -30,9 +32,10 @@ import type {
 } from './model';
 import { PAYMENT_LABELS } from './model';
 import { Outbox } from './outbox';
+import { cleanName } from './face-tags';
 import { feeFor, gatewayLabel, isExpired, methodAllowed } from './payments';
 import { afterPrint, noPrinterReason, pickPrinter } from './printing';
-import { callNext, checkIn, completeTicket, issueTicket, moveTicket, reRegister, recallTicket, skipTicket, ticketNumber } from './queue';
+import { callNext, checkIn, completeTicket, findTicket, issueTicket, moveTicket, reRegister, recallTicket, skipTicket, ticketNumber } from './queue';
 import { shiftSlip, type ShiftSlip } from './shift';
 import type { OpsStore } from './store';
 import { reconcileAlerts, routeAlert, wantedAlerts, type BoothRef } from './telemetry';
@@ -64,6 +67,10 @@ export class Ops {
   readonly cloud: SimulatedCloud;
   readonly outbox: Outbox;
   sites: Sites = { locations: [], points: [] };
+  /** Sign-in for the team. Null on customer screens, which nobody signs in to. */
+  accounts: AccountBackend | null = null;
+  /** Who signs in to this workspace, kept fresh by the access actions below. */
+  members: Member[] = [];
   /** The camera driving this device's booth, set by the camera page once it starts. */
   camera: CameraDriver | null = null;
   private actorKey: string;
@@ -83,6 +90,9 @@ export class Ops {
     this.cloud = new SimulatedCloud(`${key}:cloud`);
     this.outbox = new Outbox(localStorage, `${key}:outbox`, (item) => this.cloud.send(item));
     this.gateway.onPaid((reference) => this.qrisPaid(reference));
+    // Role changes from the Roles page, here or in another window, apply at once.
+    setRoleOverrides(this.state.settings.rolePermissions);
+    store.subscribe((state) => setRoleOverrides(state.settings.rolePermissions));
   }
 
   get state(): OpsState {
@@ -125,21 +135,117 @@ export class Ops {
     this.commit('staff.switch', `${person.name} took over this device.`, () => {});
   }
 
-  async saveStaff(input: Omit<Staff, 'pinHash' | 'pinSalt' | 'id'> & { id?: string }, pin: string): Promise<void> {
+  // ---------- sign-in (IAM) ----------
+
+  /**
+   * The person who signed in becomes the person on this device. A new owner's record takes the
+   * name and email they registered with.
+   */
+  adoptSession(member: Member): void {
+    const known = this.state.staff.find((person) => person.id === member.userId);
+    if (!known && !member.userId.startsWith('owner-')) throw new Error(`${member.name} is not on the team any more.`);
+    localStorage.setItem(this.actorKey, member.userId);
+    const adopt = (draft: OpsState) => {
+      const person = draft.staff.find((entry) => entry.id === member.userId);
+      if (!person) draft.staff.push({ id: member.userId, name: member.name, role: 'owner', branchIds: [], pinHash: '', pinSalt: '', email: member.email, phone: '', onDuty: true, active: true });
+      else {
+        if (person.name === 'Owner') person.name = member.name;
+        person.email ||= member.email;
+      }
+    };
+    // A reload opens the same session again: only a fresh sign-in goes in the history.
+    const seenKey = `${this.actorKey}:signin`;
+    const signIn = String(member.lastSignInAt);
+    if (localStorage.getItem(seenKey) === signIn) {
+      if (!known || known.name === 'Owner' || !known.email) this.store.update(adopt);
+      return;
+    }
+    localStorage.setItem(seenKey, signIn);
+    this.commit('auth.signin', `${member.name} signed in.`, adopt);
+  }
+
+  async refreshMembers(): Promise<Member[]> {
+    this.members = (await this.accounts?.members()) ?? [];
+    return this.members;
+  }
+
+  member(staffId: string): Member | null {
+    return this.members.find((entry) => entry.userId === staffId) ?? null;
+  }
+
+  private teamMate(staffId: string): Staff {
+    this.require('staff.manage');
+    if (!this.accounts) throw new Error('Sign-in is not available on this screen.');
+    const person = this.state.staff.find((entry) => entry.id === staffId);
+    if (!person) throw new Error('That person is not on the team.');
+    // Only an owner changes another owner's access.
+    if (person.role === 'owner' && this.actor()?.role !== 'owner') throw new Error('Only an owner can change an owner\'s sign-in.');
+    return person;
+  }
+
+  /** Gives a role a new set of permissions. The owner role keeps every permission. */
+  saveRole(role: Role, permissions: readonly Permission[]): void {
+    if (role === 'owner') throw new Error('The owner can always do everything, so nobody gets locked out.');
+    const allowed = PERMISSIONS.filter((permission) => permissions.includes(permission));
+    this.edit('staff.manage', 'role.save', `${ROLES[role].label} can now do ${allowed.length} of ${PERMISSIONS.length} things.`, (draft) => {
+      draft.settings.rolePermissions = { ...draft.settings.rolePermissions, [role]: allowed };
+    });
+  }
+
+  resetRole(role: Role): void {
+    this.edit('staff.manage', 'role.reset', `${ROLES[role].label} is back to its standard permissions.`, (draft) => {
+      const { [role]: _dropped, ...rest } = draft.settings.rolePermissions;
+      draft.settings.rolePermissions = rest;
+    });
+  }
+
+  /** A sign-in code for a team member. The same key, or a code still waiting, gives the same code. */
+  async inviteMember(staffId: string, key: string): Promise<Invite> {
+    const person = this.teamMate(staffId);
+    if (!person.active) throw new Error(`${person.name} has left. Mark them active first.`);
+    const invite = await this.accounts!.invite({ userId: person.id, name: person.name, email: person.email }, key);
+    await this.refreshMembers();
+    this.commit('auth.invite', `Sent ${person.name} a sign-in code.`, () => {});
+    return invite;
+  }
+
+  async resetMember(staffId: string): Promise<Invite> {
+    const person = this.teamMate(staffId);
+    const invite = await this.accounts!.resetAccess(person.id);
+    await this.refreshMembers();
+    this.commit('auth.reset', `Reset ${person.name}'s password. Their old one no longer works.`, () => {});
+    return invite;
+  }
+
+  async setMemberAccess(staffId: string, enabled: boolean): Promise<void> {
+    const person = this.teamMate(staffId);
+    await this.accounts!.setAccess(person.id, enabled);
+    await this.refreshMembers();
+    this.commit('auth.access', `${enabled ? 'Turned on' : 'Turned off'} sign-in for ${person.name}.`, () => {});
+  }
+
+  /** Saves a person and returns their id, so a new one can be sent a sign-in code straight away. */
+  async saveStaff(input: Omit<Staff, 'pinHash' | 'pinSalt' | 'id'> & { id?: string }, pin: string): Promise<string> {
     this.require('staff.manage');
     if (!input.name.trim()) throw new Error('Enter a name.');
     const secret = pin ? await hashPin(pin) : null;
     const owners = this.state.staff.filter((person) => person.role === 'owner' && person.active && person.id !== input.id);
     if (owners.length === 0 && (input.role !== 'owner' || !input.active)) throw new Error('The workspace needs an active owner.');
+    const id = input.id ?? this.store.id();
+    const email = input.email.trim().toLowerCase();
+    if (email && this.state.staff.some((person) => person.id !== id && person.email.toLowerCase() === email)) throw new Error(`${email} belongs to someone else on the team.`);
     this.commit('staff.save', `${input.id ? 'Updated' : 'Added'} ${input.name.trim()} (${input.role}).`, (draft) => {
       const existing = draft.staff.find((person) => person.id === input.id);
-      const fields = { ...input, name: input.name.trim(), ...(secret ?? {}) };
+      const fields = { ...input, email, name: input.name.trim(), ...(secret ?? {}) };
       if (existing) Object.assign(existing, fields);
       else {
         if ((input.role === 'supervisor' || input.role === 'admin') && !secret) throw new Error('Supervisors and admins need a PIN to approve refunds.');
-        draft.staff.push({ pinHash: '', pinSalt: '', ...fields, id: this.store.id() });
+        draft.staff.push({ pinHash: '', pinSalt: '', ...fields, id });
       }
     });
+    // Someone who left keeps their history and loses sign-in.
+    if (input.id && !input.active && this.member(input.id)?.status === 'active') await this.setMemberAccess(input.id, false);
+    return id;
   }
 
   /** Branches the person on this device may see. */
@@ -421,6 +527,9 @@ export class Ops {
     if (!bankReference.trim()) throw new Error('Enter the reference from the bank or wallet app.');
     const approver = await findApprover(this.state.staff, pin);
     if (!approver) throw new Error('That PIN does not belong to a supervisor.');
+    // The gateway, or a second tap, may have settled it during the PIN check.
+    const now = this.findPayment(orderId, paymentId).payment.status;
+    if (now !== 'pending') throw new Error(`This payment is ${now}.`);
     const note = `Confirmed by ${approver.name} from ${bankReference.trim()}`;
     this.settlePending(orderId, payment.reference, note);
     this.commit('payment.confirm', `${order.number}: QRIS ${payment.reference} confirmed by hand. ${note}.`, () => {}, { amount: payment.amount, branchId: order.branchId, sync: { orderId, paymentId, note } });
@@ -543,6 +652,8 @@ export class Ops {
     if (!reason.trim()) throw new Error('Enter a reason.');
     const approver = await findApprover(this.state.staff, pin);
     if (!approver) throw new Error('That PIN does not belong to a supervisor.');
+    // Checked again after the slow PIN check, so a double tap refunds the line once.
+    if (this.order(orderId).lines.find((entry) => entry.id === lineId)?.refunded) throw new Error('That line was refunded already.');
     const amount = lineNet(line);
     const method = refundMethod(order);
     const refund = { id: this.store.id(), orderId, lineId, amount, reason: reason.trim(), staffId: this.actor()?.id ?? null, supervisorId: approver.id, method, at: this.now() };
@@ -633,6 +744,22 @@ export class Ops {
       draft.tickets = checkIn(draft.tickets, token);
     });
     return this.state.tickets.find((entry) => entry.token === token)!;
+  }
+
+  /** A ticket scanned at the entrance or typed at a booth: by number, token or check-in link. */
+  findTicket(code: string): Ticket {
+    return findTicket(this.state.tickets, code);
+  }
+
+  /** The entrance scan: a waiting ticket checks in; one already in is left as it is. */
+  arrive(code: string): Ticket {
+    const ticket = this.findTicket(code);
+    return ticket.status === 'waiting' && !ticket.checkedIn ? this.checkIn(ticket.token) : ticket;
+  }
+
+  /** The ticket this booth is serving right now, if the queue called one here. */
+  servingAt(boothId: string | null): Ticket | null {
+    return this.state.tickets.find((ticket) => ticket.status === 'called' && ticket.calledBoothId === boothId) ?? null;
   }
 
   /** Tells a called customer by WhatsApp or email when they left a contact. */
@@ -832,10 +959,36 @@ export class Ops {
   // ---------- faces ----------
 
   /** Keeps a face crop for AI presets. It follows the photo retention window like every capture. */
-  async addFace(image: Blob, boothId: string | null): Promise<FaceRecord> {
-    const face: FaceRecord = { id: this.store.id(), image: await putBlob(image), boothId, createdAt: this.now() };
-    this.commit('face.capture', `${this.boothName(boothId)} captured a face for AI presets.`, (draft) => draft.faces.unshift(face), { branchId: this.branchOf(boothId) });
+  async addFace(image: Blob, boothId: string | null, ticketId: string | null = null): Promise<FaceRecord> {
+    const face: FaceRecord = { id: this.store.id(), image: await putBlob(image), boothId, ticketId, name: '', createdAt: this.now() };
+    const ticket = this.state.tickets.find((entry) => entry.id === ticketId);
+    this.commit('face.capture', `${this.boothName(boothId)} captured a face${ticket ? ` for ticket ${ticket.number}` : ' for AI presets'}.`, (draft) => draft.faces.unshift(face), { branchId: this.branchOf(boothId) });
     return face;
+  }
+
+  savePresetPrice(price: Rupiah): void {
+    this.edit('settings.manage', 'preset.price', price ? `A printed AI preset costs ${formatRupiah(price)}.` : 'AI presets are free.', (draft) => {
+      draft.settings.presetPrice = price;
+    });
+  }
+
+  /**
+   * Names a face. Anyone can, with no PIN: customers name their own party at the booth. An empty
+   * name removes it.
+   */
+  tagFace(id: string, name: string): void {
+    const face = this.state.faces.find((entry) => entry.id === id);
+    if (!face) throw new Error('That face is gone.');
+    const clean = cleanName(name);
+    if (clean === face.name) return;
+    this.commit('face.tag', clean ? `Named a face ${clean}.` : 'Removed the name from a face.', (draft) => {
+      draft.faces.find((entry) => entry.id === id)!.name = clean;
+    }, { branchId: this.branchOf(face.boothId) });
+  }
+
+  /** The faces the entrance camera took for one ticket, newest first. */
+  facesForTicket(ticketId: string): FaceRecord[] {
+    return this.state.faces.filter((face) => face.ticketId === ticketId);
   }
 
   async deleteFace(id: string): Promise<void> {

@@ -5,7 +5,11 @@ import type { OpsView, View } from '../../ui';
 import type { Ops } from '../ops';
 import { renderBranding } from './pages/branding';
 import { renderDevices } from './pages/devices';
+import { renderFaces } from './pages/faces';
 import { renderFleet } from './pages/fleet';
+import { renderHistory } from './pages/history';
+import { renderRoles } from './pages/roles';
+import { renderSignIns } from './pages/signins';
 import { renderFrames } from './pages/frames';
 import { renderPayments } from './pages/payments';
 import { renderPos } from './pages/pos';
@@ -28,6 +32,10 @@ export interface PageContext {
 type Render = (context: PageContext) => HTMLElement;
 
 const PAGES: Record<OpsView, { render: Render; permission: Permission }> = {
+  faces: { render: renderFaces, permission: 'queue.run' },
+  roles: { render: renderRoles, permission: 'staff.manage' },
+  signins: { render: renderSignIns, permission: 'staff.manage' },
+  history: { render: renderHistory, permission: 'reports.view' },
   pos: { render: renderPos, permission: 'pos.sell' },
   queue: { render: renderQueue, permission: 'queue.run' },
   sales: { render: renderSales, permission: 'history.view' },
@@ -41,6 +49,15 @@ const PAGES: Record<OpsView, { render: Render; permission: Permission }> = {
   fleet: { render: renderFleet, permission: 'fleet.manage' },
   settings: { render: renderSettings, permission: 'settings.manage' },
 };
+
+/** Pages outside the business router that still need a permission. */
+const OTHER_PAGES: Partial<Record<View, Permission>> = { gate: 'queue.run', sites: 'settings.manage' };
+
+/** Whether this person may open a page, so the menus can leave it out. */
+export function mayOpen(ops: Ops, view: View): boolean {
+  const permission = (PAGES as Partial<Record<View, { permission: Permission }>>)[view]?.permission ?? OTHER_PAGES[view];
+  return !permission || can(ops.actor(), permission);
+}
 
 export interface OpsRouter {
   show(view: OpsView): void;

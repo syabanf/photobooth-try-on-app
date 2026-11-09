@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { Ticket } from './model';
 import {
   aheadOf,
+  arrivals,
   callNext,
   checkIn,
   completeTicket,
+  findTicket,
   issueTicket,
   moveTicket,
   queueFor,
@@ -82,5 +84,20 @@ describe('multi-booth queue', () => {
   it('numbers tickets and wraps after 999', () => {
     expect(ticketNumber('A', 7)).toBe('A007');
     expect(ticketNumber('A', 1000)).toBe('A001');
+  });
+
+  it('finds a ticket by number, token or check-in link, newest number first', () => {
+    const tickets = issueTicket(seed(), { boothIds: ['A'], checkedIn: false }, 'Q001', 't5', 5);
+    expect(findTicket(tickets, 'q001').token).toBe('t5');
+    expect(findTicket(tickets, 't2').number).toBe('Q002');
+    expect(findTicket(tickets, 'https://booth.test/#checkin=t3').number).toBe('Q003');
+    expect(() => findTicket(tickets, 'Q999')).toThrow('Q999 is not in the queue');
+  });
+
+  it('lists who checked in since the last look, not tickets born checked in', () => {
+    const before = seed();
+    const after = issueTicket(checkIn(before, 't3'), { boothIds: ['A'], checkedIn: true }, 'Q005', 't5', 5);
+    expect(arrivals(before, after).map((t) => t.number)).toEqual(['Q003']);
+    expect(arrivals(after, after)).toEqual([]);
   });
 });

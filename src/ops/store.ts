@@ -29,6 +29,8 @@ const DEFAULT_SETTINGS: Settings = {
   receiptFooter: 'Thank you! Show this receipt at the booth.',
   queuePrefix: 'A',
   faceLibrary: 'all',
+  presetPrice: 25_000,
+  rolePermissions: {},
 };
 
 const preset = (id: string, name: string, layout: Preset['layout'], prompt: string): Preset => ({ id, name, layout, prompt, frameId: null, active: true, builtIn: true });
@@ -87,7 +89,7 @@ function starter(business: string, ownerId: string): OpsState {
 }
 
 /** The log keeps the newest entries; the cloud has the rest once synced. */
-const ACTIVITY_LIMIT = 2000;
+export const ACTIVITY_LIMIT = 2000;
 
 export type Listener = (state: OpsState) => void;
 
@@ -125,7 +127,9 @@ export class OpsStore {
       // Workspaces saved before payment settings existed carried only the provider name.
       const legacy = saved.settings as Partial<Settings> & { gateway?: string };
       const payments = withPaymentDefaults(legacy?.payments, legacy?.gateway);
-      return { ...starter('', `owner-${this.accountId}`), ...saved, settings: { ...DEFAULT_SETTINGS, ...saved.settings, payments }, branding: { ...DEFAULT_BRANDING, ...saved.branding } };
+      // Faces captured before tickets and names were kept on them.
+      const faces = (saved.faces ?? []).map((face) => ({ ...face, ticketId: face.ticketId ?? null, name: face.name ?? '' }));
+      return { ...starter('', `owner-${this.accountId}`), ...saved, faces, settings: { ...DEFAULT_SETTINGS, ...saved.settings, payments }, branding: { ...DEFAULT_BRANDING, ...saved.branding } };
     } catch {
       return null;
     }

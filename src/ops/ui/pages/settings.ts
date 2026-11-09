@@ -109,7 +109,21 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
       },
     });
   };
-  prints.actions.append(act('Add size', 'btn btn-outline btn-sm', () => editPrint(), 'plus'));
+  prints.actions.append(
+    act(`AI preset ${state.settings.presetPrice ? money(state.settings.presetPrice) : 'free'}`, 'btn btn-ghost btn-sm', () =>
+      formDialog({
+        title: 'AI preset print',
+        description: 'What the booth charges for one printed AI preset. 0 makes them free.',
+        submitLabel: 'Save',
+        fields: [{ name: 'price', label: 'Price', value: String(state.settings.presetPrice), type: 'number' }],
+        async submit(values) {
+          const presetPrice = parseAmount(String(values.price));
+          if (presetPrice < 0) throw new Error('A price cannot be negative.');
+          ops.savePresetPrice(presetPrice);
+        },
+      }), 'sparkles'),
+    act('Add size', 'btn btn-outline btn-sm', () => editPrint(), 'plus'),
+  );
   prints.body.append(table([{ label: 'Size', cell: (row) => PAPER[row.size].label }, { label: 'Price', className: 'num', cell: (row) => money(row.price) }], state.printPrices, { onRow: (row) => editPrint(row.size) }));
 
   // ---------- merchandise ----------
