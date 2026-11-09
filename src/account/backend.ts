@@ -8,6 +8,8 @@ import {
   trialEnd,
   trialExpired,
   type Account,
+  type AuthEvent,
+  type AuthEventKind,
   type Invite,
   type Location,
   type LocationInput,
@@ -58,6 +60,8 @@ export interface AccountBackend {
   /** Who a code is for, before they set a password. */
   inviteFor(code: string): Promise<{ account: Account; member: Member }>;
   acceptInvite(code: string, password: string, key: string): Promise<Session>;
+  /** Sign-ins, failures, locks and access changes in the current workspace, newest first. */
+  signInLog(): Promise<AuthEvent[]>;
   sites(): Promise<Sites>;
   saveLocation(input: LocationInput): Promise<Location>;
   /** Removes the location and every point in it. */
@@ -106,6 +110,8 @@ const ACCOUNTS_KEY = 'vto:accounts';
 const USERS_KEY = 'vto:users';
 const SESSION_KEY = 'vto:session';
 const ONCE_KEY = 'vto:idempotency';
+const LOG_KEY = 'vto:auth-log';
+const LOG_LIMIT = 1000;
 const sitesKey = (accountId: string) => `vto:sites:${accountId}`;
 
 export const MAX_TRIES = 5;
@@ -128,6 +134,13 @@ function newCode(): string {
 }
 
 const normalizeCode = (code: string) => code.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^(.{4})(.{4})$/, '$1-$2');
+
+/** "Chrome on macOS": enough to tell the booth tablet from the owner's phone. */
+export function deviceLabel(agent: string): string {
+  const browser = /Edg\//.test(agent) ? 'Edge' : /Firefox\//.test(agent) ? 'Firefox' : /Chrome\//.test(agent) ? 'Chrome' : /Safari\//.test(agent) ? 'Safari' : '';
+  const system = /iPhone|iPad/.test(agent) ? 'iOS' : /Android/.test(agent) ? 'Android' : /Mac OS X|Macintosh/.test(agent) ? 'macOS' : /Windows/.test(agent) ? 'Windows' : /Linux/.test(agent) ? 'Linux' : '';
+  return [browser, system].filter(Boolean).join(' on ') || 'Unknown device';
+}
 
 function publicMember({ hash: _hash, salt: _salt, inviteCode: _code, ...member }: Credential): Member {
   return member;
@@ -162,6 +175,12 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
       .finally(() => running.delete(id));
     running.set(id, work);
     return work;
+  }
+
+  const device = deviceLabel(globalThis.navigator?.userAgent ?? '');
+  function record(user: Pick<Credential, 'accountId' | 'userId' | 'name'>, kind: AuthEventKind, by: Session | null = null): void {
+    const event: AuthEvent = { id: crypto.randomUUID(), accountId: user.accountId, userId: user.userId, name: user.name, kind, at: now(), device, byName: by && by.member.userId !== user.userId ? by.member.name : null };
+    write(LOG_KEY, [event, ...read<AuthEvent[]>(LOG_KEY, [])].slice(0, LOG_LIMIT));
   }
 
   function sessionIds(): { accountId: string; userId: string } | null {
@@ -261,6 +280,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
         const account: Account = { id: crypto.randomUUID(), business, createdAt, trialEndsAt: trialEnd(createdAt) };
         const user = await owner(account.id, input);
         write(ACCOUNTS_KEY, { ...saved(), [account.id]: { account } });
+        record(user, 'register');
         return open(account, user);
       });
     },
@@ -270,7 +290,9 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
         const account = accounts().find((entry) => entry.id === accountId);
         if (!account) throw new AccountError('That workspace is no longer on this device.');
         if (Object.values(users()).some((user) => user.accountId === accountId)) throw new AccountError('This workspace already has an owner. Sign in with their email.');
-        return open(account, await owner(accountId, input));
+        const user = await owner(accountId, input);
+        record(user, 'claim');
+        return open(account, user);
       });
     },
 
@@ -288,16 +310,20 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
         const failedAttempts = user.failedAttempts + 1;
         const locked = failedAttempts >= MAX_TRIES;
         saveUser({ ...user, failedAttempts: locked ? 0 : failedAttempts, lockedUntil: locked ? now() + LOCK_MS : 0 });
+        record(user, locked ? 'locked' : 'failed');
         if (locked) throw new AccountError(`Too many wrong passwords. Sign-in is locked for ${LOCK_MS / 60_000} minutes.`, 'password');
         const left = MAX_TRIES - failedAttempts;
         throw new AccountError(`Email or password is wrong. ${left} ${left === 1 ? 'try' : 'tries'} left before a short lock.`, 'password');
       }
       const account = accounts().find((entry) => entry.id === user.accountId);
       if (!account) throw new AccountError('That workspace is no longer on this device.');
+      record(user, 'signin');
       return open(account, user);
     },
 
     async signOut() {
+      const session = currentSession();
+      if (session) record(session.member, 'signout');
       store.removeItem(SESSION_KEY);
     },
 
@@ -308,6 +334,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
       if (problem) throw new AccountError(`Password needs: ${problem.toLowerCase()}.`, 'next');
       if (current === next) throw new AccountError('Pick a password you have not used here.', 'next');
       saveUser({ ...user, ...(await hashSecret(next)) });
+      record(user, 'password');
     },
 
     async members() {
@@ -325,13 +352,17 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
         const existing = users()[input.userId];
         if (existing?.status === 'active') throw new AccountError(`${existing.name} already signs in. Reset their password instead.`);
         const base: Credential = existing ?? { userId: input.userId, accountId: account.id, name: '', email, status: 'invited', createdAt: now(), lastSignInAt: null, failedAttempts: 0, lockedUntil: 0, inviteExpiresAt: null, hash: '', salt: '', inviteCode: '' };
-        return issueCode({ ...base, name: input.name.trim(), email });
+        const invite = issueCode({ ...base, name: input.name.trim(), email });
+        // A code handed out again is the same code: one log line.
+        if (invite.code !== existing?.inviteCode) record(invite.member, 'invite', currentSession());
+        return invite;
       });
     },
 
     async resetAccess(userId) {
       const user = memberOf(userId);
       if (userId === requireSession().member.userId) throw new AccountError('Change your own password from your account instead.');
+      record(user, 'reset', currentSession());
       return issueCode(user, true);
     },
 
@@ -341,6 +372,8 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
       if (enabled && user.status === 'disabled' && !user.hash) throw new AccountError(`${user.name} never set a password. Send a new code instead.`);
       const next: Credential = { ...user, status: enabled ? (user.hash ? 'active' : user.status) : 'disabled', failedAttempts: 0, lockedUntil: 0 };
       saveUser(next);
+      const kind = !enabled ? 'disabled' : user.status === 'disabled' ? 'enabled' : 'unlocked';
+      if (kind !== 'unlocked' || user.lockedUntil > now()) record(user, kind, currentSession());
       return publicMember(next);
     },
 
@@ -358,8 +391,14 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
         if (problem) throw new AccountError(`Password needs: ${problem.toLowerCase()}.`, 'password');
         const account = accounts().find((entry) => entry.id === user.accountId);
         if (!account) throw new AccountError('That workspace is no longer on this device.', 'code');
+        record(user, 'accepted');
         return open(account, { ...user, ...(await hashSecret(password)), status: 'active', inviteCode: '', inviteExpiresAt: null });
       });
+    },
+
+    async signInLog() {
+      const { account } = requireSession();
+      return read<AuthEvent[]>(LOG_KEY, []).filter((event) => event.accountId === account.id);
     },
 
     async sites() {

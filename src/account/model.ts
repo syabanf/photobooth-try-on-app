@@ -38,6 +38,37 @@ export interface Invite {
   member: Member;
 }
 
+export type AuthEventKind = 'register' | 'claim' | 'signin' | 'failed' | 'locked' | 'signout' | 'invite' | 'accepted' | 'reset' | 'password' | 'disabled' | 'enabled' | 'unlocked';
+
+export const AUTH_EVENT_LABELS: Record<AuthEventKind, string> = {
+  register: 'Created the workspace',
+  claim: 'Secured the workspace',
+  signin: 'Signed in',
+  failed: 'Wrong password',
+  locked: 'Locked after wrong passwords',
+  signout: 'Signed out',
+  invite: 'Sign-in code sent',
+  accepted: 'Set a password from a code',
+  reset: 'Password reset',
+  password: 'Changed their password',
+  disabled: 'Sign-in turned off',
+  enabled: 'Sign-in turned on',
+  unlocked: 'Unlocked',
+};
+
+/** One line of the sign-in log: who, what happened to their sign-in, from which device, and who did it. */
+export interface AuthEvent {
+  id: string;
+  accountId: string;
+  userId: string;
+  name: string;
+  kind: AuthEventKind;
+  at: number;
+  device: string;
+  /** The person who acted on someone else's sign-in, such as the owner who reset it. */
+  byName: string | null;
+}
+
 /** A store, mall or venue. */
 export interface Location {
   id: string;

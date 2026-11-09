@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { memoryStore } from '../account/backend';
 import type { Account } from '../account/model';
+import { can, permissionsOf, type Permission } from './access';
 import { Ops } from './ops';
 import { OpsStore } from './store';
 
@@ -236,6 +237,9 @@ describe('team sign-in', () => {
     ops.adoptSession(session.member);
     expect(ops.actor()).toMatchObject({ name: 'Rizky', email: 'rizky@dusunbambu.id', role: 'owner' });
     expect(ops.state.activity[0].message).toBe('Rizky signed in.');
+    // Opening the app again on the same session is no new sign-in.
+    ops.adoptSession(session.member);
+    expect(ops.state.activity.filter((entry) => entry.kind === 'auth.signin')).toHaveLength(1);
 
     const id = await ops.saveStaff({ name: 'Sari', role: 'cashier', branchIds: [], email: 'Sari@DusunBambu.id', phone: '', onDuty: true, active: true }, '');
     await expect(ops.saveStaff({ name: 'Dewi', role: 'cashier', branchIds: [], email: 'sari@dusunbambu.id', phone: '', onDuty: true, active: true }, '')).rejects.toThrow('belongs to someone else');
@@ -261,6 +265,31 @@ describe('team sign-in', () => {
     await ops.saveStaff({ name: 'Budi', role: 'cashier', branchIds: [], email: '', phone: '', onDuty: true, active: true }, '1357');
     await ops.switchActor(ops.state.staff.find((person) => person.name === 'Budi')!.id, '1357');
     await expect(ops.resetMember(ops.state.staff[0].id)).rejects.toThrow('not allowed');
+  });
+});
+
+describe('editable roles', () => {
+  it('gives a role new permissions, keeps the owner whole, and goes back to standard', async () => {
+    const { ops } = setup();
+    await ops.saveStaff({ name: 'Budi', role: 'cashier', branchIds: [], email: '', phone: '', onDuty: true, active: true }, '1357');
+    const budi = ops.state.staff.find((person) => person.name === 'Budi')!;
+    expect(can(budi, 'reports.view')).toBe(false);
+
+    ops.saveRole('cashier', [...permissionsOf('cashier'), 'reports.view', 'not.a.permission' as Permission]);
+    expect(can(budi, 'reports.view')).toBe(true);
+    expect(ops.state.settings.rolePermissions.cashier).not.toContain('not.a.permission');
+    expect(ops.state.activity[0].kind).toBe('role.save');
+    expect(() => ops.saveRole('owner', [])).toThrow('owner can always do everything');
+
+    ops.saveRole('cashier', []);
+    await ops.switchActor(budi.id, '1357');
+    expect(() => ops.createOrder({ lines: [{ kind: 'merch', refId: 'x', label: 'X', unitPrice: 1, qty: 1 }], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null })).toThrow('not allowed');
+    expect(() => ops.resetRole('cashier')).toThrow('not allowed');
+
+    await ops.switchActor(ops.state.staff[0].id, '');
+    ops.resetRole('cashier');
+    expect(permissionsOf('cashier')).toContain('pos.sell');
+    expect(ops.state.settings.rolePermissions).toEqual({});
   });
 });
 

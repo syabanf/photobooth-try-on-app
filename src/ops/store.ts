@@ -30,6 +30,7 @@ const DEFAULT_SETTINGS: Settings = {
   queuePrefix: 'A',
   faceLibrary: 'all',
   presetPrice: 25_000,
+  rolePermissions: {},
 };
 
 const preset = (id: string, name: string, layout: Preset['layout'], prompt: string): Preset => ({ id, name, layout, prompt, frameId: null, active: true, builtIn: true });
@@ -88,7 +89,7 @@ function starter(business: string, ownerId: string): OpsState {
 }
 
 /** The log keeps the newest entries; the cloud has the rest once synced. */
-const ACTIVITY_LIMIT = 2000;
+export const ACTIVITY_LIMIT = 2000;
 
 export type Listener = (state: OpsState) => void;
 

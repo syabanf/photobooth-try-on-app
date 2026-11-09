@@ -50,8 +50,50 @@ export const ROLES: Record<Role, { label: string; detail: string; can: Permissio
   operator: { label: 'Booth operator', detail: 'Runs booths and the queue', can: ['booth.run', 'queue.run'] },
 };
 
+export const PERMISSIONS: readonly Permission[] = EVERYTHING;
+
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  'pos.sell': 'Sell at the till',
+  'pos.refund': 'Refund at the till',
+  'pos.discount': 'Give discounts',
+  'shift.run': 'Open and close shifts',
+  'queue.run': 'Run the queue, the gate and faces',
+  'booth.run': 'Run booth sessions',
+  'history.view': 'See transactions and payments',
+  'reports.view': 'See reports and activity history',
+  'vouchers.manage': 'Manage vouchers',
+  'frames.manage': 'Manage frames and AI presets',
+  'branding.manage': 'Manage branding and ads',
+  'devices.manage': 'Manage devices and alerts',
+  'staff.manage': 'Manage people, roles and sign-in',
+  'settings.manage': 'Change prices, locations and settings',
+  'fleet.manage': 'Updates and remote support',
+};
+
+/** Permissions in the groups the Roles page shows them in. */
+export const PERMISSION_GROUPS: { label: string; permissions: Permission[] }[] = [
+  { label: 'Selling', permissions: ['pos.sell', 'pos.discount', 'pos.refund', 'shift.run', 'history.view'] },
+  { label: 'On the floor', permissions: ['queue.run', 'booth.run'] },
+  { label: 'Content', permissions: ['vouchers.manage', 'frames.manage', 'branding.manage'] },
+  { label: 'Running the business', permissions: ['reports.view', 'devices.manage', 'settings.manage', 'staff.manage', 'fleet.manage'] },
+];
+
+/** Roles whose permissions the owner changed on the Roles page. The owner role never changes. */
+let overrides: Partial<Record<Role, Permission[]>> = {};
+
+export function setRoleOverrides(next: Partial<Record<Role, Permission[]>> | undefined): void {
+  overrides = next ?? {};
+}
+
+export function permissionsOf(role: Role): readonly Permission[] {
+  return role === 'owner' ? EVERYTHING : (overrides[role] ?? ROLES[role].can);
+}
+
+/** Whether a role's permissions differ from the ones it ships with. */
+export const roleChanged = (role: Role) => role !== 'owner' && !!overrides[role];
+
 export const can = (staff: Pick<Staff, 'role'> | null, permission: Permission): boolean =>
-  !!staff && ROLES[staff.role].can.includes(permission);
+  !!staff && permissionsOf(staff.role).includes(permission);
 
 /** Refunds need a supervisor's PIN, even when a supervisor runs the till. */
 export const approves = (staff: Pick<Staff, 'role' | 'active'>): boolean =>

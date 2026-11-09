@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createLocalBackend, INVITE_MS, LOCK_MS, MAX_TRIES, memoryStore } from './backend';
+import { createLocalBackend, deviceLabel, INVITE_MS, LOCK_MS, MAX_TRIES, memoryStore } from './backend';
 import { TRIAL_LIMITS, trialDaysLeft } from './model';
 
 const DAY = 86_400_000;
@@ -215,3 +215,46 @@ describe('locations and points', () => {
     expect((await backend.sites()).locations).toEqual([]);
   });
 });
+
+describe('sign-in log', () => {
+  it('records sign-ins, failures, locks, codes and access changes for the workspace only', async () => {
+    const { backend, clock } = setup();
+    await register(backend);
+    const invite = await backend.invite({ userId: 'staff-1', name: 'Sari', email: 'sari@example.com' }, 'i1');
+    await backend.invite({ userId: 'staff-1', name: 'Sari', email: 'sari@example.com' }, 'i2');
+    await backend.signOut();
+    await backend.acceptInvite(invite.code, 'kopi2026', 'a1');
+    await backend.signOut();
+    for (let i = 0; i < MAX_TRIES; i++) await backend.signIn('sari@example.com', 'wrong1234').catch(() => {});
+    clock.now += LOCK_MS;
+    await backend.signIn('dusunbambu@example.com', 'bambu2026');
+    await backend.setAccess('staff-1', false);
+
+    const log = await backend.signInLog();
+    expect(log.map((event) => `${event.name}:${event.kind}${event.byName ? ` by ${event.byName}` : ''}`).reverse()).toEqual([
+      'Rizky:register',
+      'Sari:invite by Rizky',
+      'Rizky:signout',
+      'Sari:accepted',
+      'Sari:signout',
+      'Sari:failed',
+      'Sari:failed',
+      'Sari:failed',
+      'Sari:failed',
+      'Sari:locked',
+      'Rizky:signin',
+      'Sari:disabled by Rizky',
+    ]);
+
+    await backend.signOut();
+    await register(backend, 'Toko Batik');
+    expect((await backend.signInLog()).map((event) => event.kind)).toEqual(['register']);
+  });
+
+  it('names the browser and system of the device', () => {
+    expect(deviceLabel('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36')).toBe('Chrome on macOS');
+    expect(deviceLabel('Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1')).toBe('Safari on iOS');
+    expect(deviceLabel('')).toBe('Unknown device');
+  });
+});
+

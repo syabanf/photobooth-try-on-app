@@ -1,30 +1,12 @@
-// Team and access (IAM): who works where, what each role may do, who signs in and how, PINs for
-// shared devices, and who is on duty.
+// Users (IAM): who works where, which role they hold, who signs in and how, PINs for shared
+// devices, and who is on duty. Roles and the sign-in log have pages of their own.
 
 import { formDialog, openDialog } from '../../../dialogs';
 import type { Invite, Member } from '../../../account/model';
-import { ROLES, type Permission } from '../../access';
+import { ROLES } from '../../access';
 import type { Role, Staff } from '../../model';
 import type { PageContext } from '../router';
-import { act, badge, type BadgeKind, dateTime, el, notice, page, qrCanvas, section, statRow, table } from '../kit';
-
-const PERMISSION_LABELS: Record<Permission, string> = {
-  'pos.sell': 'Sell at the till',
-  'pos.refund': 'Approve refunds',
-  'pos.discount': 'Give discounts',
-  'shift.run': 'Open and close shifts',
-  'queue.run': 'Run the queue, the gate and faces',
-  'booth.run': 'Run booth sessions',
-  'history.view': 'See transactions',
-  'reports.view': 'See reports',
-  'vouchers.manage': 'Manage vouchers',
-  'frames.manage': 'Manage frames',
-  'branding.manage': 'Manage branding and ads',
-  'devices.manage': 'Manage devices and alerts',
-  'staff.manage': 'Manage the team and sign-in',
-  'settings.manage': 'Change prices and settings',
-  'fleet.manage': 'Updates and remote support',
-};
+import { act, badge, type BadgeKind, dateTime, el, notice, page, qrCanvas, statRow, table } from '../kit';
 
 type Ops = PageContext['ops'];
 
@@ -41,11 +23,16 @@ function signInState(person: Staff, member: Member | null): { label: string; kin
   return { label: 'Active', kind: 'ok', detail: member.lastSignInAt ? `Last in ${dateTime(member.lastSignInAt)}` : 'Not signed in yet' };
 }
 
-export function renderStaff({ ops }: PageContext): HTMLElement {
+export function renderStaff({ ops, nav }: PageContext): HTMLElement {
   const { state } = ops;
   const actor = ops.actor();
-  const root = page('Team and access', 'Each person gets a role and the branches they work at, and signs in with their own email and password. A PIN lets someone take over a shared booth device.');
-  root.actions.append(act('Add person', 'btn btn-primary', () => editStaff(ops), 'plus'), act('Switch user', 'btn btn-outline', () => switchDialog(ops), 'users'));
+  const root = page('Users', 'Each person gets a role and the branches they work at, and signs in with their own email and password. A PIN lets someone take over a shared booth device.');
+  root.actions.append(
+    act('Add person', 'btn btn-primary', () => editStaff(ops), 'plus'),
+    act('Switch user', 'btn btn-outline', () => switchDialog(ops), 'users'),
+    act('Roles', 'btn btn-ghost', () => nav('roles'), 'shield'),
+    act('Sign-in log', 'btn btn-ghost', () => nav('signins'), 'key'),
+  );
 
   const members = state.staff.map((person) => ops.member(person.id));
   const now = Date.now();
@@ -100,15 +87,6 @@ export function renderStaff({ ops }: PageContext): HTMLElement {
     ),
   );
 
-  const matrix = section('What each role can do');
-  const roles = Object.keys(ROLES) as Role[];
-  matrix.body.append(
-    table(
-      [{ label: 'Permission', cell: (permission: Permission) => PERMISSION_LABELS[permission] }, ...roles.map((role) => ({ label: ROLES[role].label, className: 'num', cell: (permission: Permission) => (ROLES[role].can.includes(permission) ? '✓' : '—') }))],
-      Object.keys(PERMISSION_LABELS) as Permission[],
-    ),
-  );
-  root.body.append(matrix.root);
   return root.root;
 }
 

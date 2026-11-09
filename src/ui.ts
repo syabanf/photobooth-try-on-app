@@ -3,14 +3,14 @@ import { openDialog } from './dialogs';
 import { hydrateIcons, icon, type IconName } from './icons';
 
 export type Mode = 'local' | 'ai';
-export type OpsView = 'faces' | 'pos' | 'queue' | 'sales' | 'payments' | 'reports' | 'vouchers' | 'frames' | 'branding' | 'devices' | 'staff' | 'fleet' | 'settings';
+export type OpsView = 'faces' | 'roles' | 'signins' | 'history' | 'pos' | 'queue' | 'sales' | 'payments' | 'reports' | 'vouchers' | 'frames' | 'branding' | 'devices' | 'staff' | 'fleet' | 'settings';
 export type View = 'dashboard' | 'tryon' | 'photobooth' | 'gallery' | 'sites' | 'session' | 'presets' | 'gate' | OpsView;
 
 /** Views that show the camera stage. */
 export const CAMERA_VIEWS: readonly View[] = ['tryon', 'photobooth', 'session', 'presets', 'gate'];
 
 /** Business pages, drawn by src/ops/ui into one container. */
-export const OPS_VIEWS: readonly OpsView[] = ['faces', 'pos', 'queue', 'sales', 'payments', 'reports', 'vouchers', 'frames', 'branding', 'devices', 'staff', 'fleet', 'settings'];
+export const OPS_VIEWS: readonly OpsView[] = ['faces', 'roles', 'signins', 'history', 'pos', 'queue', 'sales', 'payments', 'reports', 'vouchers', 'frames', 'branding', 'devices', 'staff', 'fleet', 'settings'];
 export const isOpsView = (view: View): view is OpsView => (OPS_VIEWS as readonly string[]).includes(view);
 export type StatusKind = 'info' | 'warn' | 'error' | 'ok';
 
@@ -75,7 +75,10 @@ const VIEWS: Record<View, { kicker: string; title: string; capture: string }> = 
   frames: { kicker: 'Print templates', title: 'Frames', capture: 'Open camera' },
   branding: { kicker: 'Booth screens and gallery', title: 'Branding', capture: 'Open camera' },
   devices: { kicker: 'Printers, cameras and alerts', title: 'Devices', capture: 'Open camera' },
-  staff: { kicker: 'Sign-in, roles and PINs', title: 'Team', capture: 'Open camera' },
+  staff: { kicker: 'Access · who signs in', title: 'Users', capture: 'Open camera' },
+  roles: { kicker: 'Access · what each role may do', title: 'Roles', capture: 'Open camera' },
+  signins: { kicker: 'Access · who came in, and when', title: 'Sign-in log', capture: 'Open camera' },
+  history: { kicker: 'Everything that changed', title: 'Activity history', capture: 'Open camera' },
   fleet: { kicker: 'Updates, support and sync', title: 'Fleet', capture: 'Open camera' },
   settings: { kicker: 'Prices, retention and payments', title: 'Settings', capture: 'Open camera' },
 };
@@ -85,7 +88,8 @@ const MENU: { group: string; items: [View, string, IconName][] }[] = [
   { group: 'Floor', items: [['session', 'Booth', 'booth'], ['presets', 'AI presets', 'sparkles'], ['gate', 'Gate', 'qr'], ['faces', 'Faces', 'users'], ['pos', 'Point of sale', 'cart'], ['queue', 'Queue', 'queue'], ['tryon', 'Try on', 'shirt'], ['photobooth', 'Photobooth', 'aperture'], ['gallery', 'Gallery', 'images']] },
   { group: 'Sales', items: [['sales', 'Transactions', 'receipt'], ['payments', 'Payments', 'wallet'], ['reports', 'Reports', 'chart'], ['vouchers', 'Vouchers', 'ticket']] },
   { group: 'Content', items: [['frames', 'Frames', 'frame'], ['branding', 'Branding', 'palette']] },
-  { group: 'Operations', items: [['sites', 'Locations', 'pin'], ['devices', 'Devices and alerts', 'printer'], ['staff', 'Team and access', 'users'], ['fleet', 'Fleet and support', 'rocket'], ['settings', 'Settings', 'settings']] },
+  { group: 'Operations', items: [['sites', 'Locations', 'pin'], ['devices', 'Devices and alerts', 'printer'], ['history', 'Activity history', 'clock'], ['fleet', 'Fleet and support', 'rocket'], ['settings', 'Settings', 'settings']] },
+  { group: 'Access (IAM)', items: [['staff', 'Users', 'users'], ['roles', 'Roles and permissions', 'shield'], ['signins', 'Sign-in log', 'key']] },
 ];
 
 /** Items shown before "Show all", so the grid stays short on a phone. */

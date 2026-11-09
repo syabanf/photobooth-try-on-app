@@ -5,7 +5,7 @@ import type { AccountBackend } from '../account/backend';
 import type { Account, Invite, Member, Sites } from '../account/model';
 import { deleteShot } from '../gallery';
 import { deleteBlob, putBlob } from './blobs';
-import { can, checkPin, findApprover, hashPin, seesBranch, type Permission } from './access';
+import { can, checkPin, findApprover, hashPin, PERMISSIONS, ROLES, seesBranch, setRoleOverrides, type Permission } from './access';
 import { DEFAULT_CAPTURE, DEFAULT_PREVIEW, printImage, SimulatedCloud, SimulatedGateway, type CameraDriver, type CameraState, type PaymentGateway } from './adapters';
 import { amountDue, changeFor, formatRupiah, lineNet, orderNumber, priceLines, refundMethod } from './cart';
 import { sessionsToPurge, targetVersion } from './fleet';
@@ -22,6 +22,7 @@ import type {
   Payment,
   PaymentMethod,
   PaymentSettings,
+  Role,
   Rupiah,
   SessionMode,
   Shift,
@@ -89,6 +90,9 @@ export class Ops {
     this.cloud = new SimulatedCloud(`${key}:cloud`);
     this.outbox = new Outbox(localStorage, `${key}:outbox`, (item) => this.cloud.send(item));
     this.gateway.onPaid((reference) => this.qrisPaid(reference));
+    // Role changes from the Roles page, here or in another window, apply at once.
+    setRoleOverrides(this.state.settings.rolePermissions);
+    store.subscribe((state) => setRoleOverrides(state.settings.rolePermissions));
   }
 
   get state(): OpsState {
@@ -141,14 +145,23 @@ export class Ops {
     const known = this.state.staff.find((person) => person.id === member.userId);
     if (!known && !member.userId.startsWith('owner-')) throw new Error(`${member.name} is not on the team any more.`);
     localStorage.setItem(this.actorKey, member.userId);
-    this.commit('auth.signin', `${member.name} signed in.`, (draft) => {
+    const adopt = (draft: OpsState) => {
       const person = draft.staff.find((entry) => entry.id === member.userId);
       if (!person) draft.staff.push({ id: member.userId, name: member.name, role: 'owner', branchIds: [], pinHash: '', pinSalt: '', email: member.email, phone: '', onDuty: true, active: true });
       else {
         if (person.name === 'Owner') person.name = member.name;
         person.email ||= member.email;
       }
-    });
+    };
+    // A reload opens the same session again: only a fresh sign-in goes in the history.
+    const seenKey = `${this.actorKey}:signin`;
+    const signIn = String(member.lastSignInAt);
+    if (localStorage.getItem(seenKey) === signIn) {
+      if (!known || known.name === 'Owner' || !known.email) this.store.update(adopt);
+      return;
+    }
+    localStorage.setItem(seenKey, signIn);
+    this.commit('auth.signin', `${member.name} signed in.`, adopt);
   }
 
   async refreshMembers(): Promise<Member[]> {
@@ -168,6 +181,22 @@ export class Ops {
     // Only an owner changes another owner's access.
     if (person.role === 'owner' && this.actor()?.role !== 'owner') throw new Error('Only an owner can change an owner\'s sign-in.');
     return person;
+  }
+
+  /** Gives a role a new set of permissions. The owner role keeps every permission. */
+  saveRole(role: Role, permissions: readonly Permission[]): void {
+    if (role === 'owner') throw new Error('The owner can always do everything, so nobody gets locked out.');
+    const allowed = PERMISSIONS.filter((permission) => permissions.includes(permission));
+    this.edit('staff.manage', 'role.save', `${ROLES[role].label} can now do ${allowed.length} of ${PERMISSIONS.length} things.`, (draft) => {
+      draft.settings.rolePermissions = { ...draft.settings.rolePermissions, [role]: allowed };
+    });
+  }
+
+  resetRole(role: Role): void {
+    this.edit('staff.manage', 'role.reset', `${ROLES[role].label} is back to its standard permissions.`, (draft) => {
+      const { [role]: _dropped, ...rest } = draft.settings.rolePermissions;
+      draft.settings.rolePermissions = rest;
+    });
   }
 
   /** A sign-in code for a team member. The same key, or a code still waiting, gives the same code. */

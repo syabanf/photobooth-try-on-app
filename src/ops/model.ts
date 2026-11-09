@@ -1,6 +1,8 @@
 // The booth business: every record the booth client, the cashier, the queue and the cloud
 // dashboard share. Branches are the account's locations and booths are its points.
 
+import type { Permission } from './access';
+
 /** Whole rupiah. Every amount in the app is an integer, so totals never drift. */
 export type Rupiah = number;
 
@@ -520,6 +522,8 @@ export interface Settings {
   faceLibrary: 'all' | 'visit';
   /** What a printed AI preset costs at the booth. 0 makes them free. */
   presetPrice: Rupiah;
+  /** Roles the owner gave different permissions on the Roles page. */
+  rolePermissions: Partial<Record<Role, Permission[]>>;
 }
 
 /** Everything the business keeps, stored per workspace. */

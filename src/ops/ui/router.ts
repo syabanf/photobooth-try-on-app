@@ -7,6 +7,9 @@ import { renderBranding } from './pages/branding';
 import { renderDevices } from './pages/devices';
 import { renderFaces } from './pages/faces';
 import { renderFleet } from './pages/fleet';
+import { renderHistory } from './pages/history';
+import { renderRoles } from './pages/roles';
+import { renderSignIns } from './pages/signins';
 import { renderFrames } from './pages/frames';
 import { renderPayments } from './pages/payments';
 import { renderPos } from './pages/pos';
@@ -30,6 +33,9 @@ type Render = (context: PageContext) => HTMLElement;
 
 const PAGES: Record<OpsView, { render: Render; permission: Permission }> = {
   faces: { render: renderFaces, permission: 'queue.run' },
+  roles: { render: renderRoles, permission: 'staff.manage' },
+  signins: { render: renderSignIns, permission: 'staff.manage' },
+  history: { render: renderHistory, permission: 'reports.view' },
   pos: { render: renderPos, permission: 'pos.sell' },
   queue: { render: renderQueue, permission: 'queue.run' },
   sales: { render: renderSales, permission: 'history.view' },
