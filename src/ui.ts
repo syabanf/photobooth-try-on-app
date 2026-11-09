@@ -30,6 +30,8 @@ export interface UiHandlers {
 }
 
 export interface UiApi {
+  /** Hides menu entries for pages the current person may not open. */
+  setAllowed(check: (view: View) => boolean): void;
   setStatus(text: string, kind?: StatusKind, retry?: boolean): void;
   setTabs(active: Category, worn: readonly Category[]): void;
   renderStrip(items: CatalogItem[], selectedId: string | null): void;
@@ -73,7 +75,7 @@ const VIEWS: Record<View, { kicker: string; title: string; capture: string }> = 
   frames: { kicker: 'Print templates', title: 'Frames', capture: 'Open camera' },
   branding: { kicker: 'Booth screens and gallery', title: 'Branding', capture: 'Open camera' },
   devices: { kicker: 'Printers, cameras and alerts', title: 'Devices', capture: 'Open camera' },
-  staff: { kicker: 'Roles and PINs', title: 'Staff', capture: 'Open camera' },
+  staff: { kicker: 'Sign-in, roles and PINs', title: 'Team', capture: 'Open camera' },
   fleet: { kicker: 'Updates, support and sync', title: 'Fleet', capture: 'Open camera' },
   settings: { kicker: 'Prices, retention and payments', title: 'Settings', capture: 'Open camera' },
 };
@@ -83,7 +85,7 @@ const MENU: { group: string; items: [View, string, IconName][] }[] = [
   { group: 'Floor', items: [['session', 'Booth', 'booth'], ['presets', 'AI presets', 'sparkles'], ['gate', 'Gate', 'qr'], ['faces', 'Faces', 'users'], ['pos', 'Point of sale', 'cart'], ['queue', 'Queue', 'queue'], ['tryon', 'Try on', 'shirt'], ['photobooth', 'Photobooth', 'aperture'], ['gallery', 'Gallery', 'images']] },
   { group: 'Sales', items: [['sales', 'Transactions', 'receipt'], ['payments', 'Payments', 'wallet'], ['reports', 'Reports', 'chart'], ['vouchers', 'Vouchers', 'ticket']] },
   { group: 'Content', items: [['frames', 'Frames', 'frame'], ['branding', 'Branding', 'palette']] },
-  { group: 'Operations', items: [['sites', 'Locations', 'pin'], ['devices', 'Devices and alerts', 'printer'], ['staff', 'Staff and roles', 'users'], ['fleet', 'Fleet and support', 'rocket'], ['settings', 'Settings', 'settings']] },
+  { group: 'Operations', items: [['sites', 'Locations', 'pin'], ['devices', 'Devices and alerts', 'printer'], ['staff', 'Team and access', 'users'], ['fleet', 'Fleet and support', 'rocket'], ['settings', 'Settings', 'settings']] },
 ];
 
 /** Items shown before "Show all", so the grid stays short on a phone. */
@@ -225,11 +227,13 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
   // The rail and the phone bar hold the busiest pages; More opens a sheet with the rest, leaving out
   // whatever the visible bar already shows.
   const moreButtons = [$<HTMLButtonElement>('#barMore'), $<HTMLButtonElement>('#railMore')];
+  /** Pages the person on this device may open; the menus hide the rest. */
+  let allowed: (view: View) => boolean = () => true;
   const openMore = () => {
     const onBar = new Set(navButtons.filter((button) => button.offsetParent !== null).map((button) => button.dataset.view));
     const body = MENU.flatMap(({ group, items }) => {
       const rows = items
-        .filter(([view]) => !onBar.has(view))
+        .filter(([view]) => !onBar.has(view) && allowed(view))
         .map(([view, label, iconName]) => {
           const row = document.createElement('button');
           row.type = 'button';
@@ -269,6 +273,10 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
   railToggle.addEventListener('click', () => setRailExpanded(!rail.classList.contains('is-expanded')));
 
   return {
+    setAllowed(check) {
+      allowed = check;
+      for (const button of navButtons) button.hidden = !check(button.dataset.view as View);
+    },
     setStatus(text, kind = 'info', showRetry = false) {
       status.textContent = text;
       status.dataset.kind = kind;

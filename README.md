@@ -22,11 +22,22 @@ Other scripts:
 
 Add `?debug=1` to the URL to draw the landmark indices the anchors use. The Size slider trims the worn item of the active category between 70% and 150%.
 
-## Quick access and trial
+## Sign-in and team access (IAM)
 
-The app opens on a quick access page with no email or password. **Enter the app** opens a new 14-day trial workspace at once, covering up to 3 locations and 10 points. The business name is optional; left blank, the workspace is called Store 1, Store 2 and so on. Workspaces already saved in this browser show above the form with their days left, and one tap on a tile opens that workspace again. The camera and the tracking models only start after entry. The avatar pill in the header shows the days left and opens the workspace sheet, where **Switch workspace** returns to the quick access page. Opening a workspace whose trial has ended shows a "trial has ended" card instead of the app, and the backend refuses every change while still returning the saved data.
+The app opens on the Dusun Bambu sign-in screen. Nothing starts, camera and models included, until someone signs in.
 
-`src/account/backend.ts` defines `AccountBackend`, the one interface the app uses for workspaces, locations and points. The trial build ships `createLocalBackend`, which keeps everything in this browser's localStorage. Anyone who uses the browser can open any workspace saved in it, and nothing syncs between devices. Workspaces created by the earlier email and password build still appear and open, since their stored entries keep the same `{ account }` shape. For production, implement the same interface against a server that owns the accounts and issues sessions, and swap it in at `createLocalBackend(browserStore())` in `src/main.ts`.
+- **Create an account** opens a 14-day workspace (up to 3 locations and 10 booths) and makes you its owner. It asks for the business name, your name, a work email and a password of at least 8 characters with a letter and a number. A checklist under the password ticks each rule as you type.
+- **Sign in** takes email and password. Five wrong passwords lock that email for 15 minutes, and each wrong try says how many are left. A disabled person, or one whose invite is still waiting, gets a message that says so.
+- **Forgot password?** explains the reset: an owner, admin or supervisor taps Reset password on the Team page and hands over a new code.
+- **Set your password** takes a one-time 8-character code, such as `K7QM-2XPA`, from the owner. It also opens from the code's link or QR (`#invite=…`). Codes last 7 days and work once.
+- **Needs an owner** lists workspaces made by the old quick access build. Securing one with an owner's email keeps its locations, booths and sales.
+- **Team and access** (More → Team and access) adds a person with name, email, role, branches and PIN, and sends a sign-in code right away. The Access button per person sends or shows the code, resets the password, unlocks a locked sign-in, or turns sign-in off or on. Marking someone as left turns off their sign-in and keeps their history. Only an owner changes another owner's access, and nobody turns off their own sign-in.
+- **Menus follow the role.** The rail, the phone bar and More hide every page the person on the device may not open, and they update after a PIN switch. The router still refuses those pages if someone reaches them another way.
+- **Your account** (the avatar pill) shows who is signed in with their role. Owners and admins also see the trial. It also holds Change password and Sign out.
+
+**Idempotency.** Every create carries an idempotency key: register, securing a workspace, invites and setting a password from a code. The key lasts as long as the form is open. A double tap, or a retry after a dropped connection, with the same key returns the first result, so a second account, owner or code never appears. Pressing Invite again for someone whose code is still valid shows the same code. Refunds and manual QRIS confirmations check the line or payment again after the supervisor PIN check, so two taps refund or confirm once. A ticket scanned twice at the Gate keeps one set of faces, and Take again replaces the gate's earlier shot.
+
+`src/account/backend.ts` defines `AccountBackend`. `createLocalBackend` keeps accounts, password hashes (PBKDF2, `src/account/password.ts`), sessions and idempotency records in this browser's localStorage. In this build, codes work only in the browser that made them. For production, implement the same interface on a server that owns accounts, issues sessions per device and enforces roles. Swap it in at `createLocalBackend(browserStore())` in `src/main.ts`.
 
 ## Screens
 
@@ -50,7 +61,7 @@ The scenery photos come from Wikimedia Commons and are each released as CC0 or p
 
 Everything a photobooth operator runs beside the camera: the customer's session at the booth, payments, the cashier, the queue, the owner's dashboard, and device health. It runs in this browser build today. The parts a browser cannot reach (the Canon and DNP SDKs, a payment gateway's server key, OTA and remote-access agents, email and WhatsApp) sit behind adapters with simulators, listed under [Going to production](#going-to-production).
 
-The rail holds Dashboard, Booth, Point of sale, Queue, Try on, Photobooth and Gallery; **More** opens the rest, grouped: Transactions, Reports, Vouchers, Frames, Branding, Locations, Devices, Staff, Fleet and Settings. A device linked to a booth opens on the Booth flow; any other device opens on the Dashboard.
+The rail holds Dashboard, Booth, Point of sale, Queue, Try on, Photobooth and Gallery; **More** opens the rest, grouped: Transactions, Reports, Vouchers, Frames, Branding, Locations, Devices, Team and access, Fleet and Settings. On phones the bottom bar holds Dashboard, Booth and Queue around the capture button. A device linked to a booth opens on the Booth flow; any other device opens on the Dashboard.
 
 ### Booth client
 

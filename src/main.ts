@@ -35,13 +35,15 @@ import { composeBooth, runBoothSession, shotsFor } from './photobooth';
 import { blendIntoScene, connect as connectDecart, readStoredKey, storeKey, wearGarment } from './decart';
 import type { RealTimeClient } from '@decartai/sdk';
 import { browserStore, createLocalBackend } from './account/backend';
+import type { Account } from './account/model';
 import { mountAccountButton, signedIn } from './auth-screen';
+import { ROLES } from './ops/access';
 import { mountSitesView, type SitesView } from './sites-view';
 import { mountDashboard, type DashboardView } from './dashboard-view';
 import { OpsStore } from './ops/store';
 import { Ops } from './ops/ops';
 import { SimulatedEdsdk, WebcamDriver } from './ops/adapters';
-import { mountOpsRouter, type OpsRouter } from './ops/ui/router';
+import { mayOpen, mountOpsRouter, type OpsRouter } from './ops/ui/router';
 import { mountSessionPanel } from './ops/ui/session-panel';
 import { displayRoute, renderDisplay } from './ops/ui/displays';
 import { renderToday } from './ops/ui/today';
@@ -855,7 +857,7 @@ let business: { ops: Ops; router: OpsRouter; session: ReturnType<typeof mountSes
 /** Heartbeats wait for the first camera start, so a page load never reports a camera as unplugged. */
 let heartbeats = false;
 
-async function startBusiness(account: Awaited<ReturnType<typeof signedIn>>): Promise<Ops> {
+async function startBusiness(account: Account): Promise<Ops> {
   const store = new OpsStore(browserStore(), account.id, account.business);
   const ops = new Ops(store, account, {
     toast: (message, kind) => notice(message, kind),
@@ -940,9 +942,9 @@ async function startDisplay(): Promise<boolean> {
 
 async function start(): Promise<void> {
   if (await startDisplay()) return;
-  const account = await signedIn(backend);
+  const session = await signedIn(backend);
+  const { account } = session;
   document.querySelector<HTMLElement>('.shell')!.hidden = false;
-  mountAccountButton(backend, account);
   sites = mountSitesView(backend, account, {
     captureCounts: countByPoint,
     onOpenSites: () => showView('sites'),
@@ -955,6 +957,22 @@ async function start(): Promise<void> {
   });
   await sites.refresh();
   const ops = await startBusiness(account);
+  ops.accounts = backend;
+  try {
+    ops.adoptSession(session.member);
+  } catch (error) {
+    // Removed from the team since the last visit: back to the sign-in screen.
+    await backend.signOut();
+    alert((error as Error).message);
+    location.reload();
+    return;
+  }
+  await ops.refreshMembers();
+  mountAccountButton(backend, session, () => ({ label: ROLES[ops.actor()?.role ?? 'operator'].label, seesPlan: ops.can('settings.manage') }));
+  // The menus follow whoever uses the device, including after a PIN switch.
+  const applyAccess = () => ui.setAllowed((view) => mayOpen(ops, view));
+  applyAccess();
+  ops.store.subscribe(applyAccess);
   dashboard = mountDashboard(backend, account, {
     devicePointId: () => sites!.devicePointId(),
     pointLabel: (id) => sites!.pointLabel(id),

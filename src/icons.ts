@@ -76,9 +76,17 @@ import {
   ZoomIn,
   createElement,
   type IconNode,
+  Eye,
+  EyeOff,
+  KeyRound,
+  ShieldCheck,
 } from 'lucide';
 
 const ICONS = {
+  eye: Eye,
+  eyeOff: EyeOff,
+  key: KeyRound,
+  shield: ShieldCheck,
   aperture: Aperture,
   down: ArrowDownRight,
   up: ArrowUpRight,

@@ -59,7 +59,11 @@ describe('a day at the till', () => {
     await ops.saveStaff({ name: 'Sari', role: 'supervisor', branchIds: [], email: '', phone: '', onDuty: true, active: true }, '2468');
     const printLine = paid.lines.find((line) => line.kind === 'print')!;
     await expect(ops.refund(order.id, printLine.id, 'Blurry', '1111')).rejects.toThrow('does not belong to a supervisor');
-    expect(await ops.refund(order.id, printLine.id, 'Blurry', '2468')).toBe(30_000);
+    // A double tap sends two refunds while the PIN is still being checked: one goes through.
+    const both = await Promise.allSettled([ops.refund(order.id, printLine.id, 'Blurry', '2468'), ops.refund(order.id, printLine.id, 'Blurry', '2468')]);
+    expect(both.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+    expect(both.find((result) => result.status === 'fulfilled')).toMatchObject({ value: 30_000 });
+    expect(ops.state.refunds).toHaveLength(1);
     await expect(ops.refund(order.id, printLine.id, 'Again', '2468')).rejects.toThrow('refunded already');
 
     const slip = ops.closeShift(ops.openShiftFor('mall')!.id, 217_500);
@@ -168,7 +172,9 @@ describe('managing payments', () => {
     await ops.saveStaff({ name: 'Sari', role: 'supervisor', branchIds: [], email: '', phone: '', onDuty: true, active: true }, '2468');
     const third = await ops.chargeQris(first.id);
     await expect(ops.confirmPayment(first.id, third.id, 'BCA 7781', '0000')).rejects.toThrow('does not belong to a supervisor');
-    await ops.confirmPayment(first.id, third.id, 'BCA 7781', '2468');
+    const confirms = await Promise.allSettled([ops.confirmPayment(first.id, third.id, 'BCA 7781', '2468'), ops.confirmPayment(first.id, third.id, 'BCA 7781', '2468')]);
+    expect(confirms.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(ops.state.activity.filter((entry) => entry.kind === 'payment.confirm')).toHaveLength(1);
     expect(ops.order(first.id).status).toBe('paid');
     expect(ops.order(first.id).payments[2].note).toBe('Confirmed by Sari from BCA 7781');
     expect(ops.state.activity[0].kind).toBe('payment.confirm');
@@ -216,6 +222,45 @@ describe('a party from the gate to the print', () => {
 
     ops.savePresetPrice(0);
     expect(ops.state.activity[0].message).toBe('AI presets are free.');
+  });
+});
+
+describe('team sign-in', () => {
+  it('signs the owner in, invites a cashier once, and stops sign-in when they leave', async () => {
+    const { createLocalBackend } = await import('../account/backend');
+    const accounts = createLocalBackend(memoryStore());
+    const session = await accounts.register({ business: 'Dusun Bambu', name: 'Rizky', email: 'rizky@dusunbambu.id', password: 'bambu2026' }, 'r1');
+    const store = new OpsStore(memoryStore(), session.account.id, session.account.business);
+    const ops = new Ops(store, session.account, { toast: () => {}, devicePointId: () => null });
+    ops.accounts = accounts;
+    ops.adoptSession(session.member);
+    expect(ops.actor()).toMatchObject({ name: 'Rizky', email: 'rizky@dusunbambu.id', role: 'owner' });
+    expect(ops.state.activity[0].message).toBe('Rizky signed in.');
+
+    const id = await ops.saveStaff({ name: 'Sari', role: 'cashier', branchIds: [], email: 'Sari@DusunBambu.id', phone: '', onDuty: true, active: true }, '');
+    await expect(ops.saveStaff({ name: 'Dewi', role: 'cashier', branchIds: [], email: 'sari@dusunbambu.id', phone: '', onDuty: true, active: true }, '')).rejects.toThrow('belongs to someone else');
+    const [first, again] = await Promise.all([ops.inviteMember(id, 'k'), ops.inviteMember(id, 'k')]);
+    expect(again.code).toBe(first.code);
+    expect(ops.member(id)?.status).toBe('invited');
+
+    await accounts.signOut();
+    await accounts.acceptInvite(first.code, 'kopi2026', 'a');
+    await accounts.signOut();
+    await accounts.signIn('rizky@dusunbambu.id', 'bambu2026');
+    await ops.refreshMembers();
+    expect(ops.member(id)?.status).toBe('active');
+
+    await ops.saveStaff({ ...ops.state.staff.find((person) => person.id === id)!, active: false }, '');
+    expect(ops.member(id)?.status).toBe('disabled');
+    await accounts.signOut();
+    await expect(accounts.signIn('sari@dusunbambu.id', 'kopi2026')).rejects.toThrow('turned off');
+  });
+
+  it('keeps a cashier away from other people\'s sign-in', async () => {
+    const { ops } = setup();
+    await ops.saveStaff({ name: 'Budi', role: 'cashier', branchIds: [], email: '', phone: '', onDuty: true, active: true }, '1357');
+    await ops.switchActor(ops.state.staff.find((person) => person.name === 'Budi')!.id, '1357');
+    await expect(ops.resetMember(ops.state.staff[0].id)).rejects.toThrow('not allowed');
   });
 });
 

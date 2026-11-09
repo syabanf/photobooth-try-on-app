@@ -1,5 +1,6 @@
 // Role-based access: what each role may do, which branches a person sees, and supervisor PINs.
 
+import { checkSecret, hashSecret } from '../account/password';
 import type { Role, Staff } from './model';
 
 export type Permission =
@@ -64,28 +65,18 @@ export function seesBranch(staff: Pick<Staff, 'branchIds'> | null, branchId: str
 
 // ---------- PINs ----------
 
-const toHex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-const fromHex = (hex: string) => new Uint8Array((hex.match(/../g) ?? []).map((pair) => parseInt(pair, 16)));
-
-async function derive(pin: string, salt: Uint8Array): Promise<string> {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: salt as BufferSource, iterations: 120_000 }, key, 256);
-  return toHex(new Uint8Array(bits));
-}
-
 function validPin(pin: string): boolean {
   return /^\d{4,8}$/.test(pin);
 }
 
 export async function hashPin(pin: string): Promise<{ pinHash: string; pinSalt: string }> {
   if (!validPin(pin)) throw new Error('A PIN is 4 to 8 digits.');
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  return { pinHash: await derive(pin, salt), pinSalt: toHex(salt) };
+  const { hash, salt } = await hashSecret(pin);
+  return { pinHash: hash, pinSalt: salt };
 }
 
 export async function checkPin(staff: Pick<Staff, 'pinHash' | 'pinSalt'>, pin: string): Promise<boolean> {
-  if (!staff.pinHash || !validPin(pin)) return false;
-  return (await derive(pin, fromHex(staff.pinSalt))) === staff.pinHash;
+  return validPin(pin) && checkSecret(pin, staff.pinHash, staff.pinSalt);
 }
 
 /** The first approver whose PIN matches, so the supervisor on the floor just types theirs. */

@@ -1,11 +1,41 @@
 // Accounts, locations and points: the types every backend returns, plus the trial rules.
 
-/** A trial workspace, opened with one tap from the quick access page. */
+/** A workspace: one business, its people, locations and points. */
 export interface Account {
   id: string;
   business: string;
   createdAt: number;
   trialEndsAt: number;
+}
+
+export type MemberStatus = 'active' | 'invited' | 'disabled';
+
+/** Someone who signs in to a workspace. The id matches their record on the Staff page. */
+export interface Member {
+  userId: string;
+  accountId: string;
+  name: string;
+  email: string;
+  status: MemberStatus;
+  createdAt: number;
+  lastSignInAt: number | null;
+  failedAttempts: number;
+  /** Wrong passwords lock the sign-in until this time. 0 when open. */
+  lockedUntil: number;
+  /** When the waiting invite or reset code stops working. */
+  inviteExpiresAt: number | null;
+}
+
+export interface Session {
+  account: Account;
+  member: Member;
+}
+
+/** A one-time code that lets an invited person, or one whose password was reset, set a password. */
+export interface Invite {
+  code: string;
+  expiresAt: number;
+  member: Member;
 }
 
 /** A store, mall or venue. */

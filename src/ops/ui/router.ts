@@ -44,6 +44,15 @@ const PAGES: Record<OpsView, { render: Render; permission: Permission }> = {
   settings: { render: renderSettings, permission: 'settings.manage' },
 };
 
+/** Pages outside the business router that still need a permission. */
+const OTHER_PAGES: Partial<Record<View, Permission>> = { gate: 'queue.run', sites: 'settings.manage' };
+
+/** Whether this person may open a page, so the menus can leave it out. */
+export function mayOpen(ops: Ops, view: View): boolean {
+  const permission = (PAGES as Partial<Record<View, { permission: Permission }>>)[view]?.permission ?? OTHER_PAGES[view];
+  return !permission || can(ops.actor(), permission);
+}
+
 export interface OpsRouter {
   show(view: OpsView): void;
   hide(): void;

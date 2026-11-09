@@ -66,16 +66,31 @@ export function mountGatePanel(ops: Ops, hooks: GateHooks) {
     return section;
   }
 
+  /** The faces this gate took for a ticket: the ones Take again replaces. */
+  const takenHere = (ticket: Ticket) => ops.facesForTicket(ticket.id).filter((face) => face.boothId === ops.hooks.devicePointId());
+
+  /**
+   * A scan is safe to repeat: a ticket being photographed is left alone, and one photographed
+   * already shows its faces instead of filing a second set.
+   */
   function scan(code: string): void {
     const ticket = ops.findTicket(code);
-    // Its own check-in must not shoot a second time through the subscription below.
-    pending.add(ticket.id);
+    if (pending.has(ticket.id)) return;
+    const earlier = takenHere(ticket);
     ops.arrive(code);
+    if (earlier.length) {
+      last = { ticket, faces: earlier, error: '' };
+      draw();
+      notice(`${ticket.number} was photographed already. Tap Take again for a new photo.`, 'info');
+      return;
+    }
     void photograph(ticket);
   }
 
   async function photograph(ticket: Ticket): Promise<void> {
+    if (pending.has(ticket.id)) return;
     pending.add(ticket.id);
+    const replaced = takenHere(ticket);
     last = { ticket, faces: [], error: '' };
     draw();
     try {
@@ -83,6 +98,8 @@ export function mountGatePanel(ops: Ops, hooks: GateHooks) {
       const crops = await hooks.captureFaces();
       const faces: FaceRecord[] = [];
       for (const crop of crops) faces.push(await ops.addFace(await canvasToBlob(crop, 'image/jpeg', 0.92), ops.hooks.devicePointId(), ticket.id));
+      // The new shot replaces this gate's earlier one; a failed shot keeps it.
+      for (const face of replaced) await ops.deleteFace(face.id);
       last = { ticket, faces, error: '' };
     } catch (error) {
       last = { ticket, faces: [], error: (error as Error).message };
@@ -147,7 +164,7 @@ export function mountGatePanel(ops: Ops, hooks: GateHooks) {
     const arrived = arrivals(known, state.tickets);
     known = state.tickets;
     if (!visible) return;
-    for (const ticket of arrived) if (!pending.has(ticket.id)) void photograph(ticket);
+    for (const ticket of arrived) if (takenHere(ticket).length === 0) void photograph(ticket);
     draw();
   });
 
