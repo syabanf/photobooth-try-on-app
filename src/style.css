@@ -367,6 +367,27 @@ p {
   min-width: 0;
 }
 
+/* A linked booth shows only the customer session. Staff can leave from the header. */
+.shell.booth-customer-mode .rail,
+.shell.booth-customer-mode .bottombar,
+.shell.booth-customer-mode .device-card,
+.shell.booth-customer-mode #cameraPick,
+.shell.booth-customer-mode #handToggle,
+.shell.booth-customer-mode #modes,
+.shell.booth-customer-mode #accountButton {
+  display: none !important;
+}
+
+.shell.booth-customer-mode .main {
+  padding-bottom: 16px;
+}
+
+.session-result {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
 /* ---------- badge ---------- */
 
 /* ---------- hand control ---------- */
@@ -837,6 +858,15 @@ p {
 }
 
 .field-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.voucher-row {
+  align-items: flex-end;
+}
+
+.voucher-row .field {
   flex: 1;
   min-width: 0;
 }
@@ -3901,6 +3931,18 @@ p {
   gap: 10px;
 }
 
+.booth-preflight {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.booth-customer-mode .booth-preflight {
+  display: none;
+}
+
 .extra-prints {
   align-items: center;
 }
@@ -4071,6 +4113,11 @@ body.display-mode {
   width: min(960px, 100%);
   margin: 0 auto;
   text-align: center;
+}
+
+.display--gallery .display-content {
+  justify-content: flex-start;
+  padding-top: clamp(24px, 6vh, 64px);
 }
 
 .display-hero {

@@ -260,6 +260,10 @@ export interface BoothSession {
   price: Rupiah;
   startedAt: number;
   endedAt?: number;
+  /** The public photo-server link, set only after every customer file is uploaded. */
+  deliveryUrl?: string;
+  /** Set when a capture could not be completed and staff closed the session. */
+  failureReason?: string;
   /** Gallery shot ids: photos, GIF, clips and the BTS recording. */
   shotIds: string[];
   prints: number;

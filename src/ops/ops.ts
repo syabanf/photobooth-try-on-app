@@ -801,7 +801,7 @@ export class Ops {
       startedAt: this.now(),
       shotIds: [],
       prints: 0,
-      token: crypto.randomUUID().replaceAll('-', '').slice(0, 16),
+      token: crypto.randomUUID().replaceAll('-', ''),
       consent: false,
       email: '',
     };
@@ -819,11 +819,22 @@ export class Ops {
     this.store.update((draft) => draft.sessions.find((entry) => entry.id === sessionId)?.shotIds.push(shotId));
   }
 
+  /** Discards incomplete capture files before a customer retries the same paid session. */
+  async clearSessionShots(sessionId: string): Promise<void> {
+    const session = this.state.sessions.find((entry) => entry.id === sessionId);
+    if (!session) return;
+    for (const id of session.shotIds) await deleteShot(id);
+    this.store.update((draft) => {
+      const current = draft.sessions.find((entry) => entry.id === sessionId);
+      if (current) current.shotIds = [];
+    });
+  }
+
   /** Closes a session with the customer's sharing choice, and emails the link when asked. */
-  endSession(sessionId: string, consent: boolean, email: string): BoothSession {
+  endSession(sessionId: string, consent: boolean, email: string, deliveryUrl?: string, failureReason?: string): BoothSession {
     const session = this.state.sessions.find((entry) => entry.id === sessionId)!;
-    const ended = { ...session, consent, email: email.trim(), endedAt: this.now() };
-    this.commit('session.end', `${this.boothName(session.boothId)} finished a session${consent ? ', sharing allowed' : ''}.`, (draft) => {
+    const ended = { ...session, consent, email: deliveryUrl ? email.trim() : '', deliveryUrl, failureReason, endedAt: this.now() };
+    this.commit('session.end', `${this.boothName(session.boothId)} ${failureReason ? `closed a failed session: ${failureReason}` : `finished a session${consent ? ', sharing allowed' : ''}`}.`, (draft) => {
       Object.assign(draft.sessions.find((entry) => entry.id === sessionId)!, ended);
       if (ended.email) {
         draft.notifications.unshift({
@@ -839,12 +850,22 @@ export class Ops {
     return ended;
   }
 
+  /** Records a phone link restored by staff after the customer has left the booth flow. */
+  setSessionDelivery(sessionId: string, deliveryUrl: string): void {
+    const session = this.state.sessions.find((entry) => entry.id === sessionId);
+    if (!session?.endedAt || session.purgedAt || !session.shotIds.length) throw new Error('This session cannot be restored.');
+    this.commit('session.delivery', `Restored the phone link for ${this.boothName(session.boothId)} session.`, (draft) => {
+      draft.sessions.find((entry) => entry.id === sessionId)!.deliveryUrl = deliveryUrl;
+    }, { branchId: session.branchId, sync: { sessionId, deliveryUrl } });
+  }
+
   private customDomain(): string {
     return this.state.branding.customDomain.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
   }
 
   /** The customer's soft-file page, on the client's own domain when one is set. */
-  galleryLink(session: Pick<BoothSession, 'token'>): string {
+  galleryLink(session: Pick<BoothSession, 'token'> & { deliveryUrl?: string }): string {
+    if (session.deliveryUrl) return session.deliveryUrl;
     const domain = this.customDomain();
     return domain ? `https://${domain}/g/${session.token}` : `${location.origin}${location.pathname}#g=${session.token}`;
   }

@@ -1,4 +1,5 @@
 node_modules
 dist
+.photo-delivery/
 public/wasm
 .DS_Store

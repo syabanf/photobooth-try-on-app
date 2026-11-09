@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { memoryStore } from '../account/backend';
 import type { Account } from '../account/model';
+import { getShots, saveShot } from '../gallery';
 import { can, permissionsOf, type Permission } from './access';
 import { Ops } from './ops';
 import { OpsStore } from './store';
@@ -103,6 +104,43 @@ describe('a day at the till', () => {
     await ops.switchActor(budi.id, '1357');
     expect(ops.can('pos.sell')).toBe(true);
     await expect(ops.saveStaff({ name: 'X', role: 'cashier', branchIds: [], email: '', phone: '', onDuty: false, active: true }, '')).rejects.toThrow('not allowed');
+  });
+});
+
+describe('booth capture recovery', () => {
+  it('clears incomplete photos without charging a paid session again', async () => {
+    const { ops } = setup();
+    const order = ops.createOrder({
+      lines: [{ kind: 'session', refId: 'photobox', label: 'Photo strip', unitPrice: 35_000, qty: 1, mode: 'strip' }],
+      presetId: null, voucherCode: '', channel: 'booth', branchId: 'mall', boothId: 'k1',
+    });
+    const payment = await ops.chargeQris(order.id);
+    ops.gateway.simulatePaid!(payment.reference);
+    const session = ops.startSession({ boothId: 'k1', mode: 'strip', price: 35_000, orderId: order.id, voucherCode: null, frameId: null });
+    const shot = await saveShot(new Blob(['partial'], { type: 'image/png' }), 'snapshot', 'k1', null, session.id);
+    ops.attachShot(session.id, shot.id);
+
+    await ops.clearSessionShots(session.id);
+    expect(ops.state.sessions.find((entry) => entry.id === session.id)?.shotIds).toEqual([]);
+    expect(await getShots([shot.id])).toEqual([]);
+    expect(ops.order(order.id).status).toBe('paid');
+
+    ops.endSession(session.id, false, '', undefined, 'Camera disconnected');
+    expect(ops.state.sessions.find((entry) => entry.id === session.id)?.failureReason).toBe('Camera disconnected');
+    expect(ops.state.activity[0].message).toContain('closed a failed session');
+  });
+
+  it('restores a phone link after a completed session while keeping the saved file', async () => {
+    const { ops } = setup();
+    const session = ops.startSession({ boothId: 'k1', mode: 'strip', price: 0, orderId: null, voucherCode: null, frameId: null });
+    const shot = await saveShot(new Blob(['photo'], { type: 'image/png' }), 'photobooth', 'k1', null, session.id);
+    ops.attachShot(session.id, shot.id);
+    expect(() => ops.setSessionDelivery(session.id, 'http://booth/#g=token')).toThrow('cannot be restored');
+    ops.endSession(session.id, false, '');
+    ops.setSessionDelivery(session.id, 'http://booth/#g=token');
+    expect(ops.state.sessions.find((entry) => entry.id === session.id)?.deliveryUrl).toBe('http://booth/#g=token');
+    expect(await getShots([shot.id])).toHaveLength(1);
+    expect(ops.state.activity[0].kind).toBe('session.delivery');
   });
 });
 

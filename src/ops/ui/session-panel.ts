@@ -2,8 +2,9 @@
 // code, or free during an event), choose a frame and effects, shoot, print, and take the QR to
 // the soft files. Ads play when the booth sits idle.
 
-import { canvasToBlob } from '../../render/overlay';
+import { canvasToBlob, downloadBlob } from '../../render/overlay';
 import { saveShot, type ShotKind } from '../../gallery';
+import { extensionOf } from '../../gallery-view';
 import { FRAMES, composeBooth } from '../../photobooth';
 import { blobUrl } from '../blobs';
 import { applyEffects, cssFilter, FILTER_LABELS, gifBurst, recordCamera, recordFrames } from '../capture';
@@ -11,10 +12,11 @@ import { amountDue } from '../cart';
 import { composeFrame } from '../frames';
 import { NO_EFFECTS, SESSION_MODES, type BoothSession, type Effects, type Frame, type PaperSize, type SessionMode, type Voucher } from '../model';
 import type { CartLine, Ops } from '../ops';
-import { formDialog } from '../../dialogs';
+import { confirmDialog, formDialog } from '../../dialogs';
 import { methodAllowed } from '../payments';
 import { availableFrames } from '../vouchers';
 import { qrClock } from './pages/pos';
+import { photoDeliveryCheck, publishGallery } from '../delivery';
 import { act, actionButton, badge, el, money, notice, pills, qrCanvas } from './kit';
 
 export interface SessionHooks {
@@ -27,11 +29,13 @@ export interface SessionHooks {
   cameraLive(): boolean;
   onSaved(): void;
   openLocations(): void;
+  openStaffControls(): void;
 }
 
 type Step = 'mode' | 'pay' | 'style' | 'shoot' | 'finish';
 
 interface Result {
+  id: string;
   kind: ShotKind;
   blob: Blob;
   url: string;
@@ -57,7 +61,8 @@ function fresh() {
     printBlob: null as Blob | null,
     printsLeft: 0,
     consent: false,
-    email: '',
+    deliveryUrl: null as string | null,
+    error: '',
     busy: '',
   };
 }
@@ -70,6 +75,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
   let visible = false;
   let stopBts: (() => Promise<Blob | null>) | null = null;
   let unsubscribe: (() => void) | null = null;
+  let deliveryOrigin: string | null | undefined;
 
   const booth = () => ops.hooks.devicePointId();
   /** The frame's size, else the first priced size a printer at this booth takes. */
@@ -98,7 +104,9 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
     const head = el('header', 'card-head');
     const text = el('div');
     text.append(el('h2', 'card-title', title), el('p', 'card-desc', description));
-    head.append(text, el('span', 'step-count', `${['mode', 'pay', 'style', 'shoot', 'finish'].indexOf(flow.step) + 1} / 5`));
+    const path: Step[] = flow.price === 0 ? ['mode', 'style', 'shoot', 'finish'] : ['mode', 'pay', 'style', 'shoot', 'finish'];
+    const progress = flow.step === 'mode' ? 'Choose a session' : `${path.indexOf(flow.step) + 1} / ${path.length}`;
+    head.append(text, el('span', 'step-count', progress));
     const body = el('div', 'card-body');
     body.append(...content);
     section.append(head, body);
@@ -132,7 +140,25 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       grid.append(button);
     }
     const intro = event ? `${(event as Voucher).code}: sessions are free during this event.` : ops.state.branding.welcome || 'Pick what you want to make.';
-    return card(ops.boothName(id), intro, grid.childElementCount ? grid : el('p', 'card-desc', 'No mode has a price here. Set prices in Settings.'));
+    const preflight = el('div', 'booth-preflight');
+    preflight.append(el('p', 'kicker', 'Staff: phone download check'));
+    const check = act('Check again', 'btn btn-outline btn-sm', () => void checkDelivery());
+    preflight.setAttribute('role', 'status');
+    if (deliveryOrigin === undefined) preflight.append(el('p', 'field-hint', 'Checking the local photo server…'));
+    else if (!deliveryOrigin) preflight.append(el('p', 'callout', 'Phone links are unavailable. Start the app with pnpm serve, then check again.'), check);
+    else preflight.append(
+      el('p', 'field-hint', 'Scan this test QR with a phone on the venue Wi-Fi. “Phone connected” confirms the phone can open photo links.'),
+      qrCanvas(`${deliveryOrigin}/connection-test`, 150),
+      check,
+    );
+    return card(ops.boothName(id), intro, grid.childElementCount ? grid : el('p', 'card-desc', 'No mode has a price here. Set prices in Settings.'), preflight);
+  }
+
+  async function checkDelivery(): Promise<void> {
+    deliveryOrigin = undefined;
+    draw();
+    deliveryOrigin = await photoDeliveryCheck();
+    if (flow.step === 'mode') draw();
   }
 
   // ---------- 2. pay ----------
@@ -140,23 +166,27 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
     const id = booth()!;
     const voucherInput = el('input', 'input');
     voucherInput.placeholder = 'Voucher or receipt code';
+    const voucherField = el('label', 'field');
+    voucherField.append(el('span', 'field-label', 'Voucher or receipt code'), voucherInput);
     const apply = act('Apply', 'btn btn-outline', () => {
       const { voucher, discount } = ops.redeemAtBooth(voucherInput.value, id, flow.price);
       flow.voucher = voucher;
       flow.discount = discount;
       draw();
     });
-    const voucherRow = el('div', 'field-row');
-    voucherRow.append(voucherInput, apply);
+    const voucherRow = el('div', 'field-row voucher-row');
+    voucherRow.append(voucherField, apply);
 
     const extras = el('div', 'field-row extra-prints');
     if (PRINTABLE.includes(flow.mode) && printPrice()) {
       const minus = actionButton('−', 'btn btn-outline btn-icon');
+      minus.setAttribute('aria-label', 'Remove one extra print');
       minus.addEventListener('click', () => {
         flow.extraPrints = Math.max(0, flow.extraPrints - 1);
         draw();
       });
       const plus = actionButton('+', 'btn btn-outline btn-icon');
+      plus.setAttribute('aria-label', 'Add one extra print');
       plus.addEventListener('click', () => {
         flow.extraPrints += 1;
         draw();
@@ -267,6 +297,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       const wrap = el('label', 'size');
       const input = el('input');
       input.type = 'range';
+      input.setAttribute('aria-label', label);
       Object.assign(input, { min: String(min), max: String(max), step: String(step), value: String(flow.effects[key]) });
       const out = el('output', '', key === 'zoom' ? `${flow.effects.zoom.toFixed(1)}×` : `${flow.effects[key]}%`);
       input.addEventListener('input', () => {
@@ -283,6 +314,14 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       draw();
     });
     const start = act('Start shooting', 'btn btn-primary btn-block', () => shoot());
+    const paid = !!flow.orderId && ops.order(flow.orderId).status === 'paid';
+    const back = paid
+      ? act('Need to change? Get staff help', 'btn btn-outline btn-block', hooks.openStaffControls)
+      : act('Back to modes', 'btn btn-outline btn-block', () => {
+          flow = fresh();
+          resetPreview();
+          draw();
+        });
     return card(
       'Look',
       'Pick a frame and a look. Pinch the camera to zoom.',
@@ -295,6 +334,8 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       slider('saturation', 'Colour', 0, 180, 1),
       mirror,
       start,
+      ...(paid ? [el('p', 'field-hint', 'Payment is complete. Staff can help change or cancel this session.')] : []),
+      back,
     );
   }
 
@@ -321,7 +362,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
   async function keep(kind: ShotKind, blob: Blob): Promise<void> {
     const shot = await saveShot(blob, kind, booth(), null, flow.session!.id);
     ops.attachShot(flow.session!.id, shot.id);
-    flow.results.push({ kind, blob, url: URL.createObjectURL(blob) });
+    flow.results.push({ id: shot.id, kind, blob, url: URL.createObjectURL(blob) });
   }
 
   async function shoot(): Promise<void> {
@@ -330,7 +371,8 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       return;
     }
     const id = booth()!;
-    flow.session = ops.startSession({ boothId: id, mode: flow.mode, price: due() - flow.extraPrints * printPrice(), orderId: flow.orderId, voucherCode: flow.orderId ? null : (flow.voucher?.code ?? null), frameId: flow.frameId });
+    flow.error = '';
+    flow.session ??= ops.startSession({ boothId: id, mode: flow.mode, price: due() - flow.extraPrints * printPrice(), orderId: flow.orderId, voucherCode: flow.orderId ? null : (flow.voucher?.code ?? null), frameId: flow.frameId });
     go('shoot');
     const bts = ops.cameraProfile(id).secondaryDeviceId;
     if (bts) stopBts = await recordCamera(bts).catch(() => null);
@@ -388,19 +430,48 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
         }
       }
       flow.printsLeft = (PRINTABLE.includes(flow.mode) && flow.mode !== 'live' ? 1 : 0) + flow.extraPrints;
+      flow.busy = 'Preparing phone downloads…';
+      draw();
+      flow.deliveryUrl = await publishGallery(
+        flow.session.token,
+        ops.state.branding.brandName || ops.account.business,
+        flow.results,
+        ops.state.settings.retentionDays,
+      );
       flow.busy = '';
       hooks.onSaved();
       go('finish');
     } catch (error) {
       console.error(error);
+      if (stopBts) {
+        await stopBts().catch(() => null);
+        stopBts = null;
+      }
       flow.busy = '';
-      notice(`Capture failed: ${(error as Error).message}`, 'error');
+      flow.error = (error as Error).message || 'The capture could not finish.';
       go('finish');
     }
   }
 
+  async function retryCapture(): Promise<void> {
+    if (!hooks.cameraLive()) {
+      notice('The camera is not running. Ask staff for help.', 'error');
+      return;
+    }
+    if (flow.session) await ops.clearSessionShots(flow.session.id);
+    for (const result of flow.results) URL.revokeObjectURL(result.url);
+    flow.results = [];
+    flow.printBlob = null;
+    flow.printsLeft = 0;
+    flow.deliveryUrl = null;
+    flow.error = '';
+    await shoot();
+  }
+
   function shootStep(): HTMLElement {
-    return card('Smile!', flow.busy || 'Starting…', el('p', 'queue-now', SESSION_MODES[flow.mode].label));
+    const progress = el('p', 'queue-now', flow.busy || 'Starting…');
+    progress.setAttribute('role', 'status');
+    return card('Smile!', SESSION_MODES[flow.mode].label, progress);
   }
 
   // ---------- 5. finish ----------
@@ -410,7 +481,12 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       const media = result.blob.type.startsWith('video/')
         ? Object.assign(el('video'), { src: result.url, autoplay: true, muted: true, loop: true, playsInline: true })
         : Object.assign(el('img'), { src: result.url, alt: '' });
-      results.append(media);
+      const save = act(`Save ${result.kind}`, 'btn btn-outline btn-sm', () => {
+        downloadBlob(result.blob, `${result.kind}-${result.id}.${extensionOf(result.blob)}`);
+      }, 'download');
+      const item = el('div', 'session-result');
+      item.append(media, save);
+      results.append(item);
     }
     const prints = el('div', 'field-row');
     if (flow.printBlob && flow.printsLeft > 0) {
@@ -426,34 +502,51 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
     if (flow.printBlob && printPrice()) {
       prints.append(act(`Buy prints · ${money(printPrice())}`, 'btn btn-outline', () => buyPrints(), 'cart'));
     }
-    const link = flow.session ? ops.galleryLink(flow.session) : '';
+    const link = flow.deliveryUrl;
     const consent = el('label', 'consent-gate');
     const box = el('input');
     box.type = 'checkbox';
     box.checked = flow.consent;
     box.addEventListener('change', () => (flow.consent = box.checked));
-    consent.append(box, ' Allow sharing on social media and the event gallery');
-    const email = el('input', 'input');
-    email.type = 'email';
-    email.placeholder = 'Email me the link (optional)';
-    email.value = flow.email;
-    email.addEventListener('input', () => (flow.email = email.value));
-    const done = act('Done', 'btn btn-primary btn-block', () => {
-      if (flow.session) ops.endSession(flow.session.id, flow.consent, flow.email);
+    consent.append(box, ' Allow these photos in the public event gallery');
+    const closeSession = () => {
+      if (flow.session) ops.endSession(flow.session.id, flow.consent, '', flow.deliveryUrl ?? undefined, flow.error || undefined);
       for (const result of flow.results) URL.revokeObjectURL(result.url);
       flow = fresh();
       resetPreview();
       preview();
       draw();
+    };
+    const done = act(flow.error ? 'End failed session' : 'Done', flow.error ? 'btn btn-ghost btn-block' : 'btn btn-primary btn-block', () => {
+      if (!flow.error) return closeSession();
+      confirmDialog({
+        title: 'End this failed session?',
+        message: flow.orderId || flow.voucher?.orderId ? 'The payment stays recorded. Ask staff to review a refund in Transactions.' : 'This closes the session without a photo.',
+        confirmLabel: 'End session',
+        async run() { closeSession(); },
+      });
     });
+    const retry = flow.error ? act('Try capture again', 'btn btn-primary btn-block', retryCapture) : null;
+    const staffHelp = flow.error ? act('Get staff help', 'btn btn-outline btn-block', hooks.openStaffControls) : null;
+    const retryLink = !link && !flow.error && flow.results.length
+      ? act('Retry phone link', 'btn btn-outline btn-block', async () => {
+          flow.deliveryUrl = await publishGallery(flow.session!.token, ops.state.branding.brandName || ops.account.business, flow.results, ops.state.settings.retentionDays);
+          draw();
+        })
+      : null;
+    const networkHelp = link
+      ? el('p', 'field-hint', 'Connect your phone to the venue Wi-Fi, then scan the QR. If it does not open, ask staff to save the files here.')
+      : null;
     return card(
-      ops.state.branding.thanks || 'Scan to get your photos',
-      'Unlimited downloads: photo, GIF and video. Share straight to Instagram or TikTok from your phone.',
+      flow.error ? 'Capture did not finish' : link ? (ops.state.branding.thanks || 'Your photos are ready') : 'Files saved on this booth',
+      flow.error ? `${flow.error} Try again or ask staff for help.` : link ? 'Scan to save your files on your phone.' : 'Phone downloads are unavailable. Save the files here or ask staff for help.',
       results,
       prints,
       link ? qrCanvas(link, 220) : '',
-      consent,
-      email,
+      ...(networkHelp ? [networkHelp] : []),
+      ...(retryLink ? [retryLink] : []),
+      ...(link && flow.session?.eventId ? [consent] : []),
+      ...(retry ? [retry, staffHelp!] : []),
       done,
     );
   }
@@ -561,10 +654,14 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
   });
 
   return {
+    step(): Step {
+      return flow.step;
+    },
     show(): void {
       visible = true;
       preview();
       draw();
+      if (deliveryOrigin === undefined) void checkDelivery();
     },
     hide(): void {
       visible = false;

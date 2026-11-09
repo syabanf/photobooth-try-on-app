@@ -2,13 +2,15 @@
 // log of every rupiah, refund, voucher and shift.
 
 import { formDialog, openDialog } from '../../../dialogs';
+import { getShots } from '../../../gallery';
 import { seesBranch } from '../../access';
 import { lineGross, lineNet, paidAmount } from '../../cart';
-import { PAYMENT_LABELS, SESSION_MODES, type Order } from '../../model';
+import { publishGallery } from '../../delivery';
+import { PAYMENT_LABELS, SESSION_MODES, type BoothSession, type Order } from '../../model';
 import type { Ops } from '../../ops';
 import { shiftSlip } from '../../shift';
 import type { PageContext } from '../router';
-import { act, actionButton, badge, dateTime, el, money, page, pills, table } from '../kit';
+import { act, actionButton, badge, dateTime, el, money, page, pills, qrCanvas, table } from '../kit';
 import { printReceipt, showSlip } from './pos';
 
 type Tab = 'orders' | 'sessions' | 'refunds' | 'shifts' | 'activity';
@@ -89,11 +91,12 @@ export function renderSales(context: PageContext): HTMLElement {
           { label: 'Paid with', cell: (session) => session.voucherCode ?? (session.orderId ? state.orders.find((o) => o.id === session.orderId)?.number ?? '—' : session.price === 0 ? 'Free event' : '—') },
           { label: 'Price', className: 'num', cell: (session) => money(session.price) },
           { label: 'Files', className: 'num', cell: (session) => (session.purgedAt ? badge('Purged', 'muted') : String(session.shotIds.length)) },
+          { label: 'Phone link', cell: (session) => badge(session.deliveryUrl ? 'Ready' : session.endedAt && session.shotIds.length && !session.purgedAt ? 'Needs retry' : '—', session.deliveryUrl ? 'ok' : 'muted') },
           { label: 'Prints', className: 'num', cell: (session) => String(session.prints) },
           { label: 'Sharing', cell: (session) => badge(session.consent ? 'Allowed' : 'Private', session.consent ? 'ok' : 'muted') },
         ],
         sessions.slice(0, 300),
-        { empty: 'No booth sessions yet.' },
+        { empty: 'No booth sessions yet.', onRow: (session) => sessionDialog(ops, session.id, redraw) },
       ),
     );
   } else if (view.tab === 'refunds') {
@@ -215,4 +218,44 @@ function orderDialog(ops: Ops, orderId: string): void {
   const close = actionButton('Done', 'btn btn-primary');
   close.dataset.close = '';
   const dialog = openDialog({ title: order.number, body: [lines, facts], footer: [print, close] });
+}
+
+function sessionDialog(ops: Ops, sessionId: string, redraw: () => void): void {
+  const session: BoothSession | undefined = ops.state.sessions.find((entry) => entry.id === sessionId);
+  if (!session) return;
+  const details = el('div', 'panel-stack');
+  details.append(el('p', 'card-desc', `${SESSION_MODES[session.mode].label} · ${dateTime(session.startedAt)} · ${ops.boothName(session.boothId)}`));
+  const status = el('p', 'field-hint');
+  status.setAttribute('role', 'status');
+  details.append(status);
+  const close = actionButton('Done', 'btn btn-primary');
+  close.dataset.close = '';
+  let retry: HTMLButtonElement | null = null;
+  if (session.deliveryUrl) {
+    status.textContent = 'Connect the customer’s phone to the venue Wi-Fi before scanning.';
+    details.append(qrCanvas(session.deliveryUrl, 200));
+  } else if (session.endedAt && session.shotIds.length && !session.purgedAt && !session.failureReason) {
+    status.textContent = 'The files are on this booth. Retry publishing them to restore the phone QR.';
+    retry = act('Restore phone link', 'btn btn-outline', async () => {
+      retry!.disabled = true;
+      status.textContent = 'Checking saved files and uploading…';
+      try {
+        const shots = await getShots(session.shotIds);
+        if (shots.length !== session.shotIds.length) throw new Error('Some saved files are missing from this device.');
+        const files = shots.filter((shot) => shot.kind !== 'bts').map(({ id, kind, blob }) => ({ id, kind, blob }));
+        if (!files.length) throw new Error('No customer files are available.');
+        const url = await publishGallery(session.token, ops.state.branding.brandName || ops.account.business, files, ops.state.settings.retentionDays);
+        if (!url) throw new Error('Photo server unavailable. Check the booth network and try again.');
+        ops.setSessionDelivery(session.id, url);
+        status.textContent = 'Phone link restored. Scan the QR on a phone connected to the venue Wi-Fi.';
+        details.append(qrCanvas(url, 200));
+        retry!.remove();
+        redraw();
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : 'Could not restore the phone link.';
+        retry!.disabled = false;
+      }
+    });
+  } else status.textContent = session.purgedAt ? 'The saved files have expired.' : session.failureReason ? 'Capture failed in this session.' : 'No finished files are available.';
+  openDialog({ title: 'Booth session', body: [details], footer: retry ? [retry, close] : [close] });
 }

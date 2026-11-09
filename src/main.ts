@@ -46,8 +46,10 @@ import { SimulatedEdsdk, WebcamDriver } from './ops/adapters';
 import { mayOpen, mountOpsRouter, type OpsRouter } from './ops/ui/router';
 import { mountSessionPanel } from './ops/ui/session-panel';
 import { displayRoute, renderDisplay } from './ops/ui/displays';
+import { renderRemoteGallery } from './ops/delivery';
 import { renderToday } from './ops/ui/today';
 import { notice } from './ops/ui/kit';
+import { confirmDialog } from './dialogs';
 
 /** One Euro settings for landmarks in pixels: steady while the wearer holds still, quick to follow a turn. */
 const TRACK_FILTER = { minCutoff: 1.2, beta: 0.01 };
@@ -233,8 +235,17 @@ function showView(view: View): void {
     setStatus('Finish or cancel the photobooth first.', 'warn');
     return;
   }
+  if (state.view === 'session' && business?.session.step() !== 'mode' && !staffExitAuthorized) {
+    setStatus('Finish this booth session before leaving.', 'warn');
+    return;
+  }
+  if (customerMode && state.view === 'session' && view !== 'session') {
+    setStatus('Open Staff controls to leave the booth.', 'warn');
+    return;
+  }
   state.view = view;
   ui.setView(view);
+  updateCustomerShell();
   stickers.setVisible(view === 'photobooth');
   if (view !== 'photobooth') booth.showPreview(null);
   if (view === 'photobooth') {
@@ -854,6 +865,43 @@ void loadStoreItems();
 
 /** The booth business layer, set up once someone signs in. */
 let business: { ops: Ops; router: OpsRouter; session: ReturnType<typeof mountSessionPanel>; presets: ReturnType<typeof mountPresetPanel>; gate: ReturnType<typeof mountGatePanel> } | null = null;
+let customerMode = false;
+let staffExitAuthorized = false;
+const boothModeToggle = document.querySelector<HTMLButtonElement>('#boothModeToggle')!;
+
+function updateCustomerShell(): void {
+  const atBooth = state.view === 'session' && !!sites?.devicePointId();
+  document.querySelector('.shell')!.classList.toggle('booth-customer-mode', atBooth && customerMode);
+  boothModeToggle.hidden = !atBooth;
+  boothModeToggle.textContent = customerMode ? 'Staff controls' : 'Customer mode';
+}
+
+boothModeToggle.addEventListener('click', () => {
+  if (customerMode) {
+    if (business?.session.step() === 'shoot') {
+      setStatus('Wait for the capture to finish before opening staff controls.', 'warn');
+      return;
+    }
+    const inSession = business?.session.step() !== 'mode';
+    confirmDialog({
+      title: 'Open staff controls?',
+      message: inSession ? 'The current session will stay here for staff to resume.' : 'This leaves the customer screen and opens the workspace menu.',
+      confirmLabel: 'Open staff controls',
+      async run() {
+        customerMode = false;
+        staffExitAuthorized = true;
+        try {
+          showView('dashboard');
+        } finally {
+          staffExitAuthorized = false;
+        }
+      },
+    });
+  } else {
+    customerMode = true;
+    updateCustomerShell();
+  }
+});
 /** Heartbeats wait for the first camera start, so a page load never reports a camera as unplugged. */
 let heartbeats = false;
 
@@ -874,6 +922,14 @@ async function startBusiness(account: Account): Promise<Ops> {
     cameraLive: () => state.cameraLive,
     onSaved: () => void gallery.refresh(),
     openLocations: () => showView('sites'),
+    openStaffControls: () => {
+      if (customerMode) boothModeToggle.click();
+      else {
+        staffExitAuthorized = true;
+        try { showView('dashboard'); }
+        finally { staffExitAuthorized = false; }
+      }
+    },
   });
   const presets = mountPresetPanel(ops, {
     captureFace,
@@ -918,6 +974,7 @@ async function startBusiness(account: Account): Promise<Ops> {
 async function startDisplay(): Promise<boolean> {
   const route = displayRoute(location.hash);
   if (!route) return false;
+  if (route.kind === 'gallery' && await renderRemoteGallery(route.id)) return true;
   const current = await backend.current();
   const candidates = current ? [current, ...(await backend.workspaces())] : await backend.workspaces();
   // A photo link or ticket belongs to whichever workspace on this device holds its token.
@@ -984,7 +1041,8 @@ async function start(): Promise<void> {
     if (state.view === 'dashboard') void dashboard?.refresh();
   });
   // A kiosk linked to a point opens on the booth flow; a manager's device opens on the dashboard.
-  showView(sites.devicePointId() ? 'session' : 'dashboard');
+  customerMode = !!sites.devicePointId();
+  showView(customerMode ? 'session' : 'dashboard');
   void gallery.refresh();
   await wear(DEFAULT_ITEMS[0]);
   await boot();

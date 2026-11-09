@@ -1,6 +1,6 @@
 # Virtual Try-On
 
-Browser app that opens the webcam and places glasses, hats, and clothing on the person in frame, one item per category worn together. A photobooth takes timed runs of shots with a swapped background and stickers, and prints them as one sheet. Everything you capture lands in an on-device gallery. Tracking runs on-device with MediaPipe Tasks Vision. No backend.
+Browser app that opens the webcam and places glasses, hats, and clothing on the person in frame, one item per category worn together. A photobooth takes timed runs of shots with a swapped background and stickers, and prints them as one sheet. Everything you capture lands in an on-device gallery. Tracking runs on-device with MediaPipe Tasks Vision. The optional local photo server lets customers open booth-session files from a phone on the same network.
 
 ## Run
 
@@ -10,6 +10,21 @@ pnpm dev
 ```
 
 Open http://localhost:5173 and allow the camera. The `predev` step copies the MediaPipe wasm runtime into `public/wasm` so it is served from the same origin. The camera API needs `localhost` or HTTPS.
+
+### Customer photo QR on a booth network
+
+The Vite development server keeps photos in its browser only. To let a customer's phone open the QR, build and run the bundled local photo server on the booth computer:
+
+```bash
+pnpm build
+pnpm serve
+```
+
+Open `http://127.0.0.1:4173` on the booth computer. The server prints its customer photo URL, normally `http://<booth-LAN-IP>:4173`. Connect the customer's phone to the same network and make sure the booth computer's firewall allows inbound TCP 4173. If the automatic IP is wrong, set `PHOTO_PUBLIC_ORIGIN=http://<reachable-IP>:4173` before `pnpm serve`. Set `PORT` if 4173 is already in use. Keep the booth browser on `127.0.0.1`; camera access needs a secure context, while the phone's photo page does not use the camera.
+
+The booth uploads each finished customer file to `.photo-delivery/` on that computer. The QR appears only after the upload succeeds. If the server is unavailable, the finish screen offers local Save buttons instead. The server accepts uploads only from the booth computer; phone links contain a random token and allow downloads. Published files use the workspace's photo retention setting at capture time. Back up `.photo-delivery/` if these files must survive a booth computer replacement. A public domain and remote access require hosting this photo service behind HTTPS.
+
+Before opening the booth to customers, use **Staff: phone download check** on the Booth start screen. Scan its test QR with a phone on the venue Wi-Fi; the phone should say **Phone connected**. The check is hidden in customer mode. If publishing fails after a session, staff can open **Transactions → Sessions**, select the session, and choose **Restore phone link**. This re-uploads the customer files saved on that booth and shows a new QR. It requires those files to remain on the same device and within the retention period.
 
 Other scripts:
 
@@ -69,7 +84,7 @@ The rail holds Dashboard, Booth, Point of sale, Queue, Try on, Photobooth and Ga
 
 ### Booth client
 
-- **Booth flow** (the Booth page, beside the camera): pick a mode, pay, choose a frame and a look, shoot, print, then scan the QR for the soft files. Five modes, each priced per booth category in Settings: **photo strip**, **GIF** (a 12-frame boomerang, encoded in `src/ops/encoders.ts`), **video booth** (an 8 second clip), **live photo** (a still plus a 3 second clip) and **original / vintage** (a single film-toned print).
+- **Booth flow** (the Booth page, beside the camera): pick a mode, pay, choose a frame and a look, shoot, print, then scan the QR for the soft files. Free sessions skip payment in the progress count. Before payment, customers can change modes; after payment, the Look step offers staff help so the paid order stays available for review. A failed capture can be retried within the same session. Five modes, each priced per booth category in Settings: **photo strip**, **GIF** (a 12-frame boomerang, encoded in `src/ops/encoders.ts`), **video booth** (an 8 second clip), **live photo** (a still plus a 3 second clip) and **original / vintage** (a single film-toned print).
 - **Effects:** filters (Natural, Mono, Warm, Cool, Vintage, Vivid), brightness, contrast and colour, mirror on or off, and zoom by slider or by pinching the camera. The preview shows them live, and `applyEffects` bakes the same values into every captured frame.
 - **Capture engine:** each booth has a preview profile and a capture profile (ISO, aperture, shutter, white balance, exposure compensation, picture style), set on Devices → Cameras. The capture profile goes on for the shot, then preview comes back. Drivers re-apply the saved preview profile when the camera powers up. `WebcamDriver` maps what a webcam can take onto its track; `SimulatedEdsdk` stands in for a Canon body, with power and battery controls on the Cameras tab.
 - **Behind-the-scenes camera:** pick a second camera per booth, and every session records a BTS clip from it, saved with the session.
@@ -91,8 +106,8 @@ The rail holds Dashboard, Booth, Point of sale, Queue, Try on, Photobooth and Ga
 ### Digital delivery
 
 - **Soft files:** the QR at the end of a session opens the customer's page with every photo, GIF and clip, single downloads, "Download all" (a ZIP), and Share, which hands the file to the phone's share sheet for Instagram and TikTok.
-- **Branded page:** logo, colours, a heading and social links, edited on Branding with a live preview. The share buttons stay off until the customer agrees to public sharing, at the booth or on the page.
-- **Links:** a custom domain per workspace (the QR then points there), email delivery of the link from the booth, and per-event gallery pages that collect the shared sessions of an event.
+- **Branded page:** logo, colours, a heading and social links, edited on Branding with a live preview. On the local HTTP photo server, customers download files and can share them from their phone's photo app. A hosted HTTPS page can offer the phone's Share sheet after the customer agrees to sharing.
+- **Links:** the local QR points to the booth computer on the same network. The current browser build records email notifications but has no email sender, so the booth does not ask customers for an email address. Per-event gallery pages collect sessions whose customers opted in.
 - **Retention:** photos older than the retention period (Settings, default 30 days) are deleted on start and every six hours. The sales record stays.
 
 ### POS / cashier
@@ -147,7 +162,7 @@ The rail holds Dashboard, Booth, Point of sale, Queue, Try on, Photobooth and Ga
 | `printImage` uses the browser print queue | Chrome with `--kiosk-printing`, or the native bridge sending jobs to the printer driver |
 | `SimulatedCloud` acknowledges the outbox locally | The cloud API the outbox posts to, deduplicating by item id |
 | Emails and WhatsApp messages are listed on Devices → Messages sent | An email provider and the WhatsApp Business API sending them |
-| The photo page opens on the booth that took the photos | The cloud serving `/g/<token>` from object storage, on the client's custom domain |
+| The local photo server lets phones on the booth network open files; the Vite preview has no shared files | A cloud service with object storage and a public domain for access outside the venue |
 | Releases and support sessions are recorded | An update agent that installs the target version between sessions, and a remote-access agent (such as RustDesk) that takes the code |
 | Staff PINs are PBKDF2 hashes in this browser | Accounts and PINs on the server, with sessions per device |
 
