@@ -14,7 +14,8 @@ export function renderQueue({ ops }: PageContext): HTMLElement {
   const view = page('Queue', 'One ticket can wait for several booths. The first booth to free up calls it, and it leaves every other line.');
   view.actions.append(
     act('Issue ticket', 'btn btn-primary', () => issueDialog(ops, booths.map((b) => ({ id: b.id, name: b.name }))), 'ticket'),
-    act('TV display', 'btn btn-outline', () => window.open(`${location.pathname}#display=queue`, 'vto-queue-tv', 'popup,width=1280,height=720'), 'tv'),
+    act('TV display', 'btn btn-outline', () => window.open(`${location.pathname}#display=queue&lock=1`, 'vto-queue-tv', 'popup,width=1280,height=720'), 'tv'),
+    act('Self-service kiosk', 'btn btn-outline', () => openKiosk(ops), 'ticket'),
   );
 
   if (booths.length === 0) {
@@ -139,4 +140,25 @@ function ticketDialog(ticket: Ticket): void {
   const done = actionButton('Done', 'btn btn-primary');
   done.dataset.close = '';
   openDialog({ title: `Ticket ${ticket.number}`, body: [body], footer: [open, done] });
+}
+
+/**
+ * Opens the kiosk in its own tab for one booth. The tab inherits this tab's Decart key, so the
+ * kiosk can make AI prints; without one it prints the filled template.
+ */
+function openKiosk(ops: PageContext['ops']): void {
+  const open = (boothId: string) => window.open(`${location.pathname}#display=kiosk&booth=${encodeURIComponent(boothId)}&lock=1`, 'vto-kiosk');
+  const booths = ops.visibleBooths().filter((point) => point.active);
+  const here = ops.hooks.devicePointId();
+  if (here && booths.some((booth) => booth.id === here)) return void open(here);
+  if (booths.length === 1) return void open(booths[0].id);
+  formDialog({
+    title: 'Self-service kiosk',
+    description: 'The kiosk sells AI preset prints for this booth and sends them to its printer.',
+    submitLabel: 'Open kiosk',
+    fields: [{ name: 'booth', label: 'Booth', value: booths[0]?.id ?? '', options: booths.map((booth) => ({ value: booth.id, label: booth.name })) }],
+    async submit(values) {
+      open(String(values.booth));
+    },
+  });
 }

@@ -67,6 +67,29 @@ describe('register and sign in', () => {
     await expect(backend.signIn('dusunbambu@example.com', 'bambu2026')).resolves.toBeTruthy();
   });
 
+  it('says no account exists at this address when the browser holds none', async () => {
+    const { backend } = setup();
+    await expect(backend.signIn('rizky@example.com', 'bambu2026')).rejects.toThrow('No account exists at');
+  });
+
+  it('confirms a team member for a locked screen without changing the session', async () => {
+    const { backend } = setup();
+    const { account } = await register(backend);
+    await register(backend, 'Other Venue');
+    await backend.signOut();
+    await backend.signIn('dusunbambu@example.com', 'bambu2026');
+    const member = await backend.confirmMember(account.id, 'dusunbambu@example.com', 'bambu2026');
+    expect(member.userId).toBe(`owner-${account.id}`);
+    expect((await backend.session())?.account.id).toBe(account.id);
+    // Another workspace's owner cannot unlock this one's screens.
+    await expect(backend.confirmMember(account.id, 'othervenue@example.com', 'bambu2026')).rejects.toThrow('not on this workspace');
+    // Wrong passwords count toward the same lock as sign-in.
+    for (let i = 1; i < MAX_TRIES; i++) await expect(backend.confirmMember(account.id, 'dusunbambu@example.com', 'wrong1234')).rejects.toThrow('left');
+    await expect(backend.confirmMember(account.id, 'dusunbambu@example.com', 'wrong1234')).rejects.toThrow('locked for 15 minutes');
+    await expect(backend.signIn('dusunbambu@example.com', 'bambu2026')).rejects.toThrow('Try again');
+    expect((await backend.signInLog()).map((event) => event.kind)).toContain('screen');
+  });
+
   it('changes the password and keeps the old one out', async () => {
     const { backend } = setup();
     await register(backend);

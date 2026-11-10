@@ -20,6 +20,7 @@ import {
   type Sites,
 } from './model';
 import { checkSecret, hashSecret, normalizeEmail, passwordProblem, validEmail } from './password';
+import { uuid } from '../uuid';
 
 export interface Registration {
   business: string;
@@ -60,6 +61,11 @@ export interface AccountBackend {
   /** Who a code is for, before they set a password. */
   inviteFor(code: string): Promise<{ account: Account; member: Member }>;
   acceptInvite(code: string, password: string, key: string): Promise<Session>;
+  /**
+   * Checks a team member's email and password without touching this device's session, for
+   * unlocking a locked screen. Wrong passwords count toward the same lock as sign-in.
+   */
+  confirmMember(accountId: string, email: string, password: string): Promise<Member>;
   /** Sign-ins, failures, locks and access changes in the current workspace, newest first. */
   signInLog(): Promise<AuthEvent[]>;
   sites(): Promise<Sites>;
@@ -178,8 +184,37 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
   }
 
   const device = deviceLabel(globalThis.navigator?.userAgent ?? '');
+  /** The credential behind an email and password; wrong passwords count toward the lock. */
+  async function checkCredentials(email: string, password: string): Promise<Credential> {
+    const user = byEmail(email);
+    const wrong = new AccountError('Email or password is wrong.', 'password');
+    // Each browser address keeps its own accounts in this build: localhost:5173 and the booth
+    // server at 192.168.x.x:4173 do not share them. Say so instead of blaming the password.
+    if (Object.keys(users()).length === 0) {
+      const here = typeof location === 'undefined' ? 'this address' : location.host;
+      throw new AccountError(`No account exists at ${here} yet. Accounts in this build stay with the browser address they were made at. Create an account here, or open the address you signed up at.`, 'email');
+    }
+    if (!user) throw wrong;
+    if (user.status === 'disabled') throw new AccountError('Sign-in is turned off for this email. Ask the workspace owner.', 'email');
+    if (user.status === 'invited') throw new AccountError('This email has an invite waiting. Use the code you were given to set a password.', 'email');
+    if (user.lockedUntil > now()) {
+      const minutes = Math.ceil((user.lockedUntil - now()) / 60_000);
+      throw new AccountError(`Too many wrong passwords. Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}, or ask the owner to unlock you.`, 'password');
+    }
+    if (!(await checkSecret(password, user.hash, user.salt))) {
+      const failedAttempts = user.failedAttempts + 1;
+      const locked = failedAttempts >= MAX_TRIES;
+      saveUser({ ...user, failedAttempts: locked ? 0 : failedAttempts, lockedUntil: locked ? now() + LOCK_MS : 0 });
+      record(user, locked ? 'locked' : 'failed');
+      if (locked) throw new AccountError(`Too many wrong passwords. Sign-in is locked for ${LOCK_MS / 60_000} minutes.`, 'password');
+      const left = MAX_TRIES - failedAttempts;
+      throw new AccountError(`Email or password is wrong. ${left} ${left === 1 ? 'try' : 'tries'} left before a short lock.`, 'password');
+    }
+    return user;
+  }
+
   function record(user: Pick<Credential, 'accountId' | 'userId' | 'name'>, kind: AuthEventKind, by: Session | null = null): void {
-    const event: AuthEvent = { id: crypto.randomUUID(), accountId: user.accountId, userId: user.userId, name: user.name, kind, at: now(), device, byName: by && by.member.userId !== user.userId ? by.member.name : null };
+    const event: AuthEvent = { id: uuid(), accountId: user.accountId, userId: user.userId, name: user.name, kind, at: now(), device, byName: by && by.member.userId !== user.userId ? by.member.name : null };
     write(LOG_KEY, [event, ...read<AuthEvent[]>(LOG_KEY, [])].slice(0, LOG_LIMIT));
   }
 
@@ -277,7 +312,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
       return once('register', key, async () => {
         const business = clean(input.business, 'business', 'the business name');
         const createdAt = now();
-        const account: Account = { id: crypto.randomUUID(), business, createdAt, trialEndsAt: trialEnd(createdAt) };
+        const account: Account = { id: uuid(), business, createdAt, trialEndsAt: trialEnd(createdAt) };
         const user = await owner(account.id, input);
         write(ACCOUNTS_KEY, { ...saved(), [account.id]: { account } });
         record(user, 'register');
@@ -297,24 +332,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
     },
 
     async signIn(email, password) {
-      const user = byEmail(email);
-      const wrong = new AccountError('Email or password is wrong.', 'password');
-      if (!user) throw wrong;
-      if (user.status === 'disabled') throw new AccountError('Sign-in is turned off for this email. Ask the workspace owner.', 'email');
-      if (user.status === 'invited') throw new AccountError('This email has an invite waiting. Use the code you were given to set a password.', 'email');
-      if (user.lockedUntil > now()) {
-        const minutes = Math.ceil((user.lockedUntil - now()) / 60_000);
-        throw new AccountError(`Too many wrong passwords. Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}, or ask the owner to unlock you.`, 'password');
-      }
-      if (!(await checkSecret(password, user.hash, user.salt))) {
-        const failedAttempts = user.failedAttempts + 1;
-        const locked = failedAttempts >= MAX_TRIES;
-        saveUser({ ...user, failedAttempts: locked ? 0 : failedAttempts, lockedUntil: locked ? now() + LOCK_MS : 0 });
-        record(user, locked ? 'locked' : 'failed');
-        if (locked) throw new AccountError(`Too many wrong passwords. Sign-in is locked for ${LOCK_MS / 60_000} minutes.`, 'password');
-        const left = MAX_TRIES - failedAttempts;
-        throw new AccountError(`Email or password is wrong. ${left} ${left === 1 ? 'try' : 'tries'} left before a short lock.`, 'password');
-      }
+      const user = await checkCredentials(email, password);
       const account = accounts().find((entry) => entry.id === user.accountId);
       if (!account) throw new AccountError('That workspace is no longer on this device.');
       record(user, 'signin');
@@ -396,6 +414,13 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
       });
     },
 
+    async confirmMember(accountId, email, password) {
+      const user = await checkCredentials(email, password);
+      if (user.accountId !== accountId) throw new AccountError('That email is not on this workspace\'s team.', 'email');
+      record(user, 'screen');
+      return publicMember(user);
+    },
+
     async signInLog() {
       const { account } = requireSession();
       return read<AuthEvent[]>(LOG_KEY, []).filter((event) => event.accountId === account.id);
@@ -422,7 +447,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
       if (sites.locations.length >= TRIAL_LIMITS.locations) {
         throw new AccountError(`The trial covers up to ${TRIAL_LIMITS.locations} locations.`);
       }
-      const location: Location = { id: crypto.randomUUID(), createdAt: now(), ...fields };
+      const location: Location = { id: uuid(), createdAt: now(), ...fields };
       sites.locations.push(location);
       commit();
       return location;
@@ -458,7 +483,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
       if (sites.points.length >= TRIAL_LIMITS.points) {
         throw new AccountError(`The trial covers up to ${TRIAL_LIMITS.points} points.`);
       }
-      const point: Point = { id: crypto.randomUUID(), createdAt: now(), ...fields };
+      const point: Point = { id: uuid(), createdAt: now(), ...fields };
       sites.points.push(point);
       commit();
       return point;

@@ -7,6 +7,7 @@ import { ROLES } from '../../access';
 import type { Role, Staff } from '../../model';
 import type { PageContext } from '../router';
 import { act, badge, type BadgeKind, dateTime, el, notice, page, qrCanvas, statRow, table } from '../kit';
+import { uuid } from '../../../uuid';
 
 type Ops = PageContext['ops'];
 
@@ -121,7 +122,7 @@ function editStaff(ops: Ops, person?: Staff): void {
         String(values.pin),
       );
       if (values.invite && String(values.email).trim()) {
-        const invite = await ops.inviteMember(id, crypto.randomUUID());
+        const invite = await ops.inviteMember(id, uuid());
         setTimeout(() => codeDialog(invite));
       }
     },
@@ -133,7 +134,7 @@ function accessDialog(ops: Ops, person: Staff): void {
   const member = ops.member(person.id);
   const view = signInState(person, member);
   // One key per dialog: a double tap on Send code hands out one code.
-  const key = crypto.randomUUID();
+  const key = uuid();
   const facts = el('dl', 'facts');
   for (const [term, value] of [
     ['Email', person.email || 'None yet'],

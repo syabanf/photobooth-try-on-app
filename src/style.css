@@ -4077,6 +4077,8 @@ body.display-mode {
   --brand-accent: var(--accent);
   --brand-ink: var(--ink);
   --brand-bg: var(--surface);
+  /* Solid accent behind small white text, darker so the text keeps AA contrast. */
+  --brand-accent-strong: color-mix(in srgb, var(--brand-accent) 86%, #000);
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
@@ -4171,68 +4173,296 @@ body.display-mode {
   width: min(420px, 80vw);
 }
 
-.tv-calling {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+/* ---------- queue TV (#display=queue) ---------- */
+
+/* Kiosk and TV share a top bar: the brand on the left, context on the right. */
+.display--queue,
+.display--kiosk {
+  padding: clamp(16px, 2.2vw, 40px);
+  gap: clamp(12px, 1.6vw, 28px);
+}
+
+.display--queue .display-head,
+.display--kiosk .display-head {
+  justify-content: flex-start;
   gap: 16px;
-  width: 100%;
+  min-height: 0;
 }
 
-.tv-call {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 24px;
-  border-radius: 28px;
-  background: var(--brand-ink);
-  color: #fff;
-}
-
-.tv-number {
-  font-size: clamp(56px, 8vw, 104px);
-  font-weight: 800;
-  line-height: 1;
-}
-
-.tv-booth {
-  font-size: 22px;
-  font-weight: 700;
+.display-period {
   color: var(--brand-accent);
 }
 
-.tv-flash .tv-call:first-child {
-  animation: tv-flash 1.2s ease;
+.display--queue .display-brand {
+  font-size: clamp(22px, 2.2vw, 40px);
+  letter-spacing: -0.02em;
+}
+
+.display-head-kicker {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: clamp(13px, 1.1vw, 20px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.display-clock {
+  padding: 6px 18px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  font-size: clamp(18px, 1.8vw, 32px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.display--queue .display-content {
+  justify-content: stretch;
+  align-items: stretch;
+  width: 100%;
+  text-align: left;
+}
+
+.tv-grid {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: clamp(12px, 1.6vw, 28px);
+  min-height: 0;
+}
+
+.tv-main {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 1.6vw, 28px);
+  min-height: 0;
+}
+
+.tv-kicker {
+  margin: 0;
+  color: var(--on-ink-muted);
+  font-size: clamp(13px, 1.15vw, 22px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.tv-kicker--dark {
+  color: var(--muted);
+}
+
+/* The number just called: the one ink card, with its blurred accent light. */
+.tv-now {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(8px, 1vw, 16px);
+  overflow: hidden;
+  padding: clamp(24px, 3vw, 56px);
+  border-radius: var(--radius-hero);
+  background: var(--brand-ink);
+  color: var(--on-ink);
+  box-shadow: var(--shadow-float);
+}
+
+.tv-now::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  right: -10%;
+  width: min(55%, 520px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--brand-accent);
+  opacity: 0.35;
+  filter: blur(90px);
+  pointer-events: none;
+}
+
+.tv-now > * {
+  position: relative;
+}
+
+.tv-now-number {
+  margin: 0;
+  font-size: clamp(96px, 17vw, 320px);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-now-idle {
+  margin: 0;
+  font-size: clamp(36px, 4.5vw, 84px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.tv-now-booth {
+  align-self: flex-start;
+  margin: 0;
+  padding: 10px 24px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-accent-strong);
+  color: #fff;
+  font-size: clamp(20px, 2.2vw, 40px);
+  font-weight: 700;
+}
+
+.tv-now-booth--muted {
+  padding: 0;
+  background: none;
+  color: var(--on-ink-muted);
+  font-size: clamp(16px, 1.5vw, 28px);
+  font-weight: 500;
+}
+
+.tv-flash .tv-now {
+  animation: tv-flash 1.4s ease;
 }
 
 @keyframes tv-flash {
-  0%, 50% { background: var(--brand-accent); }
-  100% { background: var(--brand-ink); }
+  0%,
+  45% {
+    background: var(--brand-accent);
+  }
+  100% {
+    background: var(--brand-ink);
+  }
+}
+
+.tv-recent {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(12px, 1.6vw, 28px);
+}
+
+.tv-recent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: clamp(14px, 1.6vw, 28px);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.tv-recent-number {
+  font-size: clamp(32px, 3.6vw, 68px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-recent-booth {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: clamp(14px, 1.2vw, 22px);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tv-next {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  width: 100%;
-}
-
-.tv-column {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 16px;
-  border-radius: 20px;
+  gap: clamp(10px, 1.2vw, 20px);
+  min-height: 0;
+  overflow: hidden;
+  padding: clamp(20px, 2.2vw, 40px);
+  border-radius: var(--radius-card);
   background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.tv-booth {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: clamp(12px, 1.3vw, 24px);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.tv-booth-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tv-booth-name {
+  overflow: hidden;
+  font-size: clamp(18px, 1.7vw, 32px);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-booth-count {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: clamp(13px, 1.1vw, 20px);
+  font-weight: 600;
+}
+
+.tv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .tv-chip {
-  font-size: 28px;
+  padding: 6px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  font-size: clamp(20px, 2vw, 38px);
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
-.tv-empty {
-  opacity: 0.4;
+.tv-chip:first-child:not(.tv-chip--empty) {
+  background: var(--brand-ink);
+  color: var(--on-ink);
+}
+
+.tv-chip--more,
+.tv-chip--empty {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.tv-chip--empty {
+  background: transparent;
+  padding-inline: 0;
+  font-size: clamp(15px, 1.3vw, 24px);
+}
+
+.tv-foot {
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(14px, 1.2vw, 22px);
+  font-weight: 600;
+  text-align: center;
+}
+
+.display--queue {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* A TV in portrait, or a narrow window, stacks the cards. */
+@media (max-aspect-ratio: 1/1) {
+  .tv-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .gallery-public {
@@ -4270,6 +4500,1075 @@ body.display-mode {
 
 .display .btn-primary {
   background: var(--brand-accent);
+}
+
+/* ---------- display lock ---------- */
+
+.display-head {
+  position: relative;
+}
+
+.display-lock {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+/* The customer screen centres its logo; the lock keeps to the right edge. */
+.display--customer .display-lock {
+  position: absolute;
+  right: 0;
+}
+
+.display-lock .btn {
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+/* Locked: a small, quiet button that staff know to tap. */
+.display-lock-button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(16 17 18 / 0.06);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.display-lock-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- self-service kiosk (#display=kiosk) ---------- */
+
+.display--kiosk .display-content {
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: clamp(12px, 1.6vw, 24px);
+  width: min(1280px, 100%);
+  text-align: left;
+}
+
+.display--kiosk .display-brand {
+  font-size: clamp(20px, 2vw, 30px);
+  letter-spacing: -0.02em;
+}
+
+/* The progress pills in the top bar: done white with a check, current ink, upcoming grey. */
+.kiosk-steps {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 0 auto;
+  padding: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  list-style: none;
+}
+
+.kiosk-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 6px;
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.kiosk-step-mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.kiosk-step-mark svg {
+  width: 15px;
+  height: 15px;
+}
+
+.kiosk-steps li.is-done {
+  color: var(--foreground);
+}
+
+.kiosk-steps li.is-done .kiosk-step-mark {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.kiosk-steps li.is-active {
+  background: var(--brand-ink);
+  color: var(--on-ink);
+}
+
+.kiosk-steps li.is-active .kiosk-step-mark {
+  background: var(--brand-accent-strong);
+  color: #fff;
+}
+
+/* Two columns on a landscape screen, stacked on a portrait one. */
+.kiosk-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: clamp(12px, 1.6vw, 24px);
+  align-items: stretch;
+}
+
+@media (max-aspect-ratio: 1/1) {
+  .kiosk-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.kiosk-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+  padding: clamp(20px, 2.4vw, 36px);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.kiosk-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.kiosk-kicker {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.kiosk-kicker--ink {
+  color: var(--on-ink-muted);
+}
+
+.kiosk-card-title {
+  margin: 0;
+  font-size: clamp(26px, 3vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.kiosk-desc {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: clamp(15px, 1.4vw, 19px);
+  line-height: 1.45;
+}
+
+.kiosk-error {
+  margin: 0;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+/* The ink hero: one per screen, with its blurred accent light. */
+.kiosk-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  overflow: hidden;
+  padding: clamp(24px, 3vw, 48px);
+  border-radius: var(--radius-hero);
+  background: var(--brand-ink);
+  color: var(--on-ink);
+  box-shadow: var(--shadow-float);
+}
+
+.kiosk-hero::before {
+  content: '';
+  position: absolute;
+  top: -120px;
+  right: -120px;
+  width: min(70%, 420px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--brand-accent);
+  opacity: 0.35;
+  filter: blur(80px);
+  pointer-events: none;
+}
+
+.kiosk-hero > * {
+  position: relative;
+}
+
+.kiosk-hero--center {
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  text-align: center;
+}
+
+.kiosk-hero-title {
+  margin: 0;
+  font-size: clamp(36px, 4.6vw, 68px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+}
+
+.kiosk-hero-desc {
+  max-width: 560px;
+  margin: 0;
+  color: var(--on-ink-muted);
+  font-size: clamp(16px, 1.6vw, 21px);
+  line-height: 1.45;
+}
+
+.kiosk-how {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: clamp(16px, 1.5vw, 20px);
+  font-weight: 600;
+}
+
+.kiosk-how li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 0.06);
+}
+
+.kiosk-how-number {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.1);
+  font-variant-numeric: tabular-nums;
+}
+
+.kiosk-price {
+  align-self: flex-start;
+  margin: auto 0 0;
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-accent-strong);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* ---------- ticket entry ---------- */
+
+/* The scanner types into this field; it stays focusable but out of sight. */
+.kiosk-scan {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.kiosk-pad {
+  align-items: center;
+  gap: 16px;
+}
+
+.kiosk-reader {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: var(--surface-2);
+}
+
+.kiosk-reader-rings {
+  position: relative;
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+}
+
+.kiosk-ring {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  border: 2px solid color-mix(in srgb, var(--brand-accent) 40%, transparent);
+  border-radius: 50%;
+  animation: kiosk-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.kiosk-ring--outer {
+  width: 96px;
+  height: 96px;
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--brand-accent) 20%, transparent);
+  animation: kiosk-pulse 2s ease-in-out infinite;
+}
+
+.kiosk-reader-disc {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--brand-ink);
+  color: var(--on-ink);
+}
+
+.kiosk-reader-disc svg {
+  width: 26px;
+  height: 26px;
+}
+
+.kiosk-reader-title {
+  margin: 0;
+  font-size: clamp(20px, 2vw, 26px);
+  font-weight: 800;
+}
+
+@keyframes kiosk-ping {
+  75%,
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+@keyframes kiosk-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.kiosk-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.kiosk-divider::before,
+.kiosk-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.kiosk-typed {
+  width: min(440px, 100%);
+  margin: 0;
+  padding: 12px 24px;
+  border-radius: 20px;
+  background: var(--surface-2);
+  font-size: clamp(34px, 4vw, 52px);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.kiosk-typed.is-empty {
+  color: var(--silver);
+  font-size: clamp(24px, 2.6vw, 34px);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.kiosk-letters {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  width: min(440px, 100%);
+}
+
+.kiosk-letters .kiosk-key {
+  flex: 1 1 0;
+  max-width: 140px;
+}
+
+.kiosk-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: min(440px, 100%);
+}
+
+.kiosk-key {
+  height: clamp(50px, 7.2vh, 84px);
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface-2);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 28px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.08s, background-color 0.15s;
+}
+
+.kiosk-key:active {
+  transform: scale(0.96);
+  background: var(--surface);
+}
+
+.kiosk-key--letter {
+  background: var(--brand-ink);
+  color: var(--on-ink);
+}
+
+.kiosk-key--muted {
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.kiosk-key--go {
+  background: var(--brand-accent-strong);
+  color: #fff;
+  font-size: 20px;
+  box-shadow: var(--shadow-glow);
+}
+
+
+
+/* ---------- faces ---------- */
+
+.kiosk-faces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(180px, 40vw), 1fr));
+  gap: 16px;
+}
+
+.kiosk-face {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 24px;
+  background: var(--surface-2);
+  cursor: pointer;
+  touch-action: manipulation;
+  outline: 4px solid transparent;
+  outline-offset: -4px;
+  transition: transform 0.08s, outline-color 0.15s;
+}
+
+.kiosk-face:active {
+  transform: scale(0.97);
+}
+
+.kiosk-face img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  opacity: 0.4;
+  filter: grayscale(0.6);
+  transition: opacity 0.15s, filter 0.15s;
+}
+
+.kiosk-face.is-selected {
+  outline-color: var(--brand-accent);
+}
+
+.kiosk-face.is-selected img {
+  opacity: 1;
+  filter: none;
+}
+
+.kiosk-face-mark {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: rgb(16 17 18 / 0.3);
+  color: #fff;
+}
+
+.kiosk-face-mark svg {
+  width: 20px;
+  height: 20px;
+}
+
+.kiosk-face.is-selected .kiosk-face-mark {
+  border-color: var(--brand-accent);
+  background: var(--brand-accent);
+}
+
+.kiosk-face-name {
+  position: absolute;
+  inset: auto 10px 10px;
+  overflow: hidden;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- templates ---------- */
+
+.kiosk-templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(230px, 42vw), 1fr));
+  gap: 16px;
+}
+
+.kiosk-template {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 0;
+  border-radius: 24px;
+  background: var(--surface-2);
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.08s, background-color 0.15s;
+}
+
+.kiosk-template:active {
+  transform: scale(0.97);
+}
+
+.kiosk-template.is-suggested {
+  background: var(--accent-soft);
+}
+
+.kiosk-template img {
+  width: 100%;
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+.kiosk-template--loading {
+  min-height: 300px;
+  cursor: default;
+  animation: kiosk-pulse 1.4s ease-in-out infinite;
+}
+
+.kiosk-template-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 4px;
+}
+
+.kiosk-template-name {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.kiosk-template-tag {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-accent-strong);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ---------- payment ---------- */
+
+.kiosk-summary {
+  justify-content: flex-start;
+}
+
+.kiosk-summary-image {
+  align-self: flex-start;
+  width: auto;
+  max-width: min(280px, 60%);
+  max-height: 34vh;
+  border-radius: 18px;
+  box-shadow: var(--shadow-float);
+}
+
+.kiosk-lines {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 24px;
+  margin: 0;
+  font-size: 18px;
+}
+
+.kiosk-lines dt {
+  color: var(--on-ink-muted);
+}
+
+.kiosk-lines dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.kiosk-total {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid rgb(255 255 255 / 0.12);
+}
+
+.kiosk-total .kiosk-kicker {
+  margin: 0 0 8px;
+}
+
+.kiosk-total-value {
+  font-size: clamp(40px, 4.6vw, 64px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.kiosk-method {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: var(--surface-2);
+}
+
+.kiosk-method-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--brand-ink);
+  color: var(--on-ink);
+}
+
+.kiosk-method-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.kiosk-method .kiosk-desc {
+  margin: 2px 0 0;
+}
+
+.kiosk-voucher {
+  display: flex;
+  gap: 12px;
+}
+
+.kiosk-input {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 64px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface-2);
+  font-size: 20px;
+  letter-spacing: 0.04em;
+}
+
+.kiosk-qris {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.kiosk-qris-frame {
+  padding: 16px;
+  border-radius: 24px;
+  background: var(--card);
+  box-shadow: var(--shadow-float);
+}
+
+.kiosk-qris .qr {
+  display: block;
+  width: min(340px, 60vw, 32vh);
+  height: auto;
+}
+
+.kiosk-qris .qr-clock {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.kiosk-waiting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.kiosk-waiting--ink {
+  color: var(--on-ink);
+}
+
+.kiosk-live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--brand-accent);
+  animation: kiosk-pulse 1.2s ease-in-out infinite;
+}
+
+/* ---------- print and thanks ---------- */
+
+.kiosk-final {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(24px, 3vw, 48px);
+}
+
+@media (max-aspect-ratio: 1/1) {
+  .kiosk-final {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    text-align: center;
+  }
+
+  .kiosk-final .kiosk-waiting {
+    justify-content: center;
+  }
+}
+
+.kiosk-final-image {
+  justify-self: center;
+  width: auto;
+  max-width: min(380px, 100%);
+  max-height: 58vh;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.6);
+}
+
+.kiosk-final-image.is-working {
+  animation: kiosk-pulse 1.6s ease-in-out infinite;
+}
+
+.kiosk-final-text {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kiosk-final-text .kiosk-kicker {
+  margin: 0;
+}
+
+.kiosk-note {
+  margin: 0;
+  color: var(--on-ink-muted);
+  font-size: 15px;
+}
+
+/* ---------- the action bar ---------- */
+
+.kiosk-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: var(--shadow-float);
+}
+
+.kiosk-bar .btn:only-child {
+  margin-right: auto;
+}
+
+.kiosk-bar .btn-primary {
+  flex: 1 1 auto;
+  max-width: 520px;
+}
+
+.display--kiosk .btn-xl {
+  height: 64px;
+  padding: 0 32px;
+  font-size: 19px;
+  touch-action: manipulation;
+}
+
+.display--kiosk .btn-xl svg {
+  width: 22px;
+  height: 22px;
+}
+
+.display--kiosk .btn-lg {
+  height: 52px;
+  padding: 0 22px;
+  font-size: 16px;
+}
+
+.display--kiosk .btn-primary {
+  background: var(--brand-accent-strong);
+  color: #fff;
+  box-shadow: var(--shadow-glow);
+}
+
+.display--kiosk .btn-primary:disabled {
+  background: var(--surface);
+  color: var(--silver);
+  box-shadow: none;
+}
+
+.display--kiosk .btn-outline {
+  background: var(--card);
+}
+
+.display--kiosk .btn-soft {
+  border: 0;
+  background: var(--surface-2);
+  color: var(--foreground);
+}
+
+/* A short landscape screen (1280×720 or 800): the ticket card tightens so the keypad fits. */
+@media (min-aspect-ratio: 1/1) and (max-height: 860px) {
+  .kiosk-pad {
+    gap: 10px;
+    padding-block: 20px;
+  }
+
+  .kiosk-reader {
+    padding: 10px 16px;
+  }
+
+  .kiosk-reader-rings {
+    width: 72px;
+    height: 72px;
+  }
+
+  .kiosk-ring {
+    width: 56px;
+    height: 56px;
+  }
+
+  .kiosk-ring--outer {
+    width: 72px;
+    height: 72px;
+  }
+
+  .kiosk-reader-disc {
+    width: 44px;
+    height: 44px;
+  }
+
+  .kiosk-reader .kiosk-desc {
+    margin-top: 2px;
+  }
+
+  .kiosk-typed {
+    padding-block: 6px;
+  }
+
+  .kiosk-how li {
+    padding-block: 9px;
+  }
+
+  .kiosk-card {
+    gap: 14px;
+    padding: 22px 26px;
+  }
+
+  .kiosk-qris {
+    gap: 8px;
+  }
+
+  .kiosk-qris-frame {
+    padding: 10px;
+  }
+
+  .kiosk-bar {
+    padding: 8px;
+  }
+
+  .display--kiosk .btn-xl {
+    height: 56px;
+  }
+}
+
+/* A tall portrait kiosk (1080×1920): the cards fill the height and the keys grow for thumbs. */
+@media (max-aspect-ratio: 1/1) and (min-height: 1200px) {
+  .display--kiosk .display-content {
+    flex: 1;
+  }
+
+  .kiosk-split {
+    flex: 1;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .kiosk-pad {
+    justify-content: center;
+    gap: 22px;
+  }
+
+  .kiosk-steps li {
+    font-size: 18px;
+  }
+
+  .kiosk-step-mark {
+    width: 34px;
+    height: 34px;
+  }
+
+  .kiosk-hero-title {
+    font-size: 72px;
+  }
+
+  .kiosk-hero-desc,
+  .kiosk-how {
+    font-size: 24px;
+  }
+
+  .kiosk-how-number {
+    width: 44px;
+    height: 44px;
+  }
+
+  .kiosk-desc {
+    font-size: 21px;
+  }
+
+  .kiosk-price {
+    font-size: 22px;
+  }
+
+  .kiosk-card-title {
+    font-size: 48px;
+  }
+
+  .kiosk-reader-title {
+    font-size: 30px;
+  }
+
+  .kiosk-typed,
+  .kiosk-letters,
+  .kiosk-keypad {
+    width: min(680px, 100%);
+  }
+
+  .kiosk-keypad,
+  .kiosk-letters {
+    gap: 14px;
+  }
+
+  .kiosk-key {
+    height: 112px;
+    border-radius: 24px;
+    font-size: 40px;
+  }
+
+  .kiosk-key--muted,
+  .kiosk-key--go {
+    font-size: 26px;
+  }
+
+  .kiosk-typed {
+    font-size: 60px;
+  }
+
+  .kiosk-faces {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  .kiosk-templates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kiosk-template-name {
+    font-size: 24px;
+  }
+
+  .kiosk-face-name {
+    font-size: 20px;
+  }
+
+  .kiosk-qris .qr {
+    width: 520px;
+  }
+
+  .kiosk-summary-image {
+    max-height: 32vh;
+  }
+
+  .display--kiosk .btn-xl {
+    height: 80px;
+    font-size: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kiosk-ring,
+  .kiosk-live-dot,
+  .kiosk-final-image.is-working,
+  .kiosk-template--loading {
+    animation: none;
+  }
 }
 
 /* Tab rows on the business pages scroll sideways inside themselves on a phone, never the page. */

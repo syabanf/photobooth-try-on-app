@@ -7,6 +7,7 @@ import { PASSWORD_RULES } from './account/password';
 import { clearErrors, openDialog, showError } from './dialogs';
 import { el } from './dom';
 import { icon } from './icons';
+import { uuid } from './uuid';
 
 const longDate = (time: number) => new Date(time).toLocaleDateString(undefined, { dateStyle: 'long' });
 const daysLeftText = (days: number) => `${days} ${days === 1 ? 'day' : 'days'} left`;
@@ -117,7 +118,7 @@ export async function signedIn(backend: AccountBackend): Promise<Session> {
      * after a dropped connection creates one account, not two.
      */
     function form(fields: HTMLElement[], submitLabel: string, busyLabel: string, run: (values: Record<string, string>, key: string) => Promise<Session | void>): HTMLFormElement {
-      const key = crypto.randomUUID();
+      const key = uuid();
       const element = el('form', 'form-stack');
       element.noValidate = true;
       const submit = el('button', 'btn btn-primary btn-lg btn-block', submitLabel);

@@ -2,6 +2,7 @@
 // store, written to the activity log and queued for the cloud.
 
 import type { AccountBackend } from '../account/backend';
+import { uuid } from '../uuid';
 import type { Account, Invite, Member, Sites } from '../account/model';
 import { deleteShot } from '../gallery';
 import { deleteBlob, putBlob } from './blobs';
@@ -801,7 +802,7 @@ export class Ops {
       startedAt: this.now(),
       shotIds: [],
       prints: 0,
-      token: crypto.randomUUID().replaceAll('-', ''),
+      token: uuid().replaceAll('-', ''),
       consent: false,
       email: '',
     };

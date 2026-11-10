@@ -22,7 +22,7 @@ import { detectPose, getPoseLandmarker } from './tracking/pose';
 import { getSegmenter, segmentForVideo, type SegmentMask } from './tracking/segmenter';
 import { nextTimestamp } from './tracking/vision';
 import { COMMONS_HATS, loadStoreCatalog } from './store-catalog';
-import { CAMERA_VIEWS, isOpsView, mountUi, type Mode, type StatusKind, type View } from './ui';
+import { CAMERA_VIEWS, isOpsView, mountUi, readStored, type Mode, type StatusKind, type View } from './ui';
 import { mountBoothPanel } from './booth-panel';
 import { NO_BACKGROUND, drawBackdrop, type Background } from './backgrounds';
 import { BackgroundLayer } from './render/background-layer';
@@ -47,6 +47,7 @@ import { mayOpen, mountOpsRouter, type OpsRouter } from './ops/ui/router';
 import { mountSessionPanel } from './ops/ui/session-panel';
 import { displayRoute, renderDisplay } from './ops/ui/displays';
 import { renderRemoteGallery } from './ops/delivery';
+import { enforceDisplayLock } from './ops/ui/display-lock';
 import { renderToday } from './ops/ui/today';
 import { notice } from './ops/ui/kit';
 import { confirmDialog } from './dialogs';
@@ -972,6 +973,7 @@ async function startBusiness(account: Account): Promise<Ops> {
 
 /** A display window (customer screen, queue TV, photo page, check-in) has no camera and no menu. */
 async function startDisplay(): Promise<boolean> {
+  enforceDisplayLock();
   const route = displayRoute(location.hash);
   if (!route) return false;
   if (route.kind === 'gallery' && await renderRemoteGallery(route.id)) return true;
@@ -979,7 +981,7 @@ async function startDisplay(): Promise<boolean> {
   const candidates = current ? [current, ...(await backend.workspaces())] : await backend.workspaces();
   // A photo link or ticket belongs to whichever workspace on this device holds its token.
   const holds = (candidateId: string, business: string): boolean => {
-    if (route.kind === 'customer' || route.kind === 'queue') return candidateId === current?.id;
+    if (route.kind === 'customer' || route.kind === 'queue' || route.kind === 'kiosk') return candidateId === current?.id;
     const saved = new OpsStore(browserStore(), candidateId, business).state;
     const id = 'id' in route ? route.id : '';
     if (route.kind === 'gallery') return saved.sessions.some((session) => session.token === id);
@@ -991,8 +993,11 @@ async function startDisplay(): Promise<boolean> {
     document.body.textContent = 'Open the app and pick a workspace first.';
     return true;
   }
-  const ops = new Ops(new OpsStore(browserStore(), account.id, account.business), account, { toast: () => {}, devicePointId: () => null });
+  // The kiosk sells and prints for a booth: the one in its link, or the one this device belongs to.
+  const boothId = route.kind === 'kiosk' ? (route.boothId ?? readStored(`vto:device-point:${account.id}`)) : null;
+  const ops = new Ops(new OpsStore(browserStore(), account.id, account.business), account, { toast: () => {}, devicePointId: () => boothId });
   ops.sites = await backend.sites();
+  ops.accounts = backend;
   await renderDisplay(ops, route);
   return true;
 }

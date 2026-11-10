@@ -3,6 +3,7 @@
 // Pictures (frames, logo, ads) live in IndexedDB through blobs.ts, since they outgrow localStorage.
 
 import type { KeyValueStore } from '../account/backend';
+import { uuid } from '../uuid';
 import type { ActivityEntry, Branding, OpsState, Preset, Settings } from './model';
 import { DEFAULT_PAYMENTS, withPaymentDefaults } from './payments';
 
@@ -145,7 +146,7 @@ export class OpsStore {
   }
 
   id(): string {
-    return crypto.randomUUID();
+    return uuid();
   }
 
   /**

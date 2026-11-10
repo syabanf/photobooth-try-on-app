@@ -10,7 +10,7 @@ type Show = 'all' | 'signins' | 'problems' | 'changes';
 
 const SHOWS: { value: Show; label: string; kinds: AuthEventKind[] | null }[] = [
   { value: 'all', label: 'All', kinds: null },
-  { value: 'signins', label: 'Sign-ins', kinds: ['signin', 'signout'] },
+  { value: 'signins', label: 'Sign-ins', kinds: ['signin', 'signout', 'screen'] },
   { value: 'problems', label: 'Wrong passwords', kinds: ['failed', 'locked'] },
   { value: 'changes', label: 'Access changes', kinds: ['register', 'claim', 'invite', 'accepted', 'reset', 'password', 'disabled', 'enabled', 'unlocked'] },
 ];

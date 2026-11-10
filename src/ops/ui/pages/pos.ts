@@ -95,7 +95,7 @@ export function renderPos(context: PageContext): HTMLElement {
       ),
     );
   }
-  bar.append(act('Customer screen', 'btn btn-ghost btn-sm', () => window.open(`${location.pathname}#display=customer`, 'vto-customer', 'popup,width=900,height=640'), 'tv'));
+  bar.append(act('Customer screen', 'btn btn-ghost btn-sm', () => window.open(`${location.pathname}#display=customer&lock=1`, 'vto-customer', 'popup,width=900,height=640'), 'tv'));
   view.actions.append(bar);
 
   // ---------- catalogue ----------
@@ -249,7 +249,7 @@ export function renderPos(context: PageContext): HTMLElement {
 }
 
 /** "Valid for 14:59", counting down, or the state the QR ended in. */
-export function qrClock(ops: Ops, orderId: string, paymentId: string, onEnd: (status: Payment['status']) => void): HTMLElement {
+export function qrClock(ops: Ops, orderId: string, paymentId: string, onEnd: (status: Payment['status']) => void, label = (time: string) => `Valid for ${time}`): HTMLElement {
   const line = el('p', 'card-desc qr-clock');
   const tick = () => {
     const payment = ops.order(orderId).payments.find((entry) => entry.id === paymentId);
@@ -263,7 +263,7 @@ export function qrClock(ops: Ops, orderId: string, paymentId: string, onEnd: (st
     if (left === 0) ops.expirePayments();
     const minutes = Math.floor(left / 60_000);
     const seconds = Math.floor((left % 60_000) / 1000);
-    line.textContent = `Valid for ${minutes}:${String(seconds).padStart(2, '0')}`;
+    line.textContent = label(`${minutes}:${String(seconds).padStart(2, '0')}`);
   };
   const timer = setInterval(tick, 1000);
   tick();

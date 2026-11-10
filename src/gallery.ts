@@ -2,6 +2,7 @@
 // browser refuses storage, as private windows can.
 
 import type { BoothLayout } from './photobooth';
+import { uuid } from './uuid';
 
 export type ShotKind = 'photobooth' | 'snapshot' | 'gif' | 'video' | 'live' | 'bts' | 'preset';
 
@@ -65,7 +66,7 @@ export async function saveShot(
   layout: BoothLayout | null = null,
   sessionId: string | null = null,
 ): Promise<Shot> {
-  const shot: Shot = { id: crypto.randomUUID(), kind, layout, createdAt: Date.now(), blob, pointId, sessionId };
+  const shot: Shot = { id: uuid(), kind, layout, createdAt: Date.now(), blob, pointId, sessionId };
   const db = await openDatabase();
   if (db) await run(db, 'readwrite', (store) => store.put(shot));
   else memory.set(shot.id, shot);

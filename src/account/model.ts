@@ -38,7 +38,7 @@ export interface Invite {
   member: Member;
 }
 
-export type AuthEventKind = 'register' | 'claim' | 'signin' | 'failed' | 'locked' | 'signout' | 'invite' | 'accepted' | 'reset' | 'password' | 'disabled' | 'enabled' | 'unlocked';
+export type AuthEventKind = 'register' | 'claim' | 'signin' | 'failed' | 'locked' | 'signout' | 'invite' | 'accepted' | 'reset' | 'password' | 'disabled' | 'enabled' | 'unlocked' | 'screen';
 
 export const AUTH_EVENT_LABELS: Record<AuthEventKind, string> = {
   register: 'Created the workspace',
@@ -54,6 +54,7 @@ export const AUTH_EVENT_LABELS: Record<AuthEventKind, string> = {
   disabled: 'Sign-in turned off',
   enabled: 'Sign-in turned on',
   unlocked: 'Unlocked',
+  screen: 'Unlocked a locked screen',
 };
 
 /** One line of the sign-in log: who, what happened to their sign-in, from which device, and who did it. */

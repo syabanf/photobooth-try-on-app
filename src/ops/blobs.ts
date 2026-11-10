@@ -1,5 +1,7 @@
 // Pictures and clips the business uploads (frames, the logo, ads), kept in IndexedDB by id.
 
+import { uuid } from '../uuid';
+
 const DB_NAME = 'vto-ops';
 const STORE = 'blobs';
 
@@ -30,7 +32,7 @@ function run<T>(db: IDBDatabase, mode: IDBTransactionMode, work: (store: IDBObje
 }
 
 export async function putBlob(blob: Blob): Promise<string> {
-  const id = crypto.randomUUID();
+  const id = uuid();
   const db = await open();
   if (db) await run(db, 'readwrite', (store) => store.put(blob, id));
   else memory.set(id, blob);

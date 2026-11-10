@@ -1,6 +1,7 @@
 // Screens that open on their own, from a hash in the URL, with no camera and no menu:
 //   #display=customer  the customer-facing screen beside the till (live cart, QRIS, queue number)
 //   #display=queue     the TV in the waiting area
+//   #display=kiosk     the self-service AI preset kiosk (&booth=<id> names its booth)
 //   #g=<token>         a customer's soft-file page, from the QR at the end of a session
 //   #event=<id>        every shared session of an event
 //   #checkin=<token>   self check-in from a queue ticket QR
@@ -13,6 +14,8 @@ import { zip } from '../encoders';
 import type { BoothSession } from '../model';
 import type { Ops } from '../ops';
 import { aheadOf, queueFor } from '../queue';
+import { mountLockControl } from './display-lock';
+import { renderKiosk } from './kiosk';
 import { el, money, qrCanvas } from './kit';
 
 export function displayChannel(ops: Ops): BroadcastChannel | null {
@@ -23,12 +26,13 @@ export function displayChannel(ops: Ops): BroadcastChannel | null {
   }
 }
 
-export type DisplayRoute = { kind: 'customer' | 'queue' } | { kind: 'gallery' | 'event' | 'checkin'; id: string };
+export type DisplayRoute = { kind: 'customer' | 'queue' } | { kind: 'kiosk'; boothId: string | null } | { kind: 'gallery' | 'event' | 'checkin'; id: string };
 
 export function displayRoute(hash: string): DisplayRoute | null {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
   const display = params.get('display');
   if (display === 'customer' || display === 'queue') return { kind: display };
+  if (display === 'kiosk') return { kind: 'kiosk', boothId: params.get('booth') };
   for (const [key, kind] of [['g', 'gallery'], ['event', 'event'], ['checkin', 'checkin']] as const) {
     const id = params.get(key);
     if (id) return { kind, id };
@@ -50,7 +54,9 @@ async function brand(ops: Ops, root: HTMLElement): Promise<HTMLElement> {
     img.alt = branding.brandName;
     head.append(img);
   } else {
-    head.append(el('span', 'display-brand', branding.brandName || ops.account.business));
+    const name = el('span', 'display-brand', branding.brandName || ops.account.business);
+    name.append(el('span', 'display-period', '.'));
+    head.append(name);
   }
   return head;
 }
@@ -64,7 +70,8 @@ export async function renderDisplay(ops: Ops, route: DisplayRoute): Promise<void
   root.append(head, content);
 
   if (route.kind === 'customer') customerScreen(ops, content);
-  else if (route.kind === 'queue') queueScreen(ops, content);
+  else if (route.kind === 'queue') queueScreen(ops, content, head);
+  else if (route.kind === 'kiosk') renderKiosk(ops, content, head);
   else if (route.kind === 'checkin') checkInScreen(ops, content, route.id);
   else if (route.kind === 'gallery') {
     const token = route.id;
@@ -77,6 +84,8 @@ export async function renderDisplay(ops: Ops, route: DisplayRoute): Promise<void
     content.append(el('h1', 'display-title', event?.name ?? 'Event gallery'));
     await galleryScreen(ops, content, sessions, event ? null : 'This event is not on this device.');
   }
+  // The lock sits at the end of the top bar, after the clock or the step pills.
+  if (route.kind === 'customer' || route.kind === 'queue' || route.kind === 'kiosk') mountLockControl(ops, head);
 }
 
 function customerScreen(ops: Ops, content: HTMLElement): void {
@@ -115,37 +124,83 @@ function customerScreen(ops: Ops, content: HTMLElement): void {
   if (channel) channel.onmessage = (event) => show(event.data);
 }
 
-function queueScreen(ops: Ops, content: HTMLElement): void {
+/** A clock for the corner of a screen, ticking each minute. */
+function clock(): HTMLElement {
+  const time = el('time', 'display-clock');
+  const tick = () => {
+    const now = new Date();
+    time.textContent = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    time.dateTime = now.toISOString();
+  };
+  tick();
+  setInterval(tick, 10_000);
+  return time;
+}
+
+/**
+ * The waiting-area TV, read from across the room: the number just called fills an ink card, the
+ * three before it sit under it, and each booth lists who is next.
+ */
+function queueScreen(ops: Ops, content: HTMLElement, head: HTMLElement): void {
+  head.append(el('span', 'display-head-kicker', 'Antrean foto'), clock());
   const draw = () => {
     const { tickets } = ops.state;
     const booths = ops.sites.points.filter((point) => point.active);
-    const calling = el('div', 'tv-calling');
     const called = tickets.filter((ticket) => ticket.status === 'called').sort((a, b) => (b.calledAt ?? 0) - (a.calledAt ?? 0));
-    for (const ticket of called.slice(0, 4)) {
-      const card = el('div', 'tv-call');
-      card.append(el('span', 'tv-number', ticket.number), el('span', 'tv-booth', `→ ${ops.boothName(ticket.calledBoothId)}`));
-      calling.append(card);
+    const [latest, ...earlier] = called;
+
+    const now = el('section', 'tv-now');
+    now.append(el('p', 'tv-kicker', 'Sekarang dipanggil'));
+    if (latest) {
+      now.append(el('p', 'tv-now-number', latest.number), el('p', 'tv-now-booth', `Silakan ke ${ops.boothName(latest.calledBoothId)}`));
+    } else {
+      now.append(el('p', 'tv-now-idle', 'Belum ada nomor dipanggil'), el('p', 'tv-now-booth tv-now-booth--muted', 'Nomor Anda muncul di sini saat booth siap.'));
     }
-    if (called.length === 0) calling.append(el('p', 'display-label', 'Nobody called yet'));
-    const next = el('div', 'tv-next');
+    const recent = el('div', 'tv-recent');
+    for (const ticket of earlier.slice(0, 3)) {
+      const card = el('div', 'tv-recent-card');
+      card.append(el('span', 'tv-recent-number', ticket.number), el('span', 'tv-recent-booth', ops.boothName(ticket.calledBoothId)));
+      recent.append(card);
+    }
+    const left = el('div', 'tv-main');
+    left.append(now);
+    if (recent.childElementCount) left.append(recent);
+
+    const next = el('section', 'tv-next');
+    next.append(el('p', 'tv-kicker tv-kicker--dark', 'Berikutnya'));
     for (const booth of booths) {
-      const waiting = queueFor(tickets, booth.id).filter((ticket) => ticket.checkedIn).slice(0, 5);
-      const column = el('div', 'tv-column');
-      column.append(el('p', 'display-label', booth.name), ...waiting.map((ticket) => el('span', 'tv-chip', ticket.number)));
-      if (waiting.length === 0) column.append(el('span', 'tv-empty', '—'));
-      next.append(column);
+      const waiting = queueFor(tickets, booth.id).filter((ticket) => ticket.checkedIn);
+      const row = el('div', 'tv-booth');
+      const title = el('div', 'tv-booth-head');
+      title.append(el('span', 'tv-booth-name', booth.name), el('span', 'tv-booth-count', waiting.length ? `${waiting.length} menunggu` : 'Kosong'));
+      const chips = el('div', 'tv-chips');
+      for (const ticket of waiting.slice(0, 4)) chips.append(el('span', 'tv-chip', ticket.number));
+      if (waiting.length > 4) chips.append(el('span', 'tv-chip tv-chip--more', `+${waiting.length - 4}`));
+      if (!waiting.length) chips.append(el('span', 'tv-chip tv-chip--empty', 'Langsung masuk'));
+      row.append(title, chips);
+      next.append(row);
     }
-    content.replaceChildren(el('p', 'display-label', 'Now calling'), calling, el('p', 'display-label', 'Next up'), next);
+    if (!booths.length) next.append(el('p', 'tv-booth-count', 'Belum ada booth aktif.'));
+
+    const grid = el('div', 'tv-grid');
+    grid.append(left, next);
+    content.replaceChildren(grid, el('p', 'tv-foot', 'Mau foto AI bareng rombongan? Scan QR tiket Anda di kiosk.'));
   };
   draw();
-  let last = '';
-  ops.store.subscribe((state) => {
-    // A re-call flashes the number again on the TV.
-    const latest = state.tickets.filter((t) => t.status === 'called').map((t) => `${t.id}:${t.recalls}`).join();
-    if (latest !== last) content.classList.add('tv-flash');
-    last = latest;
+  let last = called();
+  function called(): string {
+    return ops.state.tickets.filter((t) => t.status === 'called').map((t) => `${t.id}:${t.recalls}`).join();
+  }
+  ops.store.subscribe(() => {
+    // A new call or a re-call flashes the ink card so heads turn to the TV.
+    const latest = called();
     draw();
-    setTimeout(() => content.classList.remove('tv-flash'), 1200);
+    if (latest !== last) {
+      content.classList.remove('tv-flash');
+      void content.offsetWidth;
+      content.classList.add('tv-flash');
+    }
+    last = latest;
   });
 }
 

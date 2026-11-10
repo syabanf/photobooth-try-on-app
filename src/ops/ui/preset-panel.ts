@@ -7,13 +7,14 @@ import { saveShot } from '../../gallery';
 import { canvasToBlob } from '../../render/overlay';
 import { blobUrl } from '../blobs';
 import { amountDue } from '../cart';
-import type { FaceRecord, Preset, Ticket, Voucher } from '../model';
+import type { FaceRecord, Ticket, Voucher } from '../model';
 import type { Ops } from '../ops';
 import { methodAllowed } from '../payments';
-import { PRESET_SIZE, renderPreset, suggestPreset, type PresetLook } from '../presets';
+import { PRESET_SIZE, suggestPreset } from '../presets';
 import { act, actionButton, badge, count, el, money, notice, qrCanvas } from './kit';
 import { nameButton } from './face-tag';
 import { qrClock } from './pages/pos';
+import { faceBitmaps, fillTemplates, presetTemplates, type Render } from './preset-render';
 
 export interface PresetHooks {
   /** A 4:5 headshot of whoever faces the camera; throws when no face is found. */
@@ -25,12 +26,6 @@ export interface PresetHooks {
 }
 
 type Step = 'start' | 'faces' | 'templates' | 'pay' | 'result';
-
-interface Render {
-  preset: Preset;
-  canvas: HTMLCanvasElement;
-  url: string;
-}
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -50,7 +45,8 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
   let aiUrl = '';
   let showAi = false;
   let renderToken = 0;
-  const bitmaps = new Map<string, Promise<ImageBitmap>>();
+  const faceBitmap = faceBitmaps();
+  const templates = () => presetTemplates(ops);
   // Payment for the print, one order per party.
   let orderId: string | null = null;
   let paid = false;
@@ -66,26 +62,9 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
   const priced = () => price() > 0 && !!booth();
   const due = () => Math.max(0, price() - discount);
 
-  const faceBitmap = (face: FaceRecord) => {
-    let bitmap = bitmaps.get(face.id);
-    if (!bitmap) {
-      bitmap = blobUrl(face.image).then((url) => fetch(url)).then((response) => response.blob()).then((blob) => createImageBitmap(blob));
-      bitmaps.set(face.id, bitmap);
-    }
-    return bitmap;
-  };
-
   /** The library the booth shows: every face kept, or only this customer's, as Settings says. */
   const library = () => ops.state.faces.filter((face) => ops.state.settings.faceLibrary === 'all' || visit.has(face.id));
   const party = () => (ticket ? ops.facesForTicket(ticket.id) : []);
-
-  /** Built-in and custom presets, plus every active uploaded frame as a template of its own. */
-  function templates(): Preset[] {
-    const frames = ops.state.frames
-      .filter((frame) => frame.active && frame.slots.length)
-      .map((frame): Preset => ({ id: `frame:${frame.id}`, name: frame.name, layout: 'frame', frameId: frame.id, active: true, builtIn: false, prompt: 'Make this a polished printed photo in its frame: even studio light, true colours and crisp detail, the frame artwork left exactly as it is.' }));
-    return [...ops.state.aiPresets.filter((preset) => preset.active && (preset.layout !== 'frame' || preset.frameId)), ...frames];
-  }
 
   function card(title: string, description: string, ...content: (Node | string)[]): HTMLElement {
     const section = el('section', 'card');
@@ -257,36 +236,16 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
   }
 
   // ---------- 3. templates ----------
-  function look(preset: Preset): Promise<PresetLook> {
-    const { branding } = ops.state;
-    const base: PresetLook = { brand: branding.brandName || ops.account.business, accent: branding.accent, ink: branding.ink, date: new Date() };
-    const frame = ops.state.frames.find((entry) => entry.id === preset.frameId);
-    if (preset.layout !== 'frame' || !frame) return Promise.resolve(base);
-    return blobUrl(frame.image)
-      .then((url) => fetch(url))
-      .then((response) => response.blob())
-      .then((blob) => createImageBitmap(blob))
-      .then((image) => ({ ...base, frame: { frame, image } }));
-  }
-
-  /** Fills every template with the chosen faces, newest choice first. */
+  /** Fills every template with the chosen faces, the suggested one first. */
   async function renderAll(): Promise<void> {
     const token = ++renderToken;
     for (const render of renders) URL.revokeObjectURL(render.url);
     renders = [];
     const faces = await Promise.all(ops.state.faces.filter((face) => selected.has(face.id)).map(faceBitmap));
-    // The suggested template renders first, so the customer sees it straight away.
-    const all = templates();
-    const suggested = suggestPreset(all, selected.size);
-    for (const preset of [...all].sort((a, b) => Number(b.id === suggested?.id) - Number(a.id === suggested?.id))) {
-      try {
-        const canvas = await renderPreset(preset, faces, await look(preset));
-        if (token !== renderToken) return;
-        renders.push({ preset, canvas, url: URL.createObjectURL(await canvasToBlob(canvas, 'image/jpeg', 0.9)) });
-        if (step === 'templates') draw();
-      } catch (error) {
-        console.warn(`Preset ${preset.name} skipped`, error);
-      }
+    for await (const render of fillTemplates(ops, faces)) {
+      if (token !== renderToken) return;
+      renders.push(render);
+      if (step === 'templates') draw();
     }
   }
 
