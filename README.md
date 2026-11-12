@@ -30,9 +30,11 @@ Other scripts:
 
 | Command | Purpose |
 |---|---|
-| `pnpm test` | Unit tests for the anchor math |
+| `pnpm test` | Unit tests |
 | `pnpm build` | Typecheck and production bundle in `dist/` |
 | `pnpm preview` | Serve the production bundle |
+| `pnpm serve` | Serve the production bundle with compression, caching and the photo service |
+| `pnpm models` | Copy the MediaPipe models into `public/models` so the booth runs without internet |
 | `pnpm gen:samples` | Regenerate the sample PNGs in `public/items` |
 
 Add `?debug=1` to the URL to draw the landmark indices the anchors use. The Size slider trims the worn item of the active category between 70% and 150%.
@@ -155,6 +157,26 @@ The rail holds Dashboard, Booth, Point of sale, Queue, Try on, Photobooth and Ga
 `src/ops/` holds the business: `model.ts` (every record), engines with tests (`vouchers`, `cart`, `shift`, `queue`, `outbox`, `printing`, `telemetry`, `access`, `fleet`, `reports`, `encoders`, `frames`), `adapters.ts` (the edges and their simulators), `store.ts` (one JSON document per workspace with an activity log, broadcast to other windows), `ops.ts` (every action, logged and queued for sync), `capture.ts` (effects, GIF bursts, clips), and `ui/` (the pages, the Booth flow and the standalone screens). `src/ops/ops.test.ts` runs a day at the till end to end.
 
 ### Going to production
+
+**Booth computer setup**
+
+1. `pnpm install`, then `pnpm models` once while the computer has internet. The camera then loads the face, pose, hand and background models from the booth itself; without the copies it falls back to Google's servers.
+2. `pnpm build`, then `pnpm serve`. Keep the server running with the OS's service manager (launchd, systemd or NSSM on Windows) so it restarts after a reboot.
+3. Open `http://127.0.0.1:4173` on the booth and sign in. Open the kiosk and the TV from **Queue** so they start locked.
+4. Run the kiosk and TV browsers full screen, for example `chrome --kiosk --kiosk-printing http://127.0.0.1:4173/#display=queue&lock=1`. Turn off the OS screen sleep: the Wake Lock API that keeps screens on needs HTTPS or localhost.
+
+**What the build does for production**
+
+- *Two bundles.* The TV, customer screen, kiosk, check-in and photo pages load about 60 kB (gzip) without the camera, MediaPipe or the Decart SDK. The staff app loads about 145 kB first; the Decart SDK and LiveKit (another 180 kB gzip) load only when someone turns on AI mode or an AI print.
+- *The server* compresses HTML, JS, CSS and the wasm runtime with brotli or gzip (the 11.7 MB wasm goes out as 2.7 MB), caches hashed bundles for a year, revalidates `index.html` on every load, and sends `nosniff`, `SAMEORIGIN`, `no-referrer` and a camera-only Permissions-Policy.
+- *Unattended screens* keep the screen awake, block pinch zoom, long-press menus and text selection, and reload themselves: the TV and customer screen 10 seconds after an uncaught error and every 6 hours, the kiosk at its start screen once it has run 6 hours.
+- *The staff app* shows any uncaught error as a notice, once per message a minute.
+- *Demo items* from dummyjson.com and Wikimedia appear only in development. Set `VITE_DEMO_CATALOG=1` at build time to keep them.
+- *DM Sans* ships inside the bundle (`src/assets/fonts`, SIL Open Font License), so screens keep their typeface without internet.
+- A web manifest and icon let a tablet add the app to its home screen.
+
+**Still to replace before a public launch**
+
 
 | In this build | For production |
 |---|---|

@@ -1,8 +1,5 @@
 import { GestureRecognizer, type NormalizedLandmark } from '@mediapipe/tasks-vision';
-import { createWithFallback, getVisionFileset } from './vision';
-
-const MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task';
+import { createWithFallback, getVisionFileset, modelUrl } from './vision';
 
 const MIN_SCORE = 0.6;
 
@@ -11,7 +8,7 @@ let instance: Promise<GestureRecognizer> | null = null;
 export function getGestureRecognizer(): Promise<GestureRecognizer> {
   instance ??= createWithFallback(async (delegate) =>
     GestureRecognizer.createFromOptions(await getVisionFileset(), {
-      baseOptions: { modelAssetPath: MODEL_URL, delegate },
+      baseOptions: { modelAssetPath: await modelUrl('gesture'), delegate },
       runningMode: 'VIDEO',
       numHands: 1,
     }),

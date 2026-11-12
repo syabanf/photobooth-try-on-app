@@ -10,6 +10,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "serve": "node scripts/serve.mjs",
+    "models": "node scripts/fetch-models.mjs",
     "test": "vitest run",
     "gen:samples": "node scripts/gen-samples.mjs"
   },

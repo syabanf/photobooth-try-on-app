@@ -243,6 +243,7 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
           row.type = 'button';
           row.className = 'pick-row';
           row.dataset.close = '';
+          row.dataset.page = view;
           const tile = document.createElement('span');
           tile.className = 'tile tile--soft';
           tile.append(icon(iconName));

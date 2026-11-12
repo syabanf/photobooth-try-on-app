@@ -2,7 +2,7 @@
 // flash, progress and sheet preview drawn over the camera.
 
 import { SCENERY, STUDIO_BACKGROUNDS, imageBackground, loadBackground, paintedBackdrop, type Background } from './backgrounds';
-import { readStoredKey, storeKey } from './decart';
+import { readStoredKey, storeKey } from './decart-key';
 import { icon } from './icons';
 import { FRAMES, shotsFor, type BoothFrame, type BoothLayout } from './photobooth';
 import { STICKERS, type StickerDef } from './stickers';

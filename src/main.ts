@@ -1,4 +1,3 @@
-import './style.css';
 import type { FaceLandmarker, GestureRecognizer, ImageSegmenter, NormalizedLandmark, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { faceOutline, glassesFrame, hatFrame, itemRect, packFrame, unpackFrame, type HeadFrame } from './anchors';
 import { CAMERA_MESSAGES, classifyCameraError, startCamera } from './camera';
@@ -22,7 +21,7 @@ import { detectPose, getPoseLandmarker } from './tracking/pose';
 import { getSegmenter, segmentForVideo, type SegmentMask } from './tracking/segmenter';
 import { nextTimestamp } from './tracking/vision';
 import { COMMONS_HATS, loadStoreCatalog } from './store-catalog';
-import { CAMERA_VIEWS, isOpsView, mountUi, readStored, type Mode, type StatusKind, type View } from './ui';
+import { CAMERA_VIEWS, isOpsView, mountUi, type Mode, type StatusKind, type View } from './ui';
 import { mountBoothPanel } from './booth-panel';
 import { NO_BACKGROUND, drawBackdrop, type Background } from './backgrounds';
 import { BackgroundLayer } from './render/background-layer';
@@ -32,7 +31,7 @@ import { countByPoint, saveShot } from './gallery';
 import { mountGalleryView } from './gallery-view';
 import { mountShareDialog } from './share-dialog';
 import { composeBooth, runBoothSession, shotsFor } from './photobooth';
-import { blendIntoScene, connect as connectDecart, readStoredKey, storeKey, wearGarment } from './decart';
+import { readStoredKey, storeKey } from './decart-key';
 import type { RealTimeClient } from '@decartai/sdk';
 import { browserStore, createLocalBackend } from './account/backend';
 import type { Account } from './account/model';
@@ -45,12 +44,19 @@ import { Ops } from './ops/ops';
 import { SimulatedEdsdk, WebcamDriver } from './ops/adapters';
 import { mayOpen, mountOpsRouter, type OpsRouter } from './ops/ui/router';
 import { mountSessionPanel } from './ops/ui/session-panel';
-import { displayRoute, renderDisplay } from './ops/ui/displays';
-import { renderRemoteGallery } from './ops/delivery';
-import { enforceDisplayLock } from './ops/ui/display-lock';
 import { renderToday } from './ops/ui/today';
 import { notice } from './ops/ui/kit';
 import { confirmDialog } from './dialogs';
+
+/**
+ * Sample products from dummyjson.com and hats from Wikimedia fill the try-on rail in development.
+ * A production build leaves them out unless VITE_DEMO_CATALOG=1, so customers see only the
+ * venue's own items and the booth never waits on those sites.
+ */
+const DEMO_CATALOG = import.meta.env.DEV || import.meta.env.VITE_DEMO_CATALOG === '1';
+
+/** The Decart SDK (and LiveKit behind it) loads the first time someone uses AI mode or an AI blend. */
+const decartSdk = () => import('./decart');
 
 /** One Euro settings for landmarks in pixels: steady while the wearer holds still, quick to follow a turn. */
 const TRACK_FILTER = { minCutoff: 1.2, beta: 0.01 };
@@ -96,7 +102,7 @@ const boothTrigger = new CaptureTrigger({ gestures: ['Victory'], holdFrames: 8, 
 
 const state = {
   activeTab: 'glasses' as Category,
-  items: [...COMMONS_HATS, ...DEFAULT_ITEMS],
+  items: [...(DEMO_CATALOG ? COMMONS_HATS : []), ...DEFAULT_ITEMS],
   worn: { glasses: null, hat: null, clothing: null } as Record<Category, CatalogItem | null>,
   images: { glasses: null, hat: null, clothing: null } as Record<Category, ItemImage | null>,
   /** Rigid placement for face items; clothing uses the garment mesh instead. */
@@ -317,6 +323,7 @@ async function blendShot(
   apiKey: string,
   scene: Promise<Blob | null>,
 ): Promise<HTMLCanvasElement> {
+  const { blendIntoScene } = await decartSdk();
   const blended = await createImageBitmap(await blendIntoScene(apiKey, await canvasToBlob(shot, 'image/jpeg', 0.92), await scene));
   const out = document.createElement('canvas');
   out.width = shot.width;
@@ -469,6 +476,7 @@ async function connectAi(apiKey: string): Promise<void> {
   storeKey(apiKey);
   setStatus('Connecting to Decart…');
   try {
+    const { connect: connectDecart, wearGarment } = await decartSdk();
     state.decart = await connectDecart(apiKey, stream, {
       onRemoteStream(remote) {
         remoteVideo.srcObject = remote;
@@ -553,8 +561,11 @@ function toggleItem(item: CatalogItem): void {
     }
     state.worn.clothing = item;
     refreshUi();
-    if (state.decart) {
-      wearGarment(state.decart, item).catch((e) => setStatus(`Decart: ${e.message}`, 'error'));
+    const client = state.decart;
+    if (client) {
+      decartSdk()
+        .then(({ wearGarment }) => wearGarment(client, item))
+        .catch((e) => setStatus(`Decart: ${e.message}`, 'error'));
     }
     return;
   }
@@ -797,6 +808,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 async function loadStoreItems(): Promise<void> {
+  if (!DEMO_CATALOG) return;
   try {
     const storeItems = await loadStoreCatalog();
     state.items.unshift(...storeItems);
@@ -971,39 +983,7 @@ async function startBusiness(account: Account): Promise<Ops> {
   return ops;
 }
 
-/** A display window (customer screen, queue TV, photo page, check-in) has no camera and no menu. */
-async function startDisplay(): Promise<boolean> {
-  enforceDisplayLock();
-  const route = displayRoute(location.hash);
-  if (!route) return false;
-  if (route.kind === 'gallery' && await renderRemoteGallery(route.id)) return true;
-  const current = await backend.current();
-  const candidates = current ? [current, ...(await backend.workspaces())] : await backend.workspaces();
-  // A photo link or ticket belongs to whichever workspace on this device holds its token.
-  const holds = (candidateId: string, business: string): boolean => {
-    if (route.kind === 'customer' || route.kind === 'queue' || route.kind === 'kiosk') return candidateId === current?.id;
-    const saved = new OpsStore(browserStore(), candidateId, business).state;
-    const id = 'id' in route ? route.id : '';
-    if (route.kind === 'gallery') return saved.sessions.some((session) => session.token === id);
-    if (route.kind === 'event') return saved.events.some((event) => event.id === id);
-    return saved.tickets.some((ticket) => ticket.token === id);
-  };
-  const account = candidates.find((candidate) => holds(candidate.id, candidate.business)) ?? current ?? candidates[0];
-  if (!account) {
-    document.body.textContent = 'Open the app and pick a workspace first.';
-    return true;
-  }
-  // The kiosk sells and prints for a booth: the one in its link, or the one this device belongs to.
-  const boothId = route.kind === 'kiosk' ? (route.boothId ?? readStored(`vto:device-point:${account.id}`)) : null;
-  const ops = new Ops(new OpsStore(browserStore(), account.id, account.business), account, { toast: () => {}, devicePointId: () => boothId });
-  ops.sites = await backend.sites();
-  ops.accounts = backend;
-  await renderDisplay(ops, route);
-  return true;
-}
-
 async function start(): Promise<void> {
-  if (await startDisplay()) return;
   const session = await signedIn(backend);
   const { account } = session;
   document.querySelector<HTMLElement>('.shell')!.hidden = false;
@@ -1055,5 +1035,19 @@ async function start(): Promise<void> {
   const id = sites.devicePointId();
   if (id && ops.camera) ops.heartbeat(id, ops.camera.state());
 }
+
+// An error no handler caught still reaches the person at the screen, once per message a minute.
+const reported = new Map<string, number>();
+function reportUncaught(reason: unknown): void {
+  const message = reason instanceof Error ? reason.message : String(reason ?? 'Unknown error');
+  // The browser raises this for layout timing; it never means something broke.
+  if (message.includes('ResizeObserver loop')) return;
+  console.error(reason);
+  if (Date.now() - (reported.get(message) ?? 0) < 60_000) return;
+  reported.set(message, Date.now());
+  notice(`Something went wrong: ${message}`, 'error');
+}
+window.addEventListener('error', (event) => reportUncaught(event.error ?? event.message));
+window.addEventListener('unhandledrejection', (event) => reportUncaught(event.reason));
 
 void start();

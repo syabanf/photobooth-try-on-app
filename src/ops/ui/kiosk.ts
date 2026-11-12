@@ -3,7 +3,7 @@
 // with no staff at the screen. It shows only the faces the gate took for the scanned ticket, and
 // goes back to the start after a while without a touch so the next party never sees them.
 
-import { readStoredKey, restylePreset } from '../../decart';
+import { readStoredKey } from '../../decart-key';
 import { icon, type IconName } from '../../icons';
 import { canvasToBlob } from '../../render/overlay';
 import { blobUrl } from '../blobs';
@@ -13,6 +13,7 @@ import type { Ops } from '../ops';
 import { methodAllowed } from '../payments';
 import { suggestPreset } from '../presets';
 import { el, money, qrCanvas } from './kit';
+import { dueForReload } from './display-guard';
 import { qrClock } from './pages/pos';
 import { faceBitmaps, fillTemplates, presetTemplates, type Render } from './preset-render';
 
@@ -110,6 +111,8 @@ export function renderKiosk(ops: Ops, root: HTMLElement, head: HTMLElement): voi
 
   function restart(): void {
     dropOrder();
+    // Between parties is the safe moment for a long-running kiosk to start fresh.
+    if (dueForReload()) return location.reload();
     renderToken++;
     for (const render of renders) URL.revokeObjectURL(render.url);
     renders = [];
@@ -448,6 +451,8 @@ export function renderKiosk(ops: Ops, root: HTMLElement, head: HTMLElement): voi
     const key = readStoredKey();
     if (key) {
       try {
+        // The SDK loads only when a print goes through the AI.
+        const { restylePreset } = await import('../../decart');
         image = await restylePreset(key, image, chosen!.preset.prompt);
       } catch (reason) {
         console.warn('AI redraw failed, printing the template', reason);

@@ -2,7 +2,7 @@
 // the entrance camera took, the customer picks who is in the picture, sees every template already
 // filled with them, pays for the one they like, and the AI redraws it for the print.
 
-import { readStoredKey, restylePreset, storeKey } from '../../decart';
+import { readStoredKey, storeKey } from '../../decart-key';
 import { saveShot } from '../../gallery';
 import { canvasToBlob } from '../../render/overlay';
 import { blobUrl } from '../blobs';
@@ -390,6 +390,7 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
     draw();
     try {
       const template = await canvasToBlob(chosen!.canvas, 'image/jpeg', 0.92);
+      const { restylePreset } = await import('../../decart');
       aiBlob = await restylePreset(key, template, chosen!.preset.prompt);
       aiUrl = URL.createObjectURL(aiBlob);
       showAi = true;

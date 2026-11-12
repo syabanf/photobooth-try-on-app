@@ -1,0 +1,15 @@
+{
+  "name": "Dusun Bambu Photobooth",
+  "short_name": "Dusun Bambu",
+  "description": "Photobooth, AI presets, queue and cashier for Dusun Bambu.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f1f0f1",
+  "theme_color": "#101112",
+  "lang": "id",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

@@ -15,30 +15,9 @@ import type { BoothSession } from '../model';
 import type { Ops } from '../ops';
 import { aheadOf, queueFor } from '../queue';
 import { mountLockControl } from './display-lock';
+import { displayChannel, type DisplayRoute } from './display-route';
 import { renderKiosk } from './kiosk';
 import { el, money, qrCanvas } from './kit';
-
-export function displayChannel(ops: Ops): BroadcastChannel | null {
-  try {
-    return new BroadcastChannel(`${ops.store.key}:display`);
-  } catch {
-    return null;
-  }
-}
-
-export type DisplayRoute = { kind: 'customer' | 'queue' } | { kind: 'kiosk'; boothId: string | null } | { kind: 'gallery' | 'event' | 'checkin'; id: string };
-
-export function displayRoute(hash: string): DisplayRoute | null {
-  const params = new URLSearchParams(hash.replace(/^#/, ''));
-  const display = params.get('display');
-  if (display === 'customer' || display === 'queue') return { kind: display };
-  if (display === 'kiosk') return { kind: 'kiosk', boothId: params.get('booth') };
-  for (const [key, kind] of [['g', 'gallery'], ['event', 'event'], ['checkin', 'checkin']] as const) {
-    const id = params.get(key);
-    if (id) return { kind, id };
-  }
-  return null;
-}
 
 /** Applies the workspace's brand colours to a standalone screen. */
 async function brand(ops: Ops, root: HTMLElement): Promise<HTMLElement> {

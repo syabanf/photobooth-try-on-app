@@ -5,12 +5,14 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
+import { promisify } from 'node:util';
+import { brotliCompress, constants, gzip } from 'node:zlib';
 
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || '0.0.0.0';
 const dist = resolve('dist');
 const data = resolve(process.env.PHOTO_DATA_DIR || '.photo-delivery');
-const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.webm': 'video/webm', '.mp4': 'video/mp4', '.ico': 'image/x-icon' };
+const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.webm': 'video/webm', '.mp4': 'video/mp4', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.task': 'application/octet-stream', '.tflite': 'application/octet-stream' };
 const tokenPattern = /^[a-f0-9]{16,32}$/;
 const filePattern = /^[a-zA-Z0-9-]{1,80}$/;
 const maxUpload = 100 * 1024 * 1024;
@@ -23,8 +25,15 @@ function localAddress() {
   return '127.0.0.1';
 }
 const publicOrigin = (process.env.PHOTO_PUBLIC_ORIGIN || `http://${localAddress()}:${port}`).replace(/\/$/, '');
+/** Sent with every response: no sniffing, no framing by other sites, and photo links stay out of Referer headers. */
+const SECURITY = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Referrer-Policy': 'no-referrer',
+  'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=()',
+};
 const send = (res, status, body, type = 'application/json') => {
-  res.writeHead(status, { 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': 'no-store' });
+  res.writeHead(status, { ...SECURITY, 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': 'no-store' });
   res.end(type === 'application/json' ? JSON.stringify(body) : body);
 };
 const loopback = (address = '') => address === '::1' || address === '127.0.0.1' || address.startsWith('::ffff:127.');
@@ -85,7 +94,7 @@ async function serve(req, res) {
       if (manifest.expiresAt && manifest.expiresAt <= Date.now()) return send(res, 410, { error: 'These photos have expired.' });
       if (!fileId) return send(res, 200, manifest);
       if (!manifest.files.some((file) => file.id === fileId)) return send(res, 404, { error: 'File not found.' });
-      res.writeHead(200, { 'Content-Type': await readFile(join(folder, `${fileId}.type`), 'utf8'), 'Cache-Control': 'private, max-age=3600' });
+      res.writeHead(200, { ...SECURITY, 'Content-Type': await readFile(join(folder, `${fileId}.type`), 'utf8'), 'Cache-Control': 'private, max-age=3600' });
       createReadStream(join(folder, fileId)).pipe(res);
       return;
     }
@@ -95,8 +104,50 @@ async function serve(req, res) {
   const requested = resolve(dist, `.${decodeURIComponent(url.pathname)}`);
   const file = requested.startsWith(dist + sep) && existsSync(requested) && statSync(requested).isFile() ? requested : join(dist, 'index.html');
   if (!existsSync(file)) return send(res, 404, { error: 'Build the app first with pnpm build.' });
-  res.writeHead(200, { 'Content-Type': mime[extname(file)] || 'application/octet-stream' });
-  createReadStream(file).pipe(res);
+  await sendStatic(req, res, file);
+}
+
+const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.json', '.svg', '.wasm', '.webmanifest']);
+const compressed = new Map();
+const brotli = promisify(brotliCompress);
+const gzipAsync = promisify(gzip);
+
+/** Brotli and gzip copies of a file, made once per file version and kept in memory. */
+function packed(file) {
+  const { mtimeMs } = statSync(file);
+  const cached = compressed.get(file);
+  if (cached && cached.mtimeMs === mtimeMs) return cached.work;
+  const work = readFile(file).then(async (raw) => ({
+    br: await brotli(raw, { params: { [constants.BROTLI_PARAM_QUALITY]: 9, [constants.BROTLI_PARAM_SIZE_HINT]: raw.length } }),
+    gzip: await gzipAsync(raw, { level: 9 }),
+  }));
+  compressed.set(file, { mtimeMs, work });
+  return work;
+}
+
+/**
+ * Hashed bundles under /assets never change, so browsers keep them a year. The wasm runtime and
+ * items keep their names across builds and revalidate weekly; index.html always revalidates.
+ */
+function cacheFor(file) {
+  if (file.startsWith(join(dist, 'assets') + sep)) return 'public, max-age=31536000, immutable';
+  if (file.endsWith('index.html')) return 'no-cache';
+  return 'public, max-age=604800';
+}
+
+async function sendStatic(req, res, file) {
+  const headers = { ...SECURITY, 'Content-Type': mime[extname(file)] || 'application/octet-stream', 'Cache-Control': cacheFor(file), Vary: 'Accept-Encoding' };
+  const accepts = String(req.headers['accept-encoding'] || '');
+  const encoding = COMPRESSIBLE.has(extname(file)) ? (/\bbr\b/.test(accepts) ? 'br' : /\bgzip\b/.test(accepts) ? 'gzip' : null) : null;
+  if (!encoding) {
+    res.writeHead(200, headers);
+    if (req.method === 'HEAD') return res.end();
+    createReadStream(file).pipe(res);
+    return;
+  }
+  const body = (await packed(file))[encoding];
+  res.writeHead(200, { ...headers, 'Content-Encoding': encoding, 'Content-Length': body.length });
+  res.end(req.method === 'HEAD' ? undefined : body);
 }
 
 http.createServer((req, res) => {
@@ -104,6 +155,11 @@ http.createServer((req, res) => {
 }).listen(port, host, () => {
   console.log(`Booth: http://127.0.0.1:${port}`);
   console.log(`Customer photo links: ${publicOrigin}`);
+  // Compress the big files now, so the first booth to load the camera does not wait for it.
+  for (const name of ['vision_wasm_internal.wasm', 'vision_wasm_internal.js']) {
+    const file = join(dist, 'wasm', name);
+    if (existsSync(file)) void packed(file);
+  }
 });
 
 async function purgeExpired() {

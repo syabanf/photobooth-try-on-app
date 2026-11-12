@@ -1,8 +1,5 @@
 import { ImageSegmenter } from '@mediapipe/tasks-vision';
-import { createWithFallback, getVisionFileset } from './vision';
-
-const MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite';
+import { createWithFallback, getVisionFileset, modelUrl } from './vision';
 
 /** Class indices the selfie multiclass model assigns to each pixel. */
 export const SEGMENT = {
@@ -32,7 +29,7 @@ let instance: Promise<ImageSegmenter> | null = null;
 export function getSegmenter(): Promise<ImageSegmenter> {
   instance ??= createWithFallback(async (delegate) =>
     ImageSegmenter.createFromOptions(await getVisionFileset(), {
-      baseOptions: { modelAssetPath: MODEL_URL, delegate },
+      baseOptions: { modelAssetPath: await modelUrl('segmenter'), delegate },
       runningMode: 'VIDEO',
       outputCategoryMask: true,
       outputConfidenceMasks: false,

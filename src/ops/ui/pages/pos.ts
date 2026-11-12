@@ -13,7 +13,7 @@ import { PAPER } from '../../printing';
 import { shiftSlip, type ShiftSlip } from '../../shift';
 import type { PageContext } from '../router';
 import { act, actionButton, badge, dateTime, el, money, notice, page, parseAmount, pills, qrCanvas } from '../kit';
-import { displayChannel } from '../displays';
+import { displayChannel } from '../display-route';
 
 type Tab = 'sessions' | 'prints' | 'merch' | 'reprint';
 

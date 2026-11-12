@@ -4,6 +4,7 @@
 import { createDecartClient, models, type RealTimeClient } from '@decartai/sdk';
 import type { CatalogItem } from './catalog';
 
+
 /** Decart's virtual try-on model. It repaints each frame with the garment worn. */
 const MODEL = 'lucy-vton-latest';
 
@@ -15,7 +16,6 @@ const BLEND_PROMPT =
   'Blend the person into the reference scene so they look photographed there, matching its light, ' +
   'shadows, colour and depth, with clean natural edges. Keep their face, hair, expression, pose and clothing unchanged.';
 
-const KEY_STORAGE = 'decart-api-key';
 
 export interface SessionCallbacks {
   onRemoteStream: (stream: MediaStream) => void;
@@ -28,22 +28,6 @@ export interface SessionCallbacks {
  * The key lives in session storage, so it is gone when the tab closes and never reaches disk.
  * A public deployment should mint short-lived client tokens on a server instead.
  */
-export function readStoredKey(): string {
-  try {
-    return sessionStorage.getItem(KEY_STORAGE) ?? '';
-  } catch {
-    return '';
-  }
-}
-
-export function storeKey(key: string): void {
-  try {
-    sessionStorage.setItem(KEY_STORAGE, key);
-  } catch {
-    // Private browsing can refuse storage; the key still works for this session.
-  }
-}
-
 /** Phrasing Decart's examples recommend: name the swap, then describe the garment. */
 function garmentPrompt(item: CatalogItem): string {
   return `Substitute the current top with a ${item.name.toLowerCase()}, worn naturally with a realistic fit`;

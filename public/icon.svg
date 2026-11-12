@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#101112"/>
+  <text x="256" y="300" text-anchor="middle" font-family="DM Sans, Arial, sans-serif" font-size="210" font-weight="800" fill="#ffffff" letter-spacing="-8">DB</text>
+  <circle cx="396" cy="292" r="22" fill="#f04e30"/>
+</svg>

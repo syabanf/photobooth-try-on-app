@@ -1,12 +1,12 @@
 import { FaceLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
-import { MODEL_URLS, createWithFallback, getVisionFileset, nextTimestamp } from './vision';
+import { createWithFallback, getVisionFileset, modelUrl, nextTimestamp } from './vision';
 
 let instance: Promise<FaceLandmarker> | null = null;
 
 export function getFaceLandmarker(): Promise<FaceLandmarker> {
   instance ??= createWithFallback(async (delegate) =>
     FaceLandmarker.createFromOptions(await getVisionFileset(), {
-      baseOptions: { modelAssetPath: MODEL_URLS.face, delegate },
+      baseOptions: { modelAssetPath: await modelUrl('face'), delegate },
       runningMode: 'VIDEO',
       numFaces: 1,
       outputFaceBlendshapes: false,
@@ -36,7 +36,7 @@ let group: Promise<FaceLandmarker> | null = null;
 export async function detectFaces(video: HTMLVideoElement): Promise<NormalizedLandmark[][]> {
   group ??= createWithFallback(async (delegate) =>
     FaceLandmarker.createFromOptions(await getVisionFileset(), {
-      baseOptions: { modelAssetPath: MODEL_URLS.face, delegate },
+      baseOptions: { modelAssetPath: await modelUrl('face'), delegate },
       runningMode: 'VIDEO',
       numFaces: 6,
       outputFaceBlendshapes: false,
