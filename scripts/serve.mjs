@@ -126,17 +126,22 @@ function packed(file) {
 }
 
 /**
- * Hashed bundles under /assets never change, so browsers keep them a year. The wasm runtime and
- * items keep their names across builds and revalidate weekly; index.html always revalidates.
+ * Hashed bundles under /assets never change, so browsers keep them a year. Everything else keeps
+ * its name across builds (index.html, the wasm runtime, models, icons) and revalidates on each
+ * load: an unchanged file costs a 304, and a new MediaPipe runtime never meets an old bundle.
  */
 function cacheFor(file) {
-  if (file.startsWith(join(dist, 'assets') + sep)) return 'public, max-age=31536000, immutable';
-  if (file.endsWith('index.html')) return 'no-cache';
-  return 'public, max-age=604800';
+  return file.startsWith(join(dist, 'assets') + sep) ? 'public, max-age=31536000, immutable' : 'no-cache';
 }
 
 async function sendStatic(req, res, file) {
-  const headers = { ...SECURITY, 'Content-Type': mime[extname(file)] || 'application/octet-stream', 'Cache-Control': cacheFor(file), Vary: 'Accept-Encoding' };
+  const { size, mtimeMs } = statSync(file);
+  const etag = `"${size.toString(16)}-${Math.round(mtimeMs).toString(16)}"`;
+  const headers = { ...SECURITY, 'Content-Type': mime[extname(file)] || 'application/octet-stream', 'Cache-Control': cacheFor(file), ETag: etag, Vary: 'Accept-Encoding' };
+  if (req.headers['if-none-match'] === etag) {
+    res.writeHead(304, headers);
+    return res.end();
+  }
   const accepts = String(req.headers['accept-encoding'] || '');
   const encoding = COMPRESSIBLE.has(extname(file)) ? (/\bbr\b/.test(accepts) ? 'br' : /\bgzip\b/.test(accepts) ? 'gzip' : null) : null;
   if (!encoding) {

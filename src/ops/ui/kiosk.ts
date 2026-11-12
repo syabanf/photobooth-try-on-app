@@ -142,12 +142,16 @@ export function renderKiosk(ops: Ops, root: HTMLElement, head: HTMLElement): voi
     const element = el('button', `btn ${className}`, label);
     element.type = 'button';
     if (iconName) element.prepend(icon(iconName));
-    element.addEventListener('click', () => {
+    // The button rests while its work runs, so a double tap on Bayar asks for one QR.
+    element.addEventListener('click', async () => {
+      if (element.disabled) return;
+      element.disabled = true;
       try {
-        const done = run();
-        if (done instanceof Promise) done.catch((reason: Error) => fail(reason.message));
+        await run();
       } catch (reason) {
         fail((reason as Error).message);
+      } finally {
+        element.disabled = false;
       }
     });
     return element;

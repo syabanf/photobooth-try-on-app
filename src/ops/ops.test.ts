@@ -85,6 +85,40 @@ describe('a day at the till', () => {
     expect(ops.order(order.id).status).toBe('paid');
   });
 
+  it('charges QRIS once for a double tap and shows a waiting QR again', async () => {
+    const { ops } = setup();
+    ops.openShift('mall', 0);
+    const order = ops.createOrder({ lines: [{ kind: 'session', refId: 'photobox', label: 'GIF', unitPrice: 30_000, qty: 1 }], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null });
+    const [first, second] = await Promise.all([ops.chargeQris(order.id), ops.chargeQris(order.id)]);
+    expect(second.id).toBe(first.id);
+    expect((await ops.chargeQris(order.id)).id).toBe(first.id);
+    expect(ops.order(order.id).payments).toHaveLength(1);
+    // A repeat callback from the gateway changes nothing.
+    ops.gateway.simulatePaid!(first.reference);
+    ops.gateway.simulatePaid!(first.reference);
+    expect(ops.order(order.id).payments.filter((payment) => payment.status === 'paid')).toHaveLength(1);
+    expect(ops.order(order.id).status).toBe('paid');
+  });
+
+  it('settles an open order when the gateway reports a QR this device had expired', async () => {
+    let now = Date.UTC(2026, 9, 19, 5);
+    const store = new OpsStore(memoryStore(), account.id, account.business, () => now);
+    const ops = new Ops(store, account, { toast: () => {}, devicePointId: () => 'k1' });
+    ops.sites = { locations: [{ id: 'mall', name: 'Mall', city: 'Jakarta', address: '', createdAt: 0 }], points: [{ id: 'k1', locationId: 'mall', name: 'Kiosk 1', code: 'K1', active: true, createdAt: 0 }] };
+    const order = ops.createOrder({ lines: [{ kind: 'session', refId: 'photobox', label: 'GIF', unitPrice: 30_000, qty: 1 }], presetId: null, voucherCode: '', channel: 'booth', branchId: 'mall', boothId: 'k1' });
+    const late = await ops.chargeQris(order.id);
+    now += 60 * 60_000;
+    ops.expirePayments();
+    const fresh = await ops.chargeQris(order.id);
+    expect(fresh.id).not.toBe(late.id);
+    ops.gateway.simulatePaid!(late.reference);
+    expect(ops.order(order.id).status).toBe('paid');
+    // The QR still on screen closes, and a payment arriving for it now changes nothing.
+    expect(ops.order(order.id).payments.find((payment) => payment.id === fresh.id)?.status).toBe('expired');
+    ops.gateway.simulatePaid!(fresh.reference);
+    expect(ops.order(order.id).payments.filter((payment) => payment.status === 'paid')).toHaveLength(1);
+  });
+
   it('keeps merchandise stock honest', () => {
     const { ops } = setup();
     ops.openShift('mall', 0);

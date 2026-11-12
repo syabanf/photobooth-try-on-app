@@ -465,11 +465,30 @@ export class Ops {
   }
 
   /** Starts a dynamic QRIS charge for what is due. The gateway callback finishes it. */
-  async chargeQris(orderId: string): Promise<Payment> {
+  /** QR charges being created, by order, so a double tap shares one charge. */
+  private charging = new Map<string, Promise<Payment>>();
+
+  /**
+   * A QRIS charge for what the order still owes. Safe to repeat: a second tap while the first is
+   * on its way gets the same charge, and a QR still waiting for that amount is shown again rather
+   * than replaced, since the customer may have scanned it already.
+   */
+  chargeQris(orderId: string): Promise<Payment> {
+    let charge = this.charging.get(orderId);
+    if (!charge) {
+      charge = this.createQrisCharge(orderId).finally(() => this.charging.delete(orderId));
+      this.charging.set(orderId, charge);
+    }
+    return charge;
+  }
+
+  private async createQrisCharge(orderId: string): Promise<Payment> {
     const order = this.order(orderId);
     this.requireMethod(order, 'qris');
     const due = amountDue(order);
     if (due <= 0) throw new Error('Nothing is due.');
+    const waiting = order.payments.find((payment) => payment.method === 'qris' && payment.status === 'pending' && payment.amount === due && (payment.expiresAt ?? 0) > this.now());
+    if (waiting) return waiting;
     const reference = `${order.number}-${order.payments.length + 1}`;
     const expiresInMs = this.payments.gateway.qrExpiryMinutes * 60_000;
     const charge = await this.gateway.createQris(due, reference, expiresInMs);
@@ -495,18 +514,26 @@ export class Ops {
   }
 
   /** The gateway callback: marks the QRIS payment paid and unlocks whatever waited on it. */
+  /**
+   * The gateway says a QR was paid. A repeat callback finds the payment paid and does nothing. A
+   * late one for a QR this device already expired or replaced still settles an open order, since
+   * the customer's money has moved; once the order is closed the payment stays as it was.
+   */
   private qrisPaid(reference: string): void {
-    const order = this.state.orders.find((entry) => entry.payments.some((payment) => payment.reference === reference && payment.status === 'pending'));
-    if (!order) return;
+    const order = this.state.orders.find((entry) => entry.status === 'open' && entry.payments.some((payment) => payment.reference === reference && (payment.status === 'pending' || payment.status === 'expired')));
+    if (!order || amountDue(order) === 0) return;
     this.settlePending(order.id, reference, '');
   }
 
   private settlePending(orderId: string, reference: string, note: string): void {
     this.store.update((draft) => {
-      const payment = draft.orders.find((entry) => entry.id === orderId)!.payments.find((entry) => entry.reference === reference)!;
+      const order = draft.orders.find((entry) => entry.id === orderId)!;
+      const payment = order.payments.find((entry) => entry.reference === reference)!;
       payment.status = 'paid';
       payment.paidAt = this.now();
       if (note) payment.note = note;
+      // Paid in full: any other QR still showing for this order closes, so nobody pays twice.
+      if (amountDue(order) === 0) for (const other of order.payments) if (other.status === 'pending') other.status = 'expired';
     });
     if (amountDue(this.order(orderId)) === 0) this.finalize(orderId);
   }

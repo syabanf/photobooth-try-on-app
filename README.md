@@ -168,9 +168,10 @@ The rail holds Dashboard, Booth, Point of sale, Queue, Try on, Photobooth and Ga
 **What the build does for production**
 
 - *Two bundles.* The TV, customer screen, kiosk, check-in and photo pages load about 60 kB (gzip) without the camera, MediaPipe or the Decart SDK. The staff app loads about 145 kB first; the Decart SDK and LiveKit (another 180 kB gzip) load only when someone turns on AI mode or an AI print.
-- *The server* compresses HTML, JS, CSS and the wasm runtime with brotli or gzip (the 11.7 MB wasm goes out as 2.7 MB), caches hashed bundles for a year, revalidates `index.html` on every load, and sends `nosniff`, `SAMEORIGIN`, `no-referrer` and a camera-only Permissions-Policy.
+- *The server* compresses HTML, JS, CSS and the wasm runtime with brotli or gzip (the 11.7 MB wasm goes out as 2.7 MB), caches hashed bundles for a year, revalidates everything else (`index.html`, the wasm runtime, models, icons) with an ETag so an unchanged file costs a 304 and a new runtime never meets an old bundle, and sends `nosniff`, `SAMEORIGIN`, `no-referrer` and a camera-only Permissions-Policy.
 - *Unattended screens* keep the screen awake, block pinch zoom, long-press menus and text selection, and reload themselves: the TV and customer screen 10 seconds after an uncaught error and every 6 hours, the kiosk at its start screen once it has run 6 hours.
 - *The staff app* shows any uncaught error as a notice, once per message a minute.
+- *Payments are safe to repeat.* A double tap on Pay shares one QRIS charge, and a QR still waiting for the same amount shows again instead of a new one. A repeated gateway callback changes nothing. A late callback for a QR this device had expired still settles an open order, and once an order is paid any other QR for it closes so nobody pays twice. Kiosk buttons rest while their work runs.
 - *Demo items* from dummyjson.com and Wikimedia appear only in development. Set `VITE_DEMO_CATALOG=1` at build time to keep them.
 - *DM Sans* ships inside the bundle (`src/assets/fonts`, SIL Open Font License), so screens keep their typeface without internet.
 - A web manifest and icon let a tablet add the app to its home screen.
