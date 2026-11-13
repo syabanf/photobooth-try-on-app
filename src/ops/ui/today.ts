@@ -7,6 +7,7 @@ import type { Ops } from '../ops';
 import { isOnline } from '../telemetry';
 import { localTimeZone, zonedTime } from '../time';
 import { badge, el, money, statRow } from './kit';
+import { setupBanner } from './pages/setup';
 import type { View } from '../../ui';
 
 export function renderToday(ops: Ops, nav: (view: View) => void): HTMLElement {
@@ -74,6 +75,8 @@ export function renderToday(ops: Ops, nav: (view: View) => void): HTMLElement {
     links.append(button);
   }
   body.append(links);
+  const setup = setupBanner(ops, nav);
+  if (setup) body.prepend(setup);
   card.append(head, body);
   return card;
 }

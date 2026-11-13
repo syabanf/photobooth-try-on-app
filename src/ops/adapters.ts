@@ -3,7 +3,7 @@
 //
 //   PaymentGateway  → a server that calls Midtrans/Xendit/DOKU with the server key and forwards
 //                     their payment callback to the booth (webhook → push).
-//   CameraDriver    → a native bridge to Canon EDSDK (Electron or a local helper service).
+//   CameraDriver    → the browser webcam, a DSLR over the network (src/dslr), or the simulator.
 //   printImage      → the OS print queue; Chrome in --kiosk-printing mode prints with no dialog.
 //   CloudTransport  → the cloud API the outbox syncs to.
 
@@ -90,10 +90,14 @@ export interface CameraState {
 }
 
 export interface CameraDriver {
-  readonly kind: 'webcam' | 'edsdk';
+  readonly kind: 'webcam' | 'edsdk' | 'dslr';
   state(): CameraState;
   /** Applies a profile. Drivers re-apply the saved preview profile on their own after power-up. */
   apply(profile: 'preview' | 'capture', settings: CameraSettings): Promise<void>;
+  /** A full-size still from the camera itself; absent when photos come from the preview frame. */
+  shoot?(): Promise<Blob>;
+  /** Stops any polling when a new setup replaces this driver. */
+  close?(): void;
   onChange(listener: (state: CameraState) => void): () => void;
 }
 

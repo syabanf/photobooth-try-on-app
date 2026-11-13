@@ -1,11 +1,13 @@
-// Reports: revenue grouped by day, booth, branch, shift, frame or mode; CSV export; and the
-// settlement check of a gateway report against the ledger.
+// Reports: revenue grouped by day, booth, branch, shift, product, frame or mode; the floor (queue,
+// gate and AI prints); CSV export; and the settlement check of a gateway report against the ledger.
 
 import { lineNet, paidAmount } from './cart';
-import type { BoothSession, Order, Payment, Refund, Rupiah } from './model';
+import type { BoothSession, FaceRecord, LineKind, Order, Payment, Refund, Rupiah, Ticket } from './model';
 import { zonedTime } from './time';
 
-export type GroupBy = 'day' | 'branch' | 'booth' | 'shift' | 'frame' | 'mode';
+export type GroupBy = 'day' | 'branch' | 'booth' | 'shift' | 'product' | 'frame' | 'mode';
+
+export const PRODUCT_LABELS: Record<LineKind, string> = { session: 'Photo sessions', preset: 'AI presets', print: 'Extra prints', reprint: 'Reprints', merch: 'Merchandise' };
 
 export interface ReportRow {
   key: string;
@@ -49,6 +51,27 @@ export function revenueReport(input: ReportInput, groupBy: GroupBy): ReportRow[]
       entry.net += session.price;
     }
     return [...rows.values()].sort((a, b) => b.sessions - a.sessions);
+  }
+
+  if (groupBy === 'product') {
+    // One row per kind of thing sold, from its lines: an order with a session and two prints
+    // counts in both rows, and a refund lands on the row of the line it gave back.
+    const paid = input.orders.filter((order) => order.status === 'paid');
+    for (const order of paid) {
+      for (const kind of new Set(order.lines.map((line) => line.kind))) row(kind).orders += 1;
+      for (const line of order.lines) {
+        const entry = row(line.kind);
+        entry.gross += lineNet(line);
+        if (line.kind === 'session') entry.sessions += line.qty;
+      }
+    }
+    const lines = new Map(paid.flatMap((order) => order.lines.map((line) => [line.id, line] as const)));
+    for (const refund of input.refunds) {
+      const line = lines.get(refund.lineId);
+      if (line) row(line.kind).refunds += refund.amount;
+    }
+    for (const entry of rows.values()) entry.net = entry.gross - entry.refunds;
+    return [...rows.values()].sort((a, b) => b.net - a.net);
   }
 
   const keyOf = (order: Order): string => {
@@ -161,4 +184,41 @@ export function reconcileSettlement(payments: readonly Payment[], rows: readonly
     if (!seen.has(payment.reference)) result.missingInGateway.push(payment);
   }
   return result;
+}
+
+export interface FloorReport {
+  tickets: number;
+  served: number;
+  skipped: number;
+  /** Average minutes from taking a ticket to being called, for tickets that were called. */
+  averageWait: number | null;
+  /** Tickets the gate camera photographed at least one face for. */
+  partiesPhotographed: number;
+  faces: number;
+  /** AI preset prints sold, at the booth panel or the kiosk. */
+  presetPrints: number;
+  presetRevenue: Rupiah;
+  /** Tickets per hour of the day, 0 to 23, in the report's time zone. */
+  byHour: number[];
+}
+
+/** How the floor ran: the queue, the gate camera and what the parties bought as AI prints. */
+export function floorReport(input: { tickets: readonly Ticket[]; faces: readonly FaceRecord[]; orders: readonly Order[]; timeZone: string }): FloorReport {
+  const called = input.tickets.filter((ticket) => ticket.calledAt);
+  const waits = called.map((ticket) => (ticket.calledAt! - ticket.createdAt) / 60_000);
+  const photographed = new Set(input.faces.map((face) => face.ticketId).filter((id): id is string => id !== null));
+  const presetLines = input.orders.filter((order) => order.status === 'paid').flatMap((order) => order.lines.filter((line) => line.kind === 'preset'));
+  const byHour = Array.from({ length: 24 }, () => 0);
+  for (const ticket of input.tickets) byHour[Math.floor(zonedTime(ticket.createdAt, input.timeZone).minutes / 60) % 24] += 1;
+  return {
+    tickets: input.tickets.length,
+    served: input.tickets.filter((ticket) => ticket.status === 'done').length,
+    skipped: input.tickets.filter((ticket) => ticket.status === 'skipped').length,
+    averageWait: waits.length ? waits.reduce((sum, minutes) => sum + minutes, 0) / waits.length : null,
+    partiesPhotographed: input.tickets.filter((ticket) => photographed.has(ticket.id)).length,
+    faces: input.faces.length,
+    presetPrints: presetLines.reduce((sum, line) => sum + line.qty, 0),
+    presetRevenue: presetLines.reduce((sum, line) => sum + lineNet(line), 0),
+    byHour,
+  };
 }

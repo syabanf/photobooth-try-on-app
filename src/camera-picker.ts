@@ -1,6 +1,6 @@
 // The camera source dialog: a USB or built-in camera by name, or an IP camera by URL.
 
-import { checkIpUrl, guessFormat, listCameras, readSource, writeSource, type CameraSource } from './camera-source';
+import { checkIpUrl, describeSource, guessFormat, listCameras, readSource, writeSource, type CameraSource } from './camera-source';
 import { formDialog } from './dialogs';
 
 export async function pickCamera(onPick: (source: CameraSource) => void): Promise<void> {
@@ -9,7 +9,7 @@ export async function pickCamera(onPick: (source: CameraSource) => void): Promis
   const value = current.kind === 'device' ? current.deviceId : current.kind;
   const dialog = formDialog({
     title: 'Camera',
-    description: 'Pick the camera this device uses. An IP camera works through its MJPEG or HLS link.',
+    description: 'Pick the camera this device uses. An IP camera works through its MJPEG or HLS link. A DSLR connects from Devices → Cameras → Set up camera.',
     submitLabel: 'Use camera',
     fields: [
       {
@@ -20,6 +20,7 @@ export async function pickCamera(onPick: (source: CameraSource) => void): Promis
           { value: 'auto', label: 'Default camera' },
           ...cameras.map((camera, index) => ({ value: camera.deviceId, label: camera.label || `Camera ${index + 1}` })),
           { value: 'ip', label: 'IP camera (link)' },
+          ...(current.kind === 'dslr' ? [{ value: 'dslr', label: `${describeSource(current)} (live view)` }] : []),
         ],
         hint: cameras.some((camera) => !camera.label) ? 'Camera names appear once the browser has camera permission.' : undefined,
       },
@@ -45,6 +46,7 @@ export async function pickCamera(onPick: (source: CameraSource) => void): Promis
       const choice = String(values.source);
       let source: CameraSource;
       if (choice === 'auto') source = { kind: 'auto' };
+      else if (choice === 'dslr') source = current;
       else if (choice === 'ip') {
         const url = checkIpUrl(String(values.url));
         source = { kind: 'ip', url, format: values.format === 'auto' ? guessFormat(url) : (values.format as 'mjpeg' | 'video') };

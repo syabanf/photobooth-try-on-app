@@ -1,21 +1,25 @@
-// Where this device's picture comes from: a USB or built-in camera picked by name, or an IP
-// camera by URL. Every source ends up as a MediaStream, so try-on, recording and Decart treat an
+// Where this device's picture comes from: a USB or built-in camera picked by name, an IP
+// camera by URL, or a DSLR's live view over the network. Every source ends up as a MediaStream, so try-on, recording and Decart treat an
 // IP camera exactly like a webcam.
 //
 // Browsers cannot open RTSP. An RTSP camera goes through a small bridge such as go2rtc or
 // MediaMTX, which serves it as MJPEG or as a video stream the browser plays.
 
+import type { DslrLink } from './ops/model';
+import { dslrClient } from './dslr/protocol';
+
 export type CameraSource =
   | { kind: 'auto' }
   | { kind: 'device'; deviceId: string; label: string }
-  | { kind: 'ip'; url: string; format: 'mjpeg' | 'video' };
+  | { kind: 'ip'; url: string; format: 'mjpeg' | 'video' }
+  | { kind: 'dslr'; link: DslrLink; model: string };
 
 const KEY = 'vto:camera-source';
 
 export function readSource(): CameraSource {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null') as CameraSource | null;
-    return saved && ['auto', 'device', 'ip'].includes(saved.kind) ? saved : { kind: 'auto' };
+    return saved && ['auto', 'device', 'ip', 'dslr'].includes(saved.kind) ? saved : { kind: 'auto' };
   } catch {
     return { kind: 'auto' };
   }
@@ -38,6 +42,7 @@ export function guessFormat(url: string): 'mjpeg' | 'video' {
 export function describeSource(source: CameraSource): string {
   if (source.kind === 'device') return source.label || 'Camera';
   if (source.kind === 'ip') return `IP camera · ${new URL(source.url).host}`;
+  if (source.kind === 'dslr') return `${source.model || 'DSLR'} · ${source.link.host}`;
   return 'Default camera';
 }
 
@@ -136,10 +141,52 @@ async function openIp(url: string, format: 'mjpeg' | 'video'): Promise<OpenedSou
   };
 }
 
+/**
+ * Pulls a DSLR's live view one JPEG at a time into a canvas and streams the canvas. The camera
+ * sets the pace up to 25 frames a second (CCAPI gives about 15 to 25 on Wi-Fi); a dropped frame is skipped.
+ */
+async function openDslr(link: DslrLink): Promise<OpenedSource> {
+  const client = dslrClient(link);
+  await client.startLiveView();
+  const first = await createImageBitmap(await client.liveViewFrame());
+  const canvas = document.createElement('canvas');
+  canvas.width = first.width;
+  canvas.height = first.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(first, 0, 0);
+  first.close();
+  let running = true;
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  void (async () => {
+    while (running) {
+      const started = performance.now();
+      try {
+        const frame = await createImageBitmap(await client.liveViewFrame());
+        if (running) ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+        frame.close();
+        // Never ask faster than the stream plays, so a quick camera is not flooded with requests.
+        await sleep(Math.max(0, 1000 / FPS - (performance.now() - started)));
+      } catch {
+        // The camera is busy (shooting, focusing) or the network dropped a frame: try again shortly.
+        await sleep(250);
+      }
+    }
+  })();
+  const stream = canvas.captureStream(FPS);
+  return {
+    stream,
+    close() {
+      running = false;
+      stream.getTracks().forEach((track) => track.stop());
+    },
+  };
+}
+
 const PREFERRED = { width: { ideal: 1280 }, height: { ideal: 720 } };
 
 export async function openSource(source: CameraSource): Promise<OpenedSource> {
   if (source.kind === 'ip') return openIp(source.url, source.format);
+  if (source.kind === 'dslr') return openDslr(source.link);
   if (!navigator.mediaDevices?.getUserMedia) throw new DOMException('Camera API unavailable', 'SecurityError');
   const video: MediaTrackConstraints =
     source.kind === 'device' ? { ...PREFERRED, deviceId: { exact: source.deviceId } } : { ...PREFERRED, facingMode: 'user' };

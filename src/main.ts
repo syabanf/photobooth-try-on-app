@@ -42,6 +42,7 @@ import { mountDashboard, type DashboardView } from './dashboard-view';
 import { OpsStore } from './ops/store';
 import { Ops } from './ops/ops';
 import { SimulatedEdsdk, WebcamDriver } from './ops/adapters';
+import { DslrDriver } from './dslr/driver';
 import { mayOpen, mountOpsRouter, type OpsRouter } from './ops/ui/router';
 import { mountSessionPanel } from './ops/ui/session-panel';
 import { renderToday } from './ops/ui/today';
@@ -954,16 +955,27 @@ async function startBusiness(account: Account): Promise<Ops> {
   const gate = mountGatePanel(ops, { captureFaces, flash: () => booth.flash() });
   business = { ops, router, session, presets, gate };
 
-  // The device's camera: a Canon over EDSDK when its booth says so, the webcam otherwise.
-  const boothId = sites?.devicePointId();
-  const profile = boothId ? ops.cameraProfile(boothId) : null;
-  ops.camera = profile?.driver === 'edsdk'
-    ? new SimulatedEdsdk(() => ops.cameraProfile(boothId!).preview)
-    : new WebcamDriver(() => (video.srcObject as MediaStream | null)?.getVideoTracks()[0] ?? null);
-  if (profile) void ops.camera.apply('preview', profile.preview).catch(() => {});
-  ops.camera.onChange((camera) => {
-    const id = sites?.devicePointId();
-    if (id && heartbeats) ops.heartbeat(id, camera);
+  // The device's camera follows its booth's setup: a DSLR on the network, the simulator, or the
+  // webcam. Saving the setup on Devices builds the driver again and restarts the preview.
+  const attachCamera = () => {
+    const boothId = sites?.devicePointId();
+    const profile = boothId ? ops.cameraProfile(boothId) : null;
+    ops.camera?.close?.();
+    ops.camera = profile?.driver === 'dslr' && profile.dslr
+      ? new DslrDriver(profile.dslr)
+      : profile?.driver === 'edsdk'
+        ? new SimulatedEdsdk(() => ops.cameraProfile(boothId!).preview)
+        : new WebcamDriver(() => (video.srcObject as MediaStream | null)?.getVideoTracks()[0] ?? null);
+    if (profile) void ops.camera.apply('preview', profile.preview).catch(() => {});
+    ops.camera.onChange((camera) => {
+      const id = sites?.devicePointId();
+      if (id && heartbeats) ops.heartbeat(id, camera);
+    });
+  };
+  attachCamera();
+  document.addEventListener('vto:camera-changed', () => {
+    attachCamera();
+    void boot();
   });
 
   // Telemetry, alerts and sync every 30 seconds; the retention purge on start and every 6 hours.
@@ -998,6 +1010,8 @@ async function start(): Promise<void> {
     },
   });
   await sites.refresh();
+  // The setup guide's "Link device" step opens the same picker as the dashboard.
+  document.addEventListener('vto:pick-device', () => sites?.pickDevicePoint());
   const ops = await startBusiness(account);
   ops.accounts = backend;
   try {

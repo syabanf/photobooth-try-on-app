@@ -41,6 +41,7 @@
   --card: #ffffff;
   --border: #e6e5e7;
   --silver: #c0c0c0;
+  --chart-muted: #d4d3d6;
   --muted: #8b8b8b;
   --body: #333333;
   --foreground: #101112;
@@ -726,6 +727,8 @@ p {
   display: grid;
   aspect-ratio: 3 / 4;
   max-height: 70dvh;
+  /* A camera narrower than the card (a DSLR's 3:2 under the height cap) sits in the middle. */
+  margin-inline: auto;
   transform: scaleX(-1);
 }
 
@@ -4534,6 +4537,391 @@ body.display-mode {
 
 .display .btn-primary {
   background: var(--brand-accent);
+}
+
+/* ---------- reports: tickets by hour ---------- */
+
+.hour-bars {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  align-items: end;
+  gap: 6px;
+  height: 180px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.hour-bar {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  min-width: 0;
+}
+
+.hour-bar-fill {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 6px 6px 2px 2px;
+  background: var(--chart-muted);
+}
+
+.hour-bar-fill.is-peak {
+  background: var(--accent);
+}
+
+.hour-bar-count,
+.hour-bar-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.hour-bar-count {
+  color: var(--foreground);
+}
+
+/* ---------- setup guide ---------- */
+
+.setup-hero {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  overflow: hidden;
+  padding: 24px;
+  border-radius: var(--radius-hero);
+  background: var(--ink);
+  color: var(--on-ink);
+  box-shadow: var(--shadow-float);
+}
+
+.setup-hero::before {
+  content: '';
+  position: absolute;
+  top: -120px;
+  right: -80px;
+  width: 320px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.3;
+  filter: blur(80px);
+  pointer-events: none;
+}
+
+.setup-hero > * {
+  position: relative;
+}
+
+.setup-hero-text {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.setup-kicker {
+  margin: 0;
+  color: var(--on-ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.setup-count {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.setup-hero-desc {
+  margin: 0;
+  color: var(--on-ink-muted);
+  font-size: 14px;
+}
+
+.setup-bar {
+  height: 6px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.15);
+}
+
+.setup-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.setup-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-radius: var(--radius-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.setup-stage-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.setup-stage-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.setup-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.setup-step-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: var(--card);
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: var(--shadow-card);
+}
+
+.setup-step.is-done .setup-step-mark {
+  background: var(--success-soft);
+  color: var(--success);
+  box-shadow: none;
+}
+
+.setup-step-mark svg {
+  width: 16px;
+  height: 16px;
+}
+
+.setup-step-text {
+  min-width: 0;
+}
+
+.setup-step-text .card-desc {
+  margin-top: 2px;
+}
+
+.setup-step-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.setup-optional {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .setup-step {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .setup-step > .btn {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+/* The dashboard's reminder while required setup steps remain. */
+.setup-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--accent-soft);
+}
+
+.setup-banner > div {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+/* A row of anchors over a long settings page. */
+.section-jump {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+  padding: 6px;
+  overflow-x: auto;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  scrollbar-width: none;
+}
+
+.section-jump-link {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  color: var(--body);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.section-jump-link:hover {
+  background: var(--surface);
+}
+
+.ops-section {
+  scroll-margin-top: 64px;
+}
+
+/* ---------- camera setup (Devices → Cameras) ---------- */
+
+.camera-setup-choices {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.camera-setup-address {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.camera-setup-address .btn {
+  height: 44px;
+}
+
+@media (max-width: 520px) {
+  .camera-setup-choices,
+  .camera-setup-address {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.camera-setup-result:empty {
+  display: none;
+}
+
+.camera-setup-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.camera-setup-result > div {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.camera-setup-preview {
+  width: min(220px, 100%);
+  border-radius: 12px;
+  background: var(--ink);
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+}
+
+.camera-setup-ok {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  color: var(--success);
+  font-weight: 700;
+}
+
+.camera-setup-ok svg {
+  width: 16px;
+  height: 16px;
+}
+
+.camera-setup-features {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.camera-setup-feature {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.camera-setup-feature.is-off {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.camera-setup-feature-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.camera-setup-feature-title {
+  font-size: 14px;
+  font-weight: 600;
 }
 
 /* ---------- display lock ---------- */

@@ -69,6 +69,17 @@ function fresh() {
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/** A DSLR's JPEG as a canvas, so effects and frames treat it like a preview frame. */
+async function blobToCanvas(blob: Blob): Promise<HTMLCanvasElement> {
+  const image = await createImageBitmap(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  canvas.getContext('2d')!.drawImage(image, 0, 0);
+  image.close();
+  return canvas;
+}
+
 export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
   const panel = document.querySelector<HTMLElement>('#sessionPanel')!;
   let flow = fresh();
@@ -350,11 +361,19 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
     hooks.countdown(null);
   }
 
+  /** A still: from the DSLR at full size when the booth shoots with one, else the preview frame. */
   async function snap(): Promise<HTMLCanvasElement> {
     const id = booth()!;
     await ops.camera?.apply('capture', ops.cameraProfile(id).capture).catch(() => {});
     hooks.flash();
-    const frame = shotFrame();
+    let frame: HTMLCanvasElement;
+    try {
+      frame = ops.camera?.shoot ? applyEffects(await blobToCanvas(await ops.camera.shoot()), flow.effects) : shotFrame();
+    } catch (error) {
+      // The camera missed the shot: the preview frame keeps the session going, and staff hear why.
+      notice(`DSLR: ${(error as Error).message} Used the preview frame instead.`, 'warn');
+      frame = shotFrame();
+    }
     await ops.camera?.apply('preview', ops.cameraProfile(id).preview).catch(() => {});
     return frame;
   }

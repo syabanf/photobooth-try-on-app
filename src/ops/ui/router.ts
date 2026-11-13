@@ -17,6 +17,7 @@ import { renderQueue } from './pages/queue';
 import { renderReports } from './pages/reports';
 import { renderSales } from './pages/sales';
 import { renderSettings } from './pages/settings';
+import { renderSetup } from './pages/setup';
 import { renderStaff } from './pages/staff';
 import { renderVouchers } from './pages/vouchers';
 import { el } from './kit';
@@ -32,6 +33,7 @@ export interface PageContext {
 type Render = (context: PageContext) => HTMLElement;
 
 const PAGES: Record<OpsView, { render: Render; permission: Permission }> = {
+  setup: { render: renderSetup, permission: 'settings.manage' },
   faces: { render: renderFaces, permission: 'queue.run' },
   roles: { render: renderRoles, permission: 'staff.manage' },
   signins: { render: renderSignIns, permission: 'staff.manage' },

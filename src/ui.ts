@@ -3,14 +3,14 @@ import { openDialog } from './dialogs';
 import { hydrateIcons, icon, type IconName } from './icons';
 
 export type Mode = 'local' | 'ai';
-export type OpsView = 'faces' | 'roles' | 'signins' | 'history' | 'pos' | 'queue' | 'sales' | 'payments' | 'reports' | 'vouchers' | 'frames' | 'branding' | 'devices' | 'staff' | 'fleet' | 'settings';
+export type OpsView = 'setup' | 'faces' | 'roles' | 'signins' | 'history' | 'pos' | 'queue' | 'sales' | 'payments' | 'reports' | 'vouchers' | 'frames' | 'branding' | 'devices' | 'staff' | 'fleet' | 'settings';
 export type View = 'dashboard' | 'tryon' | 'photobooth' | 'gallery' | 'sites' | 'session' | 'presets' | 'gate' | OpsView;
 
 /** Views that show the camera stage. */
 export const CAMERA_VIEWS: readonly View[] = ['tryon', 'photobooth', 'session', 'presets', 'gate'];
 
 /** Business pages, drawn by src/ops/ui into one container. */
-export const OPS_VIEWS: readonly OpsView[] = ['faces', 'roles', 'signins', 'history', 'pos', 'queue', 'sales', 'payments', 'reports', 'vouchers', 'frames', 'branding', 'devices', 'staff', 'fleet', 'settings'];
+export const OPS_VIEWS: readonly OpsView[] = ['setup', 'faces', 'roles', 'signins', 'history', 'pos', 'queue', 'sales', 'payments', 'reports', 'vouchers', 'frames', 'branding', 'devices', 'staff', 'fleet', 'settings'];
 export const isOpsView = (view: View): view is OpsView => (OPS_VIEWS as readonly string[]).includes(view);
 export type StatusKind = 'info' | 'warn' | 'error' | 'ok';
 
@@ -61,7 +61,7 @@ const VIEWS: Record<View, { kicker: string; title: string; capture: string }> = 
   tryon: { kicker: 'Virtual try-on', title: 'Try on', capture: 'Take snapshot' },
   photobooth: { kicker: 'Timed shots', title: 'Photobooth', capture: 'Start photobooth' },
   gallery: { kicker: 'Saved on this device', title: 'Gallery', capture: 'Open camera' },
-  sites: { kicker: 'Master data', title: 'Locations', capture: 'Open camera' },
+  sites: { kicker: 'Where you run', title: 'Locations and booths', capture: 'Open camera' },
   session: { kicker: 'Customer session', title: 'Booth', capture: 'Open camera' },
   presets: { kicker: 'Your face in every template', title: 'AI presets', capture: 'Open camera' },
   gate: { kicker: 'Scan tickets, photograph the party', title: 'Gate', capture: 'Open camera' },
@@ -70,26 +70,29 @@ const VIEWS: Record<View, { kicker: string; title: string; capture: string }> = 
   queue: { kicker: 'Customers waiting', title: 'Queue', capture: 'Open camera' },
   sales: { kicker: 'Every rupiah', title: 'Transactions', capture: 'Open camera' },
   payments: { kicker: 'Methods, fees and the gateway', title: 'Payments', capture: 'Open camera' },
-  reports: { kicker: 'Per shift, day, booth and frame', title: 'Reports', capture: 'Open camera' },
+  reports: { kicker: 'Sales, products, payments, cash and the floor', title: 'Reports', capture: 'Open camera' },
   vouchers: { kicker: 'Codes and events', title: 'Vouchers', capture: 'Open camera' },
   frames: { kicker: 'Print templates', title: 'Frames', capture: 'Open camera' },
   branding: { kicker: 'Booth screens and gallery', title: 'Branding', capture: 'Open camera' },
-  devices: { kicker: 'Printers, cameras and alerts', title: 'Devices', capture: 'Open camera' },
+  devices: { kicker: 'Cameras, printers and alerts', title: 'Devices', capture: 'Open camera' },
   staff: { kicker: 'Access · who signs in', title: 'Users', capture: 'Open camera' },
   roles: { kicker: 'Access · what each role may do', title: 'Roles', capture: 'Open camera' },
   signins: { kicker: 'Access · who came in, and when', title: 'Sign-in log', capture: 'Open camera' },
   history: { kicker: 'Everything that changed', title: 'Activity history', capture: 'Open camera' },
   fleet: { kicker: 'Updates, support and sync', title: 'Fleet', capture: 'Open camera' },
-  settings: { kicker: 'Prices, retention and payments', title: 'Settings', capture: 'Open camera' },
+  settings: { kicker: 'What things cost, and the rules', title: 'Prices and rules', capture: 'Open camera' },
+  setup: { kicker: 'Before customers arrive', title: 'Setup guide', capture: 'Open camera' },
 };
 
 /** Every page in the More sheet, grouped, with the icon its row shows. */
 const MENU: { group: string; items: [View, string, IconName][] }[] = [
-  { group: 'Floor', items: [['session', 'Booth', 'booth'], ['presets', 'AI presets', 'sparkles'], ['gate', 'Gate', 'qr'], ['faces', 'Faces', 'users'], ['pos', 'Point of sale', 'cart'], ['queue', 'Queue', 'queue'], ['tryon', 'Try on', 'shirt'], ['photobooth', 'Photobooth', 'aperture'], ['gallery', 'Gallery', 'images']] },
-  { group: 'Sales', items: [['sales', 'Transactions', 'receipt'], ['payments', 'Payments', 'wallet'], ['reports', 'Reports', 'chart'], ['vouchers', 'Vouchers', 'ticket']] },
-  { group: 'Content', items: [['frames', 'Frames', 'frame'], ['branding', 'Branding', 'palette']] },
-  { group: 'Operations', items: [['sites', 'Locations', 'pin'], ['devices', 'Devices and alerts', 'printer'], ['history', 'Activity history', 'clock'], ['fleet', 'Fleet and support', 'rocket'], ['settings', 'Settings', 'settings']] },
-  { group: 'Access (IAM)', items: [['staff', 'Users', 'users'], ['roles', 'Roles and permissions', 'shield'], ['signins', 'Sign-in log', 'key']] },
+  // Ordered the way a venue works: serve customers, run the studio, count the money, set things up.
+  { group: 'Serve customers', items: [['session', 'Booth', 'booth'], ['presets', 'AI presets', 'sparkles'], ['gate', 'Gate', 'qr'], ['queue', 'Queue', 'queue'], ['pos', 'Point of sale', 'cart']] },
+  { group: 'Studio', items: [['tryon', 'Try on', 'shirt'], ['photobooth', 'Photobooth', 'aperture'], ['gallery', 'Gallery', 'images'], ['faces', 'Faces', 'users']] },
+  { group: 'Sales and reports', items: [['reports', 'Reports', 'chart'], ['sales', 'Transactions', 'receipt'], ['history', 'Activity history', 'clock'], ['vouchers', 'Vouchers', 'ticket']] },
+  { group: 'Setup', items: [['setup', 'Setup guide', 'check'], ['sites', 'Locations and booths', 'pin'], ['devices', 'Cameras, printers and alerts', 'printer'], ['payments', 'Payments', 'wallet'], ['settings', 'Prices and rules', 'settings'], ['frames', 'Frames', 'frame'], ['branding', 'Branding', 'palette']] },
+  { group: 'Team and access', items: [['staff', 'Users', 'users'], ['roles', 'Roles and permissions', 'shield'], ['signins', 'Sign-in log', 'key']] },
+  { group: 'System', items: [['fleet', 'Fleet and support', 'rocket']] },
 ];
 
 /** Items shown before "Show all", so the grid stays short on a phone. */

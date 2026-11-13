@@ -330,9 +330,42 @@ export interface CameraSettings {
   pictureStyle: 'standard' | 'portrait' | 'landscape' | 'neutral' | 'faithful' | 'monochrome';
 }
 
+/** How the booth reaches a DSLR: Canon's network API on the camera, or digiCamControl over USB. */
+export type DslrProtocol = 'ccapi' | 'digicam';
+
+export interface DslrLink {
+  protocol: DslrProtocol;
+  /** The camera's address on the venue network (CCAPI), or the PC running digiCamControl. */
+  host: string;
+  port: number;
+}
+
+/** What the booth uses the DSLR for. Each one the camera cannot do stays off. */
+export interface DslrFeatures {
+  /** The camera's live view is the booth's preview. */
+  liveView: boolean;
+  /** Photos come from the DSLR at full resolution instead of the preview frame. */
+  capture: boolean;
+  /** The preview and capture profiles (ISO, aperture, shutter, white balance) go to the camera. */
+  settings: boolean;
+  /** Focus before each shot. */
+  autofocus: boolean;
+  /** The battery level shows on Devices and raises an alert when it runs low. */
+  battery: boolean;
+}
+
+export interface DslrSetup {
+  link: DslrLink;
+  features: DslrFeatures;
+  /** The model the camera reported when the booth tested the connection. */
+  model: string;
+}
+
 export interface CameraProfile {
   boothId: string;
-  driver: 'webcam' | 'edsdk';
+  /** webcam: the browser camera; dslr: a real DSLR; edsdk: the simulator that stands in for one. */
+  driver: 'webcam' | 'edsdk' | 'dslr';
+  dslr?: DslrSetup;
   preview: CameraSettings;
   capture: CameraSettings;
   secondaryDeviceId: string;

@@ -14,7 +14,7 @@ const MODES = Object.keys(SESSION_MODES) as SessionMode[];
 
 export function renderSettings({ ops }: PageContext): HTMLElement {
   const { state } = ops;
-  const view = page('Settings', 'Prices and rules every booth and till in this workspace follows.');
+  const view = page('Prices and rules', 'Prices and rules every booth and till in this workspace follows. Jump to a part below, or work down the page in order.');
 
   // ---------- booth categories ----------
   const categories = section('Booth categories', 'A kind of booth with its own price per session mode. Each booth belongs to one.');
@@ -353,6 +353,29 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
     ),
   );
 
-  view.body.append(categories.root, booths.root, prints.root, products.root, presets.root, rules.root, ads.root, events.root);
+  const parts: [string, string, HTMLElement][] = [
+    ['categories', 'Categories', categories.root],
+    ['booths', 'Booths', booths.root],
+    ['prints', 'Print prices', prints.root],
+    ['products', 'Merchandise', products.root],
+    ['presets', 'Discounts', presets.root],
+    ['rules', 'Operations', rules.root],
+    ['ads', 'Idle ads', ads.root],
+    ['events', 'Events', events.root],
+  ];
+  // A jump bar over the long page: each part keeps an anchor the setup guide links to.
+  const jump = el('nav', 'section-jump');
+  jump.setAttribute('aria-label', 'Parts of this page');
+  for (const [key, label, root] of parts) {
+    root.id = `settings-${key}`;
+    const link = el('a', 'section-jump-link', label);
+    link.href = `#settings-${key}`;
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      root.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    jump.append(link);
+  }
+  view.body.append(jump, ...parts.map(([, , root]) => root));
   return view.root;
 }

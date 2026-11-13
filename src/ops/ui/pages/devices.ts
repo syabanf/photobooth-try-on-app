@@ -3,14 +3,20 @@
 
 import { formDialog } from '../../../dialogs';
 import { APERTURE_STEPS, ISO_STEPS, SHUTTER_STEPS, SimulatedEdsdk } from '../../adapters';
-import { ALERT_LABELS, type CameraSettings, type NotifyChannel, type PaperSize, type Printer, type RoutingRule } from '../../model';
+import { ALERT_LABELS, type CameraProfile, type CameraSettings, type NotifyChannel, type PaperSize, type Printer, type RoutingRule } from '../../model';
 import { PAPER, PAPER_SIZES, paperState } from '../../printing';
 import { ALERT_KINDS, isOnline } from '../../telemetry';
+import { cameraSetupDialog } from '../../../dslr/setup-dialog';
 import type { PageContext } from '../router';
 import { act, badge, dateTime, el, notice, page, parseAmount, pills, section, table } from '../kit';
 
 type Tab = 'health' | 'printers' | 'cameras' | 'alerts' | 'routing' | 'messages';
 const view = { tab: 'health' as Tab };
+
+/** Opens Devices on a tab, for links from the setup guide. */
+export function showDevicesTab(tab: Tab): void {
+  view.tab = tab;
+}
 
 export function renderDevices({ ops, redraw }: PageContext): HTMLElement {
   const { state } = ops;
@@ -255,19 +261,27 @@ function readSettings(prefix: string, values: Record<string, unknown>): CameraSe
 function camerasTab(ops: PageContext['ops'], booths: ReturnType<PageContext['ops']['visibleBooths']>, device: string | null, redraw: () => void): HTMLElement {
   const box = el('div');
   const source = el('div', 'field-row');
-  source.append(
-    el('p', 'card-desc', 'This device’s picture: a USB or built-in camera, or an IP camera by its MJPEG or HLS link.'),
-    act('Camera source', 'btn btn-outline btn-sm', () => document.dispatchEvent(new Event('vto:pick-camera')), 'camera'),
-  );
+  source.append(el('p', 'card-desc', 'Each booth’s camera: a DSLR by its IP address (Canon CCAPI, or digiCamControl over USB), a webcam, or an IP stream. Set up picks the connection and what the booth uses it for; click a row for its preview and capture profiles.'));
+  if (device) source.append(act('Set up this device’s camera', 'btn btn-primary btn-sm', () => cameraSetupDialog(ops, device, redraw), 'camera'));
+  source.append(act('Camera source', 'btn btn-outline btn-sm', () => document.dispatchEvent(new Event('vto:pick-camera')), 'tv'));
   box.append(source);
   box.append(
     table(
       [
         { label: 'Booth', cell: (point) => `${point.name}${point.id === device ? ' (this device)' : ''}` },
-        { label: 'Camera', cell: (point) => (ops.cameraProfile(point.id).driver === 'edsdk' ? 'Canon (EDSDK)' : 'Webcam') },
+        { label: 'Camera', cell: (point) => cameraLabel(ops.cameraProfile(point.id)) },
         { label: 'Preview', cell: (point) => describeSettings(ops.cameraProfile(point.id).preview) },
         { label: 'Capture', cell: (point) => describeSettings(ops.cameraProfile(point.id).capture) },
         { label: 'BTS camera', cell: (point) => (ops.cameraProfile(point.id).secondaryDeviceId ? 'Recording' : '—') },
+        {
+          label: '',
+          cell: (point) => {
+            const setup = act('Set up', 'btn btn-outline btn-sm', () => cameraSetupDialog(ops, point.id, redraw), 'camera');
+            // The row opens the profiles; this button opens the connection.
+            setup.addEventListener('click', (event) => event.stopPropagation());
+            return setup;
+          },
+        },
       ],
       booths,
       {
@@ -281,7 +295,6 @@ function camerasTab(ops: PageContext['ops'], booths: ReturnType<PageContext['ops
             description: 'Preview settings run while customers frame themselves; capture settings apply for the shot, then preview comes back. They are re-applied whenever the camera powers up.',
             submitLabel: 'Save',
             fields: [
-              { name: 'driver', label: 'Camera', value: profile.driver, options: [{ value: 'webcam', label: 'Webcam (browser)' }, { value: 'edsdk', label: 'Canon DSLR or mirrorless (EDSDK)' }] },
               ...settingsFields('p_', profile.preview).map((field) => ({ ...field, label: `Preview · ${field.label}` })),
               ...settingsFields('c_', profile.capture).map((field) => ({ ...field, label: `Capture · ${field.label}` })),
               {
@@ -293,7 +306,7 @@ function camerasTab(ops: PageContext['ops'], booths: ReturnType<PageContext['ops
               },
             ],
             async submit(values) {
-              ops.saveCameraProfile({ boothId: point.id, driver: values.driver as 'webcam' | 'edsdk', preview: readSettings('p_', values), capture: readSettings('c_', values), secondaryDeviceId: String(values.secondaryDeviceId) });
+              ops.saveCameraProfile({ ...profile, preview: readSettings('p_', values), capture: readSettings('c_', values), secondaryDeviceId: String(values.secondaryDeviceId) });
             },
           });
         },
@@ -324,6 +337,11 @@ function camerasTab(ops: PageContext['ops'], booths: ReturnType<PageContext['ops
     box.append(sim.root);
   }
   return box;
+}
+
+function cameraLabel(profile: CameraProfile): string {
+  if (profile.driver === 'dslr' && profile.dslr) return `${profile.dslr.model} · ${profile.dslr.link.host}`;
+  return profile.driver === 'edsdk' ? 'Simulator' : 'Webcam or IP stream';
 }
 
 function describeSettings(settings: CameraSettings): string {

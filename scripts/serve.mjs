@@ -7,6 +7,7 @@ import { networkInterfaces } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { brotliCompress, constants, gzip } from 'node:zlib';
+import { handleCameraProxy } from './camera-proxy.mjs';
 
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || '0.0.0.0';
@@ -50,6 +51,7 @@ async function bytes(req, limit) {
 }
 
 async function serve(req, res) {
+  if (handleCameraProxy(req, res)) return;
   const url = new URL(req.url || '/', 'http://localhost');
   if (url.pathname === '/connection-test' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
