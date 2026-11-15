@@ -82,7 +82,7 @@ The scenery photos come from Wikimedia Commons and are each released as CC0 or p
 
 Everything a photobooth operator runs beside the camera: the customer's session at the booth, payments, the cashier, the queue, the owner's dashboard, and device health. It runs in this browser build today. The parts a browser cannot reach (the Canon and DNP SDKs, a payment gateway's server key, OTA and remote-access agents, email and WhatsApp) sit behind adapters with simulators, listed under [Going to production](#going-to-production).
 
-The rail holds Dashboard, Booth, AI presets, Point of sale, Queue, Try on, Photobooth and Gallery. **More** opens every page, grouped the way a venue works:
+The rail on tablets and desktops holds every page: Dashboard, then each group under its heading. Expanded (the default on desktop), a heading folds its group away and the rail remembers which groups are folded; opening a page unfolds its group. Collapsed to icons, thin dividers separate the groups and the list scrolls. On phones the bottom bar holds Dashboard, Booth and Queue, and **More** opens the same groups as a sheet:
 
 | Group | Pages |
 |---|---|

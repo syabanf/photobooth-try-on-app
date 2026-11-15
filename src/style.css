@@ -221,9 +221,60 @@ p {
 
 .rail-nav {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  align-items: center;
   gap: 6px;
+  min-height: 0;
   margin-top: 8px;
+  /* Every page lives here now: the list scrolls inside the rail, never the page. */
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.rail-nav::-webkit-scrollbar {
+  display: none;
+}
+
+/* The long page list scrolls; the brand, the capture button and the toggle keep their size. */
+.rail > :not(.rail-nav),
+.rail-item,
+.rail-group-head {
+  flex-shrink: 0;
+}
+
+.rail-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.rail-group-items {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+/* Collapsed to icons, a heading is a thin divider between groups and nothing folds away. */
+.rail-group-head {
+  display: block;
+  width: 28px;
+  height: 1px;
+  margin: 6px 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: rgb(255 255 255 / 0.12);
+  color: transparent;
+  pointer-events: none;
+}
+
+.rail-group-head .icon {
+  display: none;
 }
 
 .rail-item,
@@ -1888,6 +1939,62 @@ p {
     justify-content: flex-start;
     width: 100%;
     padding: 0 12px;
+  }
+
+  .rail.is-expanded .rail-nav,
+  .rail.is-expanded .rail-group,
+  .rail.is-expanded .rail-group-items {
+    align-items: stretch;
+  }
+
+  .rail.is-expanded .rail-group-items {
+    gap: 2px;
+  }
+
+  .rail.is-expanded .rail-item {
+    height: 40px;
+  }
+
+  /* Expanded, the heading names its group and folds it. */
+  .rail.is-expanded .rail-group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    height: auto;
+    margin: 10px 0 2px;
+    padding: 4px 12px;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--on-ink-muted);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .rail.is-expanded .rail-group-head:hover {
+    background: rgb(255 255 255 / 0.06);
+    color: #fff;
+  }
+
+  .rail.is-expanded .rail-group-head .icon {
+    display: block;
+    width: 14px;
+    height: 14px;
+    transform: rotate(90deg);
+    transition: transform 160ms ease;
+  }
+
+  .rail.is-expanded .rail-group.is-closed .rail-group-head .icon {
+    transform: none;
+  }
+
+  .rail.is-expanded .rail-group.is-closed .rail-group-items {
+    display: none;
   }
 
   .rail.is-expanded .rail-label {

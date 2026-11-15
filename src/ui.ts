@@ -118,6 +118,60 @@ function tilePicture(src: string): Promise<string> {
   return pending;
 }
 const RAIL_KEY = 'rail-expanded';
+const RAIL_GROUPS_KEY = 'rail-closed-groups';
+
+/**
+ * The rail: Dashboard, then each menu group under its heading. Expanded, a heading folds its
+ * group away; collapsed to icons, headings become thin dividers and every page stays one tap away.
+ */
+function buildRail(nav: HTMLElement): void {
+  const closed = new Set<string>(JSON.parse(readStored(RAIL_GROUPS_KEY) ?? '[]'));
+  const item = (view: View, label: string, iconName: IconName) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'rail-item';
+    button.dataset.view = view;
+    button.title = label;
+    const text = document.createElement('span');
+    text.className = 'rail-label';
+    text.textContent = label;
+    button.append(icon(iconName), text);
+    if (view === 'gallery') {
+      const badge = document.createElement('span');
+      badge.className = 'rail-badge';
+      badge.dataset.galleryCount = '';
+      badge.hidden = true;
+      button.append(badge);
+    }
+    return button;
+  };
+  nav.append(item('dashboard', 'Dashboard', 'dashboard'));
+  for (const { group, items } of MENU) {
+    const section = document.createElement('div');
+    section.className = 'rail-group';
+    section.classList.toggle('is-closed', closed.has(group));
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'rail-group-head';
+    head.setAttribute('aria-expanded', String(!closed.has(group)));
+    const name = document.createElement('span');
+    name.textContent = group;
+    head.append(name, icon('chevron'));
+    head.addEventListener('click', () => {
+      const close = !section.classList.contains('is-closed');
+      section.classList.toggle('is-closed', close);
+      head.setAttribute('aria-expanded', String(!close));
+      if (close) closed.add(group);
+      else closed.delete(group);
+      writeStored(RAIL_GROUPS_KEY, JSON.stringify([...closed]));
+    });
+    const list = document.createElement('div');
+    list.className = 'rail-group-items';
+    list.append(...items.map(([view, label, iconName]) => item(view, label, iconName)));
+    section.append(head, list);
+    nav.append(section);
+  }
+}
 
 /** A per-device preference. Storage can be refused, and then the setting is forgotten on reload. */
 export function readStored(key: string): string | null {
@@ -157,6 +211,7 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
   const rail = $<HTMLElement>('#rail');
   const railToggle = $<HTMLButtonElement>('#railToggle');
   const captureButtons = [$<HTMLButtonElement>('#railCapture'), $<HTMLButtonElement>('#barCapture')];
+  buildRail($<HTMLElement>('#railNav'));
   const navButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-view]')];
   const countBadges = [...root.querySelectorAll<HTMLElement>('[data-gallery-count]')];
 
@@ -233,7 +288,7 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
 
   // The rail and the phone bar hold the busiest pages; More opens a sheet with the rest, leaving out
   // whatever the visible bar already shows.
-  const moreButtons = [$<HTMLButtonElement>('#barMore'), $<HTMLButtonElement>('#railMore')];
+  const moreButtons = [$<HTMLButtonElement>('#barMore')];
   /** Pages the person on this device may open; the menus hide the rest. */
   let allowed: (view: View) => boolean = () => true;
   const openMore = () => {
@@ -277,13 +332,16 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
     railToggle.setAttribute('aria-label', expanded ? 'Collapse menu' : 'Expand menu');
     writeStored(RAIL_KEY, expanded ? '1' : '0');
   };
-  setRailExpanded(readStored(RAIL_KEY) === '1');
+  // Expanded until someone collapses it: with every page in the rail, labels and headings matter.
+  setRailExpanded(readStored(RAIL_KEY) !== '0');
   railToggle.addEventListener('click', () => setRailExpanded(!rail.classList.contains('is-expanded')));
 
   return {
     setAllowed(check) {
       allowed = check;
       for (const button of navButtons) button.hidden = !check(button.dataset.view as View);
+      // A group with nothing this person may open leaves the rail too.
+      for (const group of rail.querySelectorAll<HTMLElement>('.rail-group')) group.hidden = ![...group.querySelectorAll<HTMLButtonElement>('.rail-item')].some((button) => !button.hidden);
     },
     setStatus(text, kind = 'info', showRetry = false) {
       status.textContent = text;
@@ -322,6 +380,12 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
     },
     setView(view) {
       for (const button of navButtons) button.dataset.active = String(button.dataset.view === view);
+      // The open page's group unfolds, so the rail always shows where you are.
+      const current = navButtons.find((button) => button.dataset.view === view)?.closest('.rail-group');
+      if (current?.classList.contains('is-closed')) {
+        current.classList.remove('is-closed');
+        current.querySelector('.rail-group-head')?.setAttribute('aria-expanded', 'true');
+      }
       for (const button of moreButtons) button.dataset.active = String(onMore(view));
       $<HTMLElement>('#viewKicker').textContent = VIEWS[view].kicker;
       $<HTMLElement>('#viewTitle').textContent = VIEWS[view].title;
