@@ -1,9 +1,13 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+// @ts-expect-error: a plain Node module shared with scripts/serve.mjs, with no type declarations.
+import { QrisDesk } from '../../scripts/qris-mutations.mjs';
 import { memoryStore } from '../account/backend';
 import type { Account } from '../account/model';
 import { getShots, saveShot } from '../gallery';
 import { can, permissionsOf, type Permission } from './access';
+import { crc16 } from './encoders';
 import { Ops } from './ops';
+import type { StaticQrisGateway } from './static-qris';
 import { OpsStore } from './store';
 
 const account: Account = { id: 'acc', business: 'Studio Rupa', createdAt: 0, trialEndsAt: Infinity };
@@ -83,6 +87,49 @@ describe('a day at the till', () => {
     expect(ops.order(order.id).status).toBe('open');
     ops.gateway.simulatePaid!(payment.reference);
     expect(ops.order(order.id).status).toBe('paid');
+  });
+
+  it('settles a static QRIS order from the notification the booth computer matched', async () => {
+    const { ops } = setup();
+    ops.openShift('mall', 0);
+    const field = (id: string, value: string) => `${id}${String(value.length).padStart(2, '0')}${value}`;
+    const body = [field('00', '01'), field('01', '11'), field('26', field('00', 'ID.CO.QRIS.WWW') + field('01', 'ID1234567890')), field('52', '7221'), field('53', '360'), field('58', 'ID'), field('59', 'STUDIO RUPA'), field('60', 'BANDUNG')].join('') + '6304';
+    ops.savePaymentSettings((draft) => Object.assign(draft.gateway, { provider: 'static', staticQris: body + crc16(body).toString(16).toUpperCase().padStart(4, '0'), uniqueCode: 'always' }), 'Own QRIS');
+    // The booth computer, standing in for scripts/serve.mjs.
+    const desk = new QrisDesk({ token: 'secret' });
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        const { key, amount, expiresInMs, uniqueCode } = JSON.parse(String(init.body));
+        return Response.json(desk.charge(key, amount, expiresInMs, uniqueCode === 'always'));
+      }
+      if (init?.method === 'DELETE') return Response.json({ ok: desk.release(decodeURIComponent(url.split('/').pop()!)) });
+      return Response.json({ paid: desk.paidSince(0), now: Date.now() });
+    });
+    try {
+      const order = ops.createOrder({ lines: [{ kind: 'session', refId: 'photobox', label: 'GIF', unitPrice: 30_000, qty: 1 }], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null });
+      const payment = await ops.chargeQris(order.id);
+      expect(payment).toMatchObject({ amount: 30_000, uniqueCode: 1, gateway: 'QRIS statis' });
+      expect(payment.qrString).toContain('540530001');
+      expect(ops.gateway.simulated).toBe(false);
+
+      desk.ingest('Pembayaran QRIS Rp 30.000 diterima');
+      await (ops.gateway as StaticQrisGateway).check();
+      expect(ops.order(order.id).status).toBe('open');
+
+      desk.ingest('Pembayaran QRIS Rp 30.001 diterima');
+      await (ops.gateway as StaticQrisGateway).check();
+      await (ops.gateway as StaticQrisGateway).check();
+      expect(ops.order(order.id).status).toBe('paid');
+      expect(ops.order(order.id).payments.filter((entry) => entry.status === 'paid')).toHaveLength(1);
+
+      // A cancelled QR gives its amount back to the next customer.
+      const next = ops.createOrder({ lines: [{ kind: 'session', refId: 'photobox', label: 'GIF', unitPrice: 30_000, qty: 1 }], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null });
+      const waiting = await ops.chargeQris(next.id);
+      ops.cancelPayment(next.id, waiting.id, 'Customer left');
+      expect(desk.waiting()).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('charges QRIS once for a double tap and shows a waiting QR again', async () => {

@@ -3,10 +3,10 @@
 
 import { PAYMENT_METHODS, type Channel, type Order, type Payment, type PaymentMethod, type PaymentSettings, type PaymentStatus, type Refund, type Rupiah } from './model';
 
-export const GATEWAY_NAMES = { midtrans: 'Midtrans', xendit: 'Xendit', doku: 'DOKU' } as const;
+export const GATEWAY_NAMES = { midtrans: 'Midtrans', xendit: 'Xendit', doku: 'DOKU', static: 'QRIS statis' } as const;
 
 export const DEFAULT_PAYMENTS: PaymentSettings = {
-  gateway: { provider: 'midtrans', mode: 'sandbox', merchantId: '', clientKey: '', qrExpiryMinutes: 15 },
+  gateway: { provider: 'midtrans', mode: 'sandbox', merchantId: '', clientKey: '', qrExpiryMinutes: 15, staticQris: '', uniqueCode: 'collision', lockAmount: true },
   methods: {
     cash: { enabled: true, cashier: true, booth: false, feePercent: 0 },
     qris: { enabled: true, cashier: true, booth: true, feePercent: 0.7 },
@@ -32,7 +32,13 @@ export function withPaymentDefaults(saved: Partial<PaymentSettings> | undefined,
 
 export function gatewayLabel(settings: PaymentSettings): string {
   const { provider, mode } = settings.gateway;
+  if (provider === 'static') return GATEWAY_NAMES.static;
   return mode === 'production' ? GATEWAY_NAMES[provider] : `${GATEWAY_NAMES[provider]} sandbox`;
+}
+
+/** What the customer pays for a QR: the amount on the order plus its unique code. */
+export function payable(payment: Payment): Rupiah {
+  return payment.amount + (payment.uniqueCode ?? 0);
 }
 
 export function methodAllowed(settings: PaymentSettings, method: PaymentMethod, channel: Channel): boolean {

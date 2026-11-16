@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { crc16, crc32, encodeGif, indexFrame, lzw, qrisPayload, xlsx, zip } from './encoders';
+import { crc16, crc32, encodeGif, indexFrame, lockQrisAmount, lzw, qrisPayload, readQris, xlsx, zip } from './encoders';
 import { detectSlots } from './frames';
 
 const ascii = (text: string) => new TextEncoder().encode(text);
@@ -39,6 +39,35 @@ describe('qrisPayload', () => {
     expect(payload).toContain('5303360');
     const body = payload.slice(0, -4);
     expect(payload.slice(-4)).toBe(crc16(body).toString(16).toUpperCase().padStart(4, '0'));
+  });
+});
+
+describe('static QRIS', () => {
+  const seal = (body: string) => body + crc16(body).toString(16).toUpperCase().padStart(4, '0');
+  // A shop QR as an acquirer prints it: static (0211), no amount, with a terminal label.
+  const field = (id: string, value: string) => `${id}${String(value.length).padStart(2, '0')}${value}`;
+  const shop = seal(
+    [field('00', '01'), field('01', '11'), field('26', field('00', 'ID.CO.QRIS.WWW') + field('01', 'ID1234567890')), field('52', '7221'), field('53', '360'), field('58', 'ID'), field('59', 'STUDIO RUPA'), field('60', 'BANDUNG'), field('62', field('07', 'A01'))].join('') + '6304',
+  );
+
+  it('reads the merchant and refuses a damaged code', () => {
+    expect(readQris(` ${shop} `)).toEqual({ merchantName: 'STUDIO RUPA', merchantCity: 'BANDUNG', hasAmount: false });
+    expect(() => readQris(shop.slice(0, -1) + (shop.endsWith('0') ? '1' : '0'))).toThrow('checksum');
+    expect(() => readQris('hello')).toThrow('not a QRIS');
+  });
+
+  it('locks an amount in without touching the other fields', () => {
+    const locked = lockQrisAmount(shop, 35_003);
+    expect(locked.startsWith('000201010212')).toBe(true);
+    expect(locked).toContain('5303360540535003' + '5802ID');
+    expect(locked).toContain('62070703A01');
+    expect(readQris(locked)).toEqual({ merchantName: 'STUDIO RUPA', merchantCity: 'BANDUNG', hasAmount: true });
+  });
+
+  it('replaces an amount already there', () => {
+    const again = lockQrisAmount(lockQrisAmount(shop, 35_003), 20_000);
+    expect(again).toContain('540520000');
+    expect(again).not.toContain('35003');
   });
 });
 

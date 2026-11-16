@@ -13,9 +13,9 @@ import { composeFrame } from '../frames';
 import { NO_EFFECTS, SESSION_MODES, type BoothSession, type Effects, type Frame, type PaperSize, type SessionMode, type Voucher } from '../model';
 import type { CartLine, Ops } from '../ops';
 import { confirmDialog, formDialog } from '../../dialogs';
-import { methodAllowed } from '../payments';
+import { methodAllowed, payable } from '../payments';
 import { availableFrames } from '../vouchers';
-import { qrClock } from './pages/pos';
+import { qrClock, qrExact } from './pages/pos';
 import { photoDeliveryCheck, publishGallery } from '../delivery';
 import { act, actionButton, badge, el, money, notice, pills, qrCanvas } from './kit';
 
@@ -218,6 +218,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       const payment = ops.order(flow.orderId!).payments.find((entry) => entry.reference === flow.reference);
       if (payment) {
         qrArea.append(
+          ...[qrExact(ops, payment)].filter((node) => node !== null),
           qrClock(ops, flow.orderId!, payment.id, (status) => {
             // The QR ran out or the cashier cancelled it: the customer can ask for a new one.
             if (status === 'paid') return;
@@ -590,7 +591,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
     const order = ops.createOrder({ lines: [{ kind: 'print', refId: printSize(), label: `Extra print ${printSize()}`, unitPrice: printPrice(), qty, size: printSize() }], presetId: null, voucherCode: '', channel: 'booth', branchId: ops.branchOf(id) ?? '', boothId: id });
     const payment = await ops.chargeQris(order.id);
     const area = el('div', 'pay-qris');
-    area.append(qrCanvas(payment.qrString ?? '', 240), el('p', 'pay-due', money(order.total)));
+    area.append(qrCanvas(payment.qrString ?? '', 240), el('p', 'pay-due', money(payable(payment))), ...[qrExact(ops, payment, { showAmount: false })].filter((node) => node !== null));
     if (ops.gateway.simulated) {
       const simulate = actionButton('Simulate payment', 'btn btn-outline btn-sm');
       simulate.addEventListener('click', () => ops.gateway.simulatePaid!(payment.reference));

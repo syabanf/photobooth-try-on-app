@@ -72,9 +72,9 @@ export function setupSteps(state: OpsState, sites: Sites, devicePoint: string | 
     {
       id: 'payments',
       title: 'Payment gateway',
-      detail: 'The merchant ID and client key for QRIS, and which methods the till and the booths take.',
-      done: Boolean(gateway.merchantId && gateway.clientKey),
-      missing: 'No merchant ID or client key',
+      detail: 'Your own shop QRIS or a gateway’s merchant ID and client key, and which methods the till and the booths take.',
+      done: gateway.provider === 'static' ? Boolean(gateway.staticQris) : Boolean(gateway.merchantId && gateway.clientKey),
+      missing: gateway.provider === 'static' ? 'No shop QRIS pasted yet' : 'No merchant ID or client key',
       optional: false,
     },
     {

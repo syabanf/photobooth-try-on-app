@@ -140,6 +140,8 @@ export interface Payment {
   reference: string;
   gateway?: string;
   qrString?: string;
+  /** Rupiah the customer pays on top of `amount`, so the bank notification names one order. */
+  uniqueCode?: Rupiah;
   /** When a pending QR stops being valid. */
   expiresAt?: number;
   tendered?: Rupiah;
@@ -164,12 +166,19 @@ export interface PaymentMethodRule {
 }
 
 export interface GatewaySettings {
-  provider: 'midtrans' | 'xendit' | 'doku';
+  /** `static` is the shop's own QRIS: no gateway, the booth computer matches bank notifications. */
+  provider: 'midtrans' | 'xendit' | 'doku' | 'static';
   mode: 'sandbox' | 'production';
   merchantId: string;
   /** The browser-safe client key. The server key never belongs in the app. */
   clientKey: string;
   qrExpiryMinutes: number;
+  /** The shop's static QRIS string, for the `static` provider. */
+  staticQris: string;
+  /** Add a unique code to every QR, or only when two waiting QRs would ask for the same total. */
+  uniqueCode: 'collision' | 'always';
+  /** Off for acquirers that only notify on a typed amount (GoPay Merchant): the customer types it. */
+  lockAmount: boolean;
 }
 
 export interface Terminal {

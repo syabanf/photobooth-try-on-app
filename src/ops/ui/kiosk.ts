@@ -14,7 +14,7 @@ import { methodAllowed } from '../payments';
 import { suggestPreset } from '../presets';
 import { el, money, qrCanvas } from './kit';
 import { dueForReload } from './display-guard';
-import { qrClock } from './pages/pos';
+import { qrClock, qrExact } from './pages/pos';
 import { faceBitmaps, fillTemplates, presetTemplates, type Render } from './preset-render';
 
 type Step = 'scan' | 'faces' | 'templates' | 'pay' | 'making' | 'done';
@@ -400,6 +400,8 @@ export function renderKiosk(ops: Ops, root: HTMLElement, head: HTMLElement): voi
       area.append(frame);
       const payment = ops.order(orderId!).payments.find((entry) => entry.reference === reference);
       if (payment) {
+        const exact = qrExact(ops, payment, { bahasa: true });
+        if (exact) area.append(exact);
         area.append(qrClock(ops, orderId!, payment.id, (status) => {
           if (status === 'paid') return;
           qr = '';

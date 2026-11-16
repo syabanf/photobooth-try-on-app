@@ -8,6 +8,7 @@ import { setupProgress, setupSteps, type SetupStep, type SetupStepId } from '../
 import type { PageContext } from '../router';
 import { act, badge, el, page } from '../kit';
 import { showDevicesTab } from './devices';
+import { showPaymentsTab } from './payments';
 
 const STAGES: { title: string; detail: string; steps: SetupStepId[] }[] = [
   { title: 'Venue', detail: 'Where you run and which device stands where.', steps: ['locations', 'device'] },
@@ -44,7 +45,10 @@ export function renderSetup({ ops, nav, redraw }: PageContext): HTMLElement {
       showDevicesTab('printers');
       nav('devices');
     },
-    payments: () => nav('payments'),
+    payments: () => {
+      showPaymentsTab('gateway');
+      nav('payments');
+    },
     branding: () => nav('branding'),
     frames: () => nav('frames'),
     team: () => nav('staff'),

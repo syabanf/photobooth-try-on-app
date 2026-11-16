@@ -7,7 +7,9 @@ import { iconButton } from '../../../icons';
 import { printDocument, printImage } from '../../adapters';
 import { amountDue, lineGross } from '../../cart';
 import { PAYMENT_LABELS, SESSION_MODES, type Order, type PaperSize, type Payment, type PaymentMethod, type SessionMode } from '../../model';
-import { allowedMethods } from '../../payments';
+import { readQris } from '../../encoders';
+import { allowedMethods, payable } from '../../payments';
+import { markPaidDialog } from './payments';
 import type { CartLine, Ops } from '../../ops';
 import { PAPER } from '../../printing';
 import { shiftSlip, type ShiftSlip } from '../../shift';
@@ -248,6 +250,54 @@ export function renderPos(context: PageContext): HTMLElement {
   return view.root;
 }
 
+const HELP_AFTER_MS = 45_000;
+const QUIET_WARN_MS = 30 * 60_000;
+
+/**
+ * What a customer needs beside a shop-QRIS code: the exact amount when it differs from the order
+ * (a unique code) or has to be typed, the name their app will show, and, after a while with no
+ * payment seen, what to do. Null for a gateway QR, which needs none of it.
+ */
+export function qrExact(ops: Ops, payment: Payment, { bahasa = false, showAmount = true } = {}): HTMLElement | null {
+  const { provider, lockAmount, staticQris } = ops.payments.gateway;
+  if (provider !== 'static') return null;
+  const code = payment.uniqueCode ?? 0;
+  const box = el('div', 'qr-exact');
+  if (code || !lockAmount) {
+    const notes = bahasa
+      ? [lockAmount ? '' : 'Ketik nominal ini persis di aplikasi Anda.', code ? `${money(payment.amount)} + kode unik ${money(code)}, supaya pembayaran Anda langsung dikenali.` : '']
+      : [lockAmount ? '' : 'Type exactly this amount in your app.', code ? `${money(payment.amount)} plus a ${money(code)} code, so this payment is known as yours.` : ''];
+    if (showAmount) box.append(el('p', 'qr-exact-label', bahasa ? 'Bayar tepat' : 'Pay exactly'), el('p', 'qr-exact-amount', money(payable(payment))));
+    box.append(el('p', 'card-desc', notes.filter(Boolean).join(' ')));
+  }
+  box.append(el('p', 'card-desc', `${bahasa ? 'Nama penerima di aplikasi Anda' : 'Your app will show'}: ${readQris(staticQris).merchantName}`));
+  const help = el('p', 'qr-exact-help', bahasa ? 'Sudah bayar tetapi layar belum berubah? Tunjukkan bukti bayar ke petugas.' : 'Paid, but this screen has not changed? Show the payment in your app to the staff.');
+  help.hidden = true;
+  box.append(help);
+  setTimeout(() => (help.hidden = false), HELP_AFTER_MS);
+  return box;
+}
+
+/** For staff: whether the phone that reports shop-QRIS payments is still reaching the booth computer. */
+function phoneLink(ops: Ops): HTMLElement {
+  const line = el('p', 'card-desc phone-link');
+  const tick = () => {
+    if (!line.isConnected && line.textContent) return clearInterval(timer);
+    const quiet = ops.gateway.phoneQuietMs?.();
+    const minutes = Math.round((quiet ?? 0) / 60_000);
+    const stale = quiet === null || (quiet !== undefined && quiet > QUIET_WARN_MS);
+    line.classList.toggle('is-warn', stale);
+    line.textContent =
+      quiet === undefined ? 'Checking the forwarding phone…'
+      : quiet === null ? 'The forwarding phone has never reached the booth computer. Settle this one with Mark paid by hand.'
+      : stale ? `The forwarding phone has been quiet for ${minutes >= 120 ? `${Math.round(minutes / 60)} hours` : `${minutes} minutes`}. If this does not settle, check the phone or mark it paid by hand.`
+      : `Forwarding phone heard ${minutes < 1 ? 'just now' : `${minutes} min ago`}.`;
+  };
+  const timer = setInterval(tick, 3_000);
+  tick();
+  return line;
+}
+
 /** "Valid for 14:59", counting down, or the state the QR ended in. */
 export function qrClock(ops: Ops, orderId: string, paymentId: string, onEnd: (status: Payment['status']) => void, label = (time: string) => `Valid for ${time}`): HTMLElement {
   const line = el('p', 'card-desc qr-clock');
@@ -288,8 +338,9 @@ function paymentDialog(context: PageContext, orderId: string): void {
   function draw(): void {
     const order = ops.order(orderId);
     const due = amountDue(order);
+    const dueLine = el('p', 'pay-due', money(due));
     body.replaceChildren(
-      el('p', 'pay-due', money(due)),
+      dueLine,
       el('p', 'card-desc', `${order.number} · ${order.lines.length} ${order.lines.length === 1 ? 'item' : 'items'}`),
       pills(methods.map((value) => ({ value, label: PAYMENT_LABELS[value] })), method, (value) => {
         method = value;
@@ -339,10 +390,18 @@ function paymentDialog(context: PageContext, orderId: string): void {
         };
         area.replaceChildren(
           qrCanvas(payment.qrString ?? '', 240),
+          ...[qrExact(ops, payment, { showAmount: false })].filter((node) => node !== null),
           el('p', 'card-desc', `Scan with any bank or e-wallet app. ${payment.gateway} · ${payment.reference}`),
           qrClock(ops, orderId, payment.id, ended),
         );
-        broadcast(ops, { type: 'qris', qr: payment.qrString, amount: payment.amount, reference: payment.reference });
+        broadcast(ops, { type: 'qris', qr: payment.qrString, amount: payable(payment), reference: payment.reference });
+        // No gateway calls back for a static QRIS: when the phone's notification never arrives,
+        // a supervisor settles it here from what the bank app shows.
+        if (ops.payments.gateway.provider === 'static') {
+          // One amount on the screen: what the customer pays, unique code included.
+          dueLine.textContent = money(payable(payment));
+          area.append(phoneLink(ops), act('Mark paid by hand', 'btn btn-ghost btn-sm', () => markPaidDialog(ops, orderId, payment.id)));
+        }
         if (ops.gateway.simulated) {
           const simulate = actionButton('Simulate payment', 'btn btn-outline btn-sm');
           simulate.addEventListener('click', () => ops.gateway.simulatePaid!(payment.reference));

@@ -3775,6 +3775,70 @@ p {
   gap: 10px;
 }
 
+.qris-address {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.qris-setup {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  justify-items: center;
+}
+
+.qris-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--body);
+}
+
+.qr-exact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 16px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  text-align: center;
+}
+
+.qr-exact-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.qr-exact-amount {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.qr-exact-help {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.phone-link.is-warn {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--warning-soft, #fff4e0);
+  color: var(--foreground);
+  font-weight: 600;
+}
+
 .qr {
   width: min(260px, 100%);
   height: auto;

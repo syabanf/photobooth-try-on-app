@@ -8,6 +8,7 @@ import { extname, join, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { brotliCompress, constants, gzip } from 'node:zlib';
 import { handleCameraProxy } from './camera-proxy.mjs';
+import { qrisHandler } from './qris-mutations.mjs';
 
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || '0.0.0.0';
@@ -17,6 +18,7 @@ const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 const tokenPattern = /^[a-f0-9]{16,32}$/;
 const filePattern = /^[a-zA-Z0-9-]{1,80}$/;
 const maxUpload = 100 * 1024 * 1024;
+const handleQris = qrisHandler(join(data, 'qris.json'));
 const dayMs = 86_400_000;
 
 function localAddress() {
@@ -51,7 +53,7 @@ async function bytes(req, limit) {
 }
 
 async function serve(req, res) {
-  if (handleCameraProxy(req, res)) return;
+  if (handleCameraProxy(req, res) || handleQris(req, res)) return;
   const url = new URL(req.url || '/', 'http://localhost');
   if (url.pathname === '/connection-test' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });

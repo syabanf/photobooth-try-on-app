@@ -165,6 +165,51 @@ export function qrisPayload(input: QrisInput): string {
   return withCrcTag + crc16(withCrcTag).toString(16).toUpperCase().padStart(4, '0');
 }
 
+/** The top-level fields of an EMVCo payload, in order. Throws on a layout that does not parse. */
+function qrisFields(payload: string): { id: string; value: string }[] {
+  const fields: { id: string; value: string }[] = [];
+  for (let at = 0; at < payload.length; ) {
+    const id = payload.slice(at, at + 2);
+    const length = Number(payload.slice(at + 2, at + 4));
+    const value = payload.slice(at + 4, at + 4 + length);
+    if (!/^\d{2}$/.test(id) || !Number.isInteger(length) || value.length !== length) throw new Error('That is not a QRIS code.');
+    fields.push({ id, value });
+    at += 4 + length;
+  }
+  return fields;
+}
+
+export interface QrisInfo {
+  merchantName: string;
+  merchantCity: string;
+  /** True when the code already carries an amount, so it is one payment's QR, not the shop's. */
+  hasAmount: boolean;
+}
+
+/** Checks a pasted QRIS string and reads who it pays. Throws with the reason when it is not valid. */
+export function readQris(payload: string): QrisInfo {
+  const text = payload.trim();
+  if (!text.startsWith('000201') || text.slice(-8, -4) !== '6304') throw new Error('That is not a QRIS code.');
+  if (text.slice(-4).toUpperCase() !== crc16(text.slice(0, -4)).toString(16).toUpperCase().padStart(4, '0')) throw new Error('The QRIS checksum is wrong. Copy the whole code again.');
+  const fields = qrisFields(text);
+  const get = (id: string) => fields.find((field) => field.id === id)?.value ?? '';
+  return { merchantName: get('59'), merchantCity: get('60'), hasAmount: Boolean(get('54')) };
+}
+
+/** The shop's static QRIS with one amount locked in: the payer's app shows it and cannot change it. */
+export function lockQrisAmount(payload: string, amount: number): string {
+  readQris(payload);
+  const fields = qrisFields(payload.trim()).filter((field) => field.id !== '54' && field.id !== '63');
+  const method = fields.find((field) => field.id === '01');
+  if (method) method.value = '12';
+  else fields.splice(1, 0, { id: '01', value: '12' });
+  // The amount sits after the currency (53), where EMVCo orders it.
+  const after = fields.findIndex((field) => Number(field.id) > 54);
+  fields.splice(after < 0 ? fields.length : after, 0, { id: '54', value: String(Math.round(amount)) });
+  const body = `${fields.map((field) => tlv(field.id, field.value)).join('')}6304`;
+  return body + crc16(body).toString(16).toUpperCase().padStart(4, '0');
+}
+
 // ---------- GIF ----------
 
 export interface RgbaFrame {

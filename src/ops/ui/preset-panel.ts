@@ -13,7 +13,7 @@ import { methodAllowed } from '../payments';
 import { PRESET_SIZE, suggestPreset } from '../presets';
 import { act, actionButton, badge, count, el, money, notice, qrCanvas } from './kit';
 import { nameButton } from './face-tag';
-import { qrClock } from './pages/pos';
+import { qrClock, qrExact } from './pages/pos';
 import { faceBitmaps, fillTemplates, presetTemplates, type Render } from './preset-render';
 
 export interface PresetHooks {
@@ -304,6 +304,7 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
       const payment = ops.order(orderId!).payments.find((entry) => entry.reference === reference);
       if (payment) {
         qrArea.append(
+          ...[qrExact(ops, payment)].filter((node) => node !== null),
           qrClock(ops, orderId!, payment.id, (status) => {
             if (status === 'paid') return;
             qr = '';

@@ -2,7 +2,8 @@
 // this browser build can run. Native and server implementations slot in behind the same shapes:
 //
 //   PaymentGateway  → a server that calls Midtrans/Xendit/DOKU with the server key and forwards
-//                     their payment callback to the booth (webhook → push).
+//                     their payment callback to the booth (webhook → push), or the shop's own
+//                     static QRIS matched to bank notifications (src/ops/static-qris.ts).
 //   CameraDriver    → the browser webcam, a DSLR over the network (src/dslr), or the simulator.
 //   printImage      → the OS print queue; Chrome in --kiosk-printing mode prints with no dialog.
 //   CloudTransport  → the cloud API the outbox syncs to.
@@ -17,6 +18,8 @@ export interface QrisCharge {
   reference: string;
   qrString: string;
   amount: number;
+  /** Rupiah added on top so no two waiting QRs ask for the same total. Static QRIS only. */
+  uniqueCode?: number;
 }
 
 export type PaidListener = (reference: string) => void;
@@ -29,6 +32,13 @@ export interface PaymentGateway {
   createQris(amount: number, reference: string, expiresInMs: number): Promise<QrisCharge>;
   /** The gateway's callback, delivered to the booth that showed the QR. */
   onPaid(listener: PaidListener): () => void;
+  /** Tells the gateway a waiting QR is cancelled or replaced, where it keeps track of them. */
+  release?(reference: string): void;
+  /**
+   * Static QRIS only: milliseconds since the forwarding phone last reached the booth computer,
+   * null when it never has, undefined before the booth computer has answered.
+   */
+  phoneQuietMs?(): number | null | undefined;
   /** Simulator only: what the gateway callback would do once the customer pays. */
   simulatePaid?(reference: string): void;
 }

@@ -8,6 +8,7 @@ import { deleteShot } from '../gallery';
 import { deleteBlob, putBlob } from './blobs';
 import { can, checkPin, findApprover, hashPin, PERMISSIONS, ROLES, seesBranch, setRoleOverrides, type Permission } from './access';
 import { DEFAULT_CAPTURE, DEFAULT_PREVIEW, printImage, SimulatedCloud, SimulatedGateway, type CameraDriver, type CameraState, type PaymentGateway } from './adapters';
+import { StaticQrisGateway } from './static-qris';
 import { amountDue, changeFor, formatRupiah, lineNet, orderNumber, priceLines, refundMethod } from './cart';
 import { sessionsToPurge, targetVersion } from './fleet';
 import type {
@@ -64,7 +65,8 @@ export interface OpsHooks {
 const DAY_MS = 86_400_000;
 
 export class Ops {
-  readonly gateway: PaymentGateway;
+  private readonly simulator: SimulatedGateway;
+  private readonly staticQris: StaticQrisGateway;
   readonly cloud: SimulatedCloud;
   readonly outbox: Outbox;
   sites: Sites = { locations: [], points: [] };
@@ -83,17 +85,27 @@ export class Ops {
   ) {
     const key = store.key;
     this.actorKey = `${key}:actor`;
-    this.gateway = new SimulatedGateway(
+    this.simulator = new SimulatedGateway(
       () => gatewayLabel(this.state.settings.payments),
       () => ({ name: this.state.branding.brandName || account.business, city: this.sites.locations[0]?.city ?? '' }),
       key,
     );
     this.cloud = new SimulatedCloud(`${key}:cloud`);
     this.outbox = new Outbox(localStorage, `${key}:outbox`, (item) => this.cloud.send(item));
-    this.gateway.onPaid((reference) => this.qrisPaid(reference));
+    this.staticQris = new StaticQrisGateway(
+      () => this.payments.gateway,
+      () => this.payments.gateway.provider === 'static' && this.state.orders.some((order) => order.status === 'open' && order.payments.some((payment) => payment.method === 'qris' && payment.status === 'pending')),
+      key,
+    );
+    for (const gateway of [this.simulator, this.staticQris]) gateway.onPaid((reference) => this.qrisPaid(reference));
     // Role changes from the Roles page, here or in another window, apply at once.
     setRoleOverrides(this.state.settings.rolePermissions);
     store.subscribe((state) => setRoleOverrides(state.settings.rolePermissions));
+  }
+
+  /** The shop's static QRIS when Settings choose it; otherwise the simulator stands in for the provider. */
+  get gateway(): PaymentGateway {
+    return this.payments.gateway.provider === 'static' ? this.staticQris : this.simulator;
   }
 
   get state(): OpsState {
@@ -492,6 +504,8 @@ export class Ops {
     const reference = `${order.number}-${order.payments.length + 1}`;
     const expiresInMs = this.payments.gateway.qrExpiryMinutes * 60_000;
     const charge = await this.gateway.createQris(due, reference, expiresInMs);
+    // An earlier QR for a different amount gives its total back to the gateway.
+    for (const old of order.payments) if (old.status === 'pending') this.gateway.release?.(old.reference);
     const payment: Payment = {
       id: this.store.id(),
       method: 'qris',
@@ -500,6 +514,7 @@ export class Ops {
       reference,
       gateway: this.gateway.label,
       qrString: charge.qrString,
+      ...(charge.uniqueCode ? { uniqueCode: charge.uniqueCode } : {}),
       expiresAt: this.now() + expiresInMs,
       fee: feeFor(this.payments, 'qris', due),
       createdAt: this.now(),
@@ -578,6 +593,7 @@ export class Ops {
       },
       { branchId: order.branchId },
     );
+    this.gateway.release?.(payment.reference);
   }
 
   /** Marks every QR past its time as expired. Runs on the telemetry tick and when a page opens. */
