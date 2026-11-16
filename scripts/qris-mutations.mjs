@@ -12,6 +12,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { dirname } from 'node:path';
+import { fromBoothComputer } from './booth-only.mjs';
 
 const MAX_BODY = 8 * 1024;
 const MAX_WAITING = 200;
@@ -144,8 +145,6 @@ export class QrisDesk {
   }
 }
 
-const loopback = (address = '') => address === '::1' || address === '127.0.0.1' || address.startsWith('::ffff:127.');
-
 function localAddress() {
   for (const entries of Object.values(networkInterfaces())) {
     for (const entry of entries || []) if (entry.family === 'IPv4' && !entry.internal) return entry.address;
@@ -179,8 +178,11 @@ function sameToken(given, token) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** A request handler for /api/qris/..., keeping its state in `file`. Returns false for other paths. */
-export function qrisHandler(file) {
+/**
+ * A request handler for /api/qris/..., keeping its state in `file`. Returns false for other paths.
+ * `origin` is the address the forwarding phone posts to; left out, it is this server's LAN address.
+ */
+export function qrisHandler(file, origin) {
   const desk = new QrisDesk(existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {}, {
     save(state) {
       mkdirSync(dirname(file), { recursive: true });
@@ -225,10 +227,10 @@ export function qrisHandler(file) {
     }
     // Everything below manages the money trail, so only the booth computer itself may ask.
     if (path === 'setup' || path === 'token' || path.startsWith('log/')) {
-      if (!loopback(req.socket.remoteAddress)) return send(res, 403, { error: 'Open this page on the booth computer to manage QRIS notifications.' });
+      if (!fromBoothComputer(req)) return send(res, 403, { error: 'Open this page on the booth computer to manage QRIS notifications.' });
       if (path === 'setup' && req.method === 'GET') {
         desk.purge();
-        return send(res, 200, { token: desk.token, origin: `http://${localAddress()}:${req.socket.localPort}`, lastSeen: desk.lastSeen, lastContact: desk.lastContact, waiting: desk.waiting(), log: desk.log });
+        return send(res, 200, { token: desk.token, origin: origin || `http://${localAddress()}:${req.socket.localPort}`, lastSeen: desk.lastSeen, lastContact: desk.lastContact, waiting: desk.waiting(), log: desk.log });
       }
       if (path === 'token' && req.method === 'POST') {
         desk.rotate();

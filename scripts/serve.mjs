@@ -7,6 +7,7 @@ import { networkInterfaces } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { brotliCompress, constants, gzip } from 'node:zlib';
+import { fromBoothComputer } from './booth-only.mjs';
 import { handleCameraProxy } from './camera-proxy.mjs';
 import { qrisHandler } from './qris-mutations.mjs';
 
@@ -18,7 +19,6 @@ const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 const tokenPattern = /^[a-f0-9]{16,32}$/;
 const filePattern = /^[a-zA-Z0-9-]{1,80}$/;
 const maxUpload = 100 * 1024 * 1024;
-const handleQris = qrisHandler(join(data, 'qris.json'));
 const dayMs = 86_400_000;
 
 function localAddress() {
@@ -28,6 +28,7 @@ function localAddress() {
   return '127.0.0.1';
 }
 const publicOrigin = (process.env.PHOTO_PUBLIC_ORIGIN || `http://${localAddress()}:${port}`).replace(/\/$/, '');
+const handleQris = qrisHandler(join(data, 'qris.json'), publicOrigin);
 /** Sent with every response: no sniffing, no framing by other sites, and photo links stay out of Referer headers. */
 const SECURITY = {
   'X-Content-Type-Options': 'nosniff',
@@ -39,7 +40,6 @@ const send = (res, status, body, type = 'application/json') => {
   res.writeHead(status, { ...SECURITY, 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': 'no-store' });
   res.end(type === 'application/json' ? JSON.stringify(body) : body);
 };
-const loopback = (address = '') => address === '::1' || address === '127.0.0.1' || address.startsWith('::ffff:127.');
 
 async function bytes(req, limit) {
   let size = 0;
@@ -69,7 +69,7 @@ async function serve(req, res) {
     if (!tokenPattern.test(token) || (fileId && !filePattern.test(fileId))) return send(res, 404, { error: 'Not found' });
     const folder = join(data, token);
     if (req.method === 'PUT' || req.method === 'POST') {
-      if (!loopback(req.socket.remoteAddress)) return send(res, 403, { error: 'Uploads must come from the booth computer.' });
+      if (!fromBoothComputer(req)) return send(res, 403, { error: 'Uploads must come from the booth computer.' });
       await mkdir(folder, { recursive: true });
       if (req.method === 'PUT' && fileId) {
         const type = String(req.headers['content-type'] || '');

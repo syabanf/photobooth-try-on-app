@@ -184,6 +184,17 @@ The rail on tablets and desktops holds every page: Dashboard, then each group un
 3. Open `http://127.0.0.1:4173` on the booth and sign in. Open the kiosk and the TV from **Queue** so they start locked.
 4. Run the kiosk and TV browsers full screen, for example `chrome --kiosk --kiosk-printing http://127.0.0.1:4173/#display=queue&lock=1`. Turn off the OS screen sleep: the Wake Lock API that keeps screens on needs HTTPS or localhost.
 
+**Other devices over HTTPS (nginx)**
+
+A tablet or a second kiosk on the venue network needs HTTPS before its browser hands over the camera. `deploy/nginx.conf` puts nginx in front of `pnpm serve` for that and changes nothing else: Node still serves the app, the photos and every `/api/` route.
+
+1. Make a certificate for the booth computer's address, for example with `mkcert <booth-IP>`, and save it as `/etc/nginx/certs/booth.crt` and `booth.key`. Install mkcert's root certificate on each tablet, or accept the browser warning once.
+2. Include `deploy/nginx.conf` from the `http` block of nginx's main config and reload nginx.
+3. Start Node where only nginx can reach it: `HOST=127.0.0.1 PHOTO_PUBLIC_ORIGIN=http://<booth-IP> pnpm serve`.
+4. Tablets open `https://<booth-IP>`. Customer phones and the phone that forwards payment notifications keep plain `http://<booth-IP>`, which needs no certificate. The booth's own browser stays on `http://127.0.0.1:4173`.
+
+Uploads, the camera proxy and QRIS management answer only the booth computer. Behind nginx, Node tells it apart by the `X-Real-IP` header nginx sets (`scripts/booth-only.mjs`), so keep that line in the config and keep `HOST=127.0.0.1`: without the header every device on the network would count as the booth computer. After moving to nginx, open **Payments → My own QRIS → Set up the phone** again, because the forwarding address loses its `:4173`.
+
 **What the build does for production**
 
 - *Two bundles.* The TV, customer screen, kiosk, check-in and photo pages load about 60 kB (gzip) without the camera, MediaPipe or the Decart SDK. The staff app loads about 145 kB first; the Decart SDK and LiveKit (another 180 kB gzip) load only when someone turns on AI mode or an AI print.

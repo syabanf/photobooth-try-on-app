@@ -1,17 +1,16 @@
 // Forwards /api/camera/<host>:<port>/<path> to a DSLR on the venue network (Canon CCAPI) or to
 // digiCamControl's web server, because neither sends the CORS headers a browser needs.
 //
-// It is no open proxy: only the booth computer may use it (requests from 127.0.0.1 or ::1), it
+// It is no open proxy: only the booth computer may use it (see booth-only.mjs), it
 // forwards only to private IPv4 addresses, and it caps bodies and time. Shared by `pnpm serve`
 // (scripts/serve.mjs) and the Vite dev server (vite.config.ts).
 import http from 'node:http';
+import { fromBoothComputer } from './booth-only.mjs';
 
 const PREFIX = /^\/api\/camera\/((\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})):(\d{1,5})(\/.*)?$/;
 const MAX_BODY = 64 * 1024;
 const TIMEOUT_MS = 25_000;
 const METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE']);
-
-const loopback = (address = '') => address === '::1' || address === '127.0.0.1' || address.startsWith('::ffff:127.');
 
 function privateIpv4(a, b, c, d) {
   if ([a, b, c, d].some((part) => part > 255)) return false;
@@ -34,7 +33,7 @@ export function handleCameraProxy(req, res) {
   }
   const [, host, a, b, c, d, portText, path = '/'] = match;
   const port = Number(portText);
-  if (!loopback(req.socket.remoteAddress)) return refuse(res, 403, 'Only the booth computer may reach its cameras.'), true;
+  if (!fromBoothComputer(req)) return refuse(res, 403, 'Only the booth computer may reach its cameras.'), true;
   if (!privateIpv4(+a, +b, +c, +d) || port < 1 || port > 65_535) return refuse(res, 403, 'Cameras must be on the local network.'), true;
   if (!METHODS.has(req.method)) return refuse(res, 405, 'Method not allowed.'), true;
 
