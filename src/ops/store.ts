@@ -1,5 +1,6 @@
-// The business store: one JSON document per workspace in localStorage, with an activity log and
-// a broadcast so the customer screen and the queue TV in other windows redraw on every change.
+// The business store: one JSON document per workspace, with an activity log and a broadcast so
+// the customer screen and the queue TV in other windows redraw on every change. The document
+// lives in IndexedDB (big-store.ts), or in localStorage where the browser has no IndexedDB.
 // Pictures (frames, logo, ads) live in IndexedDB through blobs.ts, since they outgrow localStorage.
 
 import type { KeyValueStore } from '../account/backend';
@@ -98,22 +99,29 @@ export class OpsStore {
   state: OpsState;
   private listeners = new Set<Listener>();
   private channel: BroadcastChannel | null = null;
+  /** The saved text `state` was parsed from, so an unchanged document is not parsed again. */
+  private raw: string | null = null;
   readonly key: string;
 
   constructor(
-    private readonly store: KeyValueStore,
+    readonly kv: KeyValueStore,
     readonly accountId: string,
     business: string,
     readonly now: () => number = Date.now,
   ) {
     this.key = `vto:ops:${accountId}`;
     this.state = this.read() ?? starter(business, `owner-${accountId}`);
+    const refresh = () => {
+      this.state = this.read() ?? this.state;
+      this.emit();
+    };
+    if (kv.watch) {
+      kv.watch(this.key, refresh);
+      return;
+    }
     try {
       this.channel = new BroadcastChannel(this.key);
-      this.channel.onmessage = () => {
-        this.state = this.read() ?? this.state;
-        this.emit();
-      };
+      this.channel.onmessage = refresh;
     } catch {
       // No BroadcastChannel (old browser, tests): other windows only refresh on reload.
     }
@@ -121,8 +129,9 @@ export class OpsStore {
 
   private read(): OpsState | null {
     try {
-      const raw = this.store.getItem(this.key);
+      const raw = this.kv.getItem(this.key);
       if (!raw) return null;
+      if (raw === this.raw) return this.state;
       const saved = JSON.parse(raw) as OpsState;
       // Fields added after a workspace was created get their defaults.
       // Workspaces saved before payment settings existed carried only the provider name.
@@ -130,7 +139,9 @@ export class OpsStore {
       const payments = withPaymentDefaults(legacy?.payments, legacy?.gateway);
       // Faces captured before tickets and names were kept on them.
       const faces = (saved.faces ?? []).map((face) => ({ ...face, ticketId: face.ticketId ?? null, name: face.name ?? '' }));
-      return { ...starter('', `owner-${this.accountId}`), ...saved, faces, settings: { ...DEFAULT_SETTINGS, ...saved.settings, payments }, branding: { ...DEFAULT_BRANDING, ...saved.branding } };
+      const state = { ...starter('', `owner-${this.accountId}`), ...saved, faces, settings: { ...DEFAULT_SETTINGS, ...saved.settings, payments }, branding: { ...DEFAULT_BRANDING, ...saved.branding } };
+      this.raw = raw;
+      return state;
     } catch {
       return null;
     }
@@ -151,18 +162,25 @@ export class OpsStore {
 
   /**
    * Applies a change to a copy of the state, then saves, logs and tells every window. A change
-   * that throws leaves the state untouched.
+   * that throws, or that the device cannot save, leaves the state untouched.
    */
   update(change: (draft: OpsState) => void, entry?: Omit<ActivityEntry, 'id' | 'at'>): void {
     // Re-read first: another window (the customer screen, a second till) may have written since.
-    const draft = structuredClone(this.read() ?? this.state);
+    this.state = this.read() ?? this.state;
+    const draft = structuredClone(this.state);
     change(draft);
     if (entry) {
       draft.activity.unshift({ id: this.id(), at: this.now(), ...entry });
       draft.activity.length = Math.min(draft.activity.length, ACTIVITY_LIMIT);
     }
+    const raw = JSON.stringify(draft);
+    try {
+      this.kv.setItem(this.key, raw);
+    } catch {
+      throw new Error('This device’s storage is full, so the change was not saved. Free up space or call support before selling more.');
+    }
     this.state = draft;
-    this.store.setItem(this.key, JSON.stringify(draft));
+    this.raw = raw;
     this.channel?.postMessage('changed');
     this.emit();
   }

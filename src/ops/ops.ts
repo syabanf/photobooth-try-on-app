@@ -91,7 +91,7 @@ export class Ops {
       key,
     );
     this.cloud = new SimulatedCloud(`${key}:cloud`);
-    this.outbox = new Outbox(localStorage, `${key}:outbox`, (item) => this.cloud.send(item));
+    this.outbox = new Outbox(store.kv, `${key}:outbox`, (item) => this.cloud.send(item));
     this.staticQris = new StaticQrisGateway(
       () => this.payments.gateway,
       () => this.payments.gateway.provider === 'static' && this.state.orders.some((order) => order.status === 'open' && order.payments.some((payment) => payment.method === 'qris' && payment.status === 'pending')),

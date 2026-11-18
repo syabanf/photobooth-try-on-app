@@ -9,7 +9,7 @@
 // token, since a notification is what marks money as received. Only the booth computer can read
 // the token. Shared by `pnpm serve` (scripts/serve.mjs) and the Vite dev server (vite.config.ts).
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { dirname } from 'node:path';
 import { fromBoothComputer } from './booth-only.mjs';
@@ -178,15 +178,30 @@ function sameToken(given, token) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/** The saved state, or a fresh start when the file is damaged: the server must still come up. */
+function saved(file) {
+  if (!existsSync(file)) return {};
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    const aside = `${file}.damaged-${Date.now()}`;
+    renameSync(file, aside);
+    console.error(`QRIS state was unreadable and is kept at ${aside}. Starting empty: set up the forwarding phone again.`);
+    return {};
+  }
+}
+
 /**
  * A request handler for /api/qris/..., keeping its state in `file`. Returns false for other paths.
  * `origin` is the address the forwarding phone posts to; left out, it is this server's LAN address.
  */
 export function qrisHandler(file, origin) {
-  const desk = new QrisDesk(existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {}, {
+  const desk = new QrisDesk(saved(file), {
+    // Written beside the file and renamed over it, so a power cut never leaves half a file.
     save(state) {
       mkdirSync(dirname(file), { recursive: true });
-      writeFileSync(file, JSON.stringify(state), { mode: 0o600 });
+      writeFileSync(`${file}.tmp`, JSON.stringify(state), { mode: 0o600 });
+      renameSync(`${file}.tmp`, file);
     },
   });
   const send = (res, status, payload) => {

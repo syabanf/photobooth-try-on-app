@@ -81,6 +81,8 @@ export interface KeyValueStore {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
+  /** Calls `listener` when another window of this browser changes `key`. Stores that can tell have it. */
+  watch?(key: string, listener: () => void): void;
 }
 
 export function memoryStore(): KeyValueStore {

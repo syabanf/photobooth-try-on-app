@@ -34,6 +34,7 @@ import { composeBooth, runBoothSession, shotsFor } from './photobooth';
 import { readStoredKey, storeKey } from './decart-key';
 import type { RealTimeClient } from '@decartai/sdk';
 import { browserStore, createLocalBackend } from './account/backend';
+import { openRecords } from './ops/big-store';
 import type { Account } from './account/model';
 import { mountAccountButton, signedIn } from './auth-screen';
 import { ROLES } from './ops/access';
@@ -920,7 +921,8 @@ boothModeToggle.addEventListener('click', () => {
 let heartbeats = false;
 
 async function startBusiness(account: Account): Promise<Ops> {
-  const store = new OpsStore(browserStore(), account.id, account.business);
+  const records = await openRecords(() => notice('This device could not save the last change to its disk. Keep this window open and call support.', 'error'));
+  const store = new OpsStore(records, account.id, account.business);
   const ops = new Ops(store, account, {
     toast: (message, kind) => notice(message, kind),
     devicePointId: () => sites?.devicePointId() ?? null,
