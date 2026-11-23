@@ -1,9 +1,13 @@
-// The business store: one JSON document per workspace, with an activity log and a broadcast so
-// the customer screen and the queue TV in other windows redraw on every change. The document
-// lives in IndexedDB (big-store.ts), or in localStorage where the browser has no IndexedDB.
-// Pictures (frames, logo, ads) live in IndexedDB through blobs.ts, since they outgrow localStorage.
+// The business store. The workspace lives in memory as one state object; on disk the lists that
+// grow with every sale (orders, tickets, vouchers, the activity log …) keep one key per record and
+// the rest shares one small document, so a sale writes the handful of records it touched instead
+// of the whole history. Changes go through copy-on-write drafts (draft.ts), which is how the store
+// knows what was touched. Other windows (the customer screen, the queue TV) receive the same
+// records and patch their state. Storage is IndexedDB (big-store.ts), or localStorage where the
+// browser has no IndexedDB. Pictures (frames, logo, ads) live in IndexedDB through blobs.ts.
 
-import type { KeyValueStore } from '../account/backend';
+import type { KeyValueStore, KeyWrite } from '../account/backend';
+import { produce } from './draft';
 import { uuid } from '../uuid';
 import type { ActivityEntry, Branding, OpsState, Preset, Settings } from './model';
 import { DEFAULT_PAYMENTS, withPaymentDefaults } from './payments';
@@ -95,12 +99,30 @@ export const ACTIVITY_LIMIT = 2000;
 
 export type Listener = (state: OpsState) => void;
 
+/** The lists that grow with use. Each record is saved under its own key. */
+const RECORD_FIELDS = ['orders', 'tickets', 'vouchers', 'sessions', 'refunds', 'shifts', 'alerts', 'notifications', 'faces', 'activity'] as const;
+type RecordField = (typeof RECORD_FIELDS)[number];
+type Stored = { id: string };
+/** Ids per saved chunk of a list. */
+const CHUNK = 500;
+const isRecordField = (key: string): key is RecordField => (RECORD_FIELDS as readonly string[]).includes(key);
+
+function parse<T>(raw: string | null): T | null {
+  try {
+    return raw === null ? null : (JSON.parse(raw) as T);
+  } catch {
+    return null;
+  }
+}
+
 export class OpsStore {
   state: OpsState;
   private listeners = new Set<Listener>();
   private channel: BroadcastChannel | null = null;
-  /** The saved text `state` was parsed from, so an unchanged document is not parsed again. */
-  private raw: string | null = null;
+  /** Changes with every save from any window, so a store can tell another window wrote. */
+  private rev: string | null;
+  /** True once the disk holds every record under its own key; until then a save writes them all. */
+  private split = false;
   readonly key: string;
 
   constructor(
@@ -110,40 +132,198 @@ export class OpsStore {
     readonly now: () => number = Date.now,
   ) {
     this.key = `vto:ops:${accountId}`;
-    this.state = this.read() ?? starter(business, `owner-${accountId}`);
-    const refresh = () => {
-      this.state = this.read() ?? this.state;
-      this.emit();
-    };
-    if (kv.watch) {
-      kv.watch(this.key, refresh);
+    this.rev = kv.getItem(this.revKey);
+    this.state = this.load() ?? starter(business, `owner-${accountId}`);
+    if (kv.onRemote) {
+      kv.onRemote((writes) => this.patch(writes));
       return;
     }
     try {
       this.channel = new BroadcastChannel(this.key);
-      this.channel.onmessage = refresh;
+      this.channel.onmessage = () => this.reload();
     } catch {
       // No BroadcastChannel (old browser, tests): other windows only refresh on reload.
     }
   }
 
-  private read(): OpsState | null {
+  private get revKey(): string {
+    return `${this.key}:rev`;
+  }
+
+  /** How many chunks a list has. */
+  private listKey(field: RecordField): string {
+    return `${this.key}:list:${field}`;
+  }
+
+  private chunkKey(field: RecordField, index: number): string {
+    return `${this.key}:list:${field}:${index}`;
+  }
+
+  /** A list's ids, newest first as the business code keeps them. */
+  private readIds(field: RecordField): string[] {
+    const count = parse<number>(this.kv.getItem(this.listKey(field))) ?? 0;
+    const ids: string[] = [];
+    for (let index = 0; index < count; index += 1) ids.push(...(parse<string[]>(this.kv.getItem(this.chunkKey(field, index))) ?? []));
+    return ids.reverse();
+  }
+
+  /**
+   * The chunks of a list that differ from before. On disk a list runs oldest first: new records,
+   * which the business code puts at the front, land in the last chunk, so a sale rewrites one
+   * chunk of at most CHUNK ids instead of every id the workspace ever made.
+   */
+  private listWrites(field: RecordField, before: readonly Stored[] | null, after: readonly Stored[], unchanged = 0): KeyWrite[] {
+    // `unchanged` ids at the old end match, so the chunks they fill stay as they are.
+    const count = Math.ceil(after.length / CHUNK);
+    const previousCount = before ? Math.ceil(before.length / CHUNK) : -1;
+    const writes: KeyWrite[] = [];
+    for (let index = Math.floor(unchanged / CHUNK); index < count; index += 1) {
+      const ids: string[] = [];
+      for (let at = index * CHUNK; at < Math.min((index + 1) * CHUNK, after.length); at += 1) ids.push(after[after.length - 1 - at].id);
+      writes.push([this.chunkKey(field, index), JSON.stringify(ids)]);
+    }
+    for (let index = count; index < previousCount; index += 1) writes.push([this.chunkKey(field, index), null]);
+    if (count !== previousCount) writes.push([this.listKey(field), String(count)]);
+    return writes;
+  }
+
+  private recordKey(field: RecordField, id: string): string {
+    return `${this.key}:rec:${field}:${id}`;
+  }
+
+  /** Fields added after a workspace was created get their defaults. */
+  private upgrade(saved: Partial<OpsState>): OpsState {
+    // Workspaces saved before payment settings existed carried only the provider name.
+    const legacy = saved.settings as Partial<Settings> & { gateway?: string };
+    const payments = withPaymentDefaults(legacy?.payments, legacy?.gateway);
+    // Faces captured before tickets and names were kept on them.
+    const faces = (saved.faces ?? []).map((face) => (face.ticketId === undefined || face.name === undefined ? { ...face, ticketId: face.ticketId ?? null, name: face.name ?? '' } : face));
+    return { ...starter('', `owner-${this.accountId}`), ...saved, faces, settings: { ...DEFAULT_SETTINGS, ...saved.settings, payments }, branding: { ...DEFAULT_BRANDING, ...saved.branding } };
+  }
+
+  private readList(field: RecordField): Stored[] {
+    return this.readIds(field).map((id) => parse<Stored>(this.kv.getItem(this.recordKey(field, id)))).filter((record): record is Stored => record !== null);
+  }
+
+  private load(): OpsState | null {
+    const saved = parse<Partial<OpsState> & { format?: number }>(this.kv.getItem(this.key));
+    if (!saved) return null;
+    if (saved.format === 2) {
+      this.split = true;
+      const { format: _, ...small } = saved;
+      const records = Object.fromEntries(RECORD_FIELDS.map((field) => [field, this.readList(field)]));
+      return this.upgrade({ ...small, ...records } as Partial<OpsState>);
+    }
+    // One JSON document, as every build before this one saved it: split it once.
+    const state = this.upgrade(saved);
     try {
-      const raw = this.kv.getItem(this.key);
-      if (!raw) return null;
-      if (raw === this.raw) return this.state;
-      const saved = JSON.parse(raw) as OpsState;
-      // Fields added after a workspace was created get their defaults.
-      // Workspaces saved before payment settings existed carried only the provider name.
-      const legacy = saved.settings as Partial<Settings> & { gateway?: string };
-      const payments = withPaymentDefaults(legacy?.payments, legacy?.gateway);
-      // Faces captured before tickets and names were kept on them.
-      const faces = (saved.faces ?? []).map((face) => ({ ...face, ticketId: face.ticketId ?? null, name: face.name ?? '' }));
-      const state = { ...starter('', `owner-${this.accountId}`), ...saved, faces, settings: { ...DEFAULT_SETTINGS, ...saved.settings, payments }, branding: { ...DEFAULT_BRANDING, ...saved.branding } };
-      this.raw = raw;
-      return state;
+      this.write(this.everything(state));
+      this.split = true;
     } catch {
-      return null;
+      // A full disk keeps the old document, which still loads next time.
+    }
+    return state;
+  }
+
+  /** Another window wrote and this store missed the message: start over from the disk. */
+  private reload(): void {
+    this.rev = this.kv.getItem(this.revKey);
+    this.state = this.load() ?? this.state;
+    this.emit();
+  }
+
+  /** Records another window just saved, applied without reading the rest from the disk. */
+  private patch(writes: readonly KeyWrite[]): void {
+    const prefix = `${this.key}:`;
+    const mine = writes.filter(([key]) => key === this.key || key.startsWith(prefix));
+    if (mine.length === 0) return;
+    const next: Partial<OpsState> = {};
+    const records = new Map<RecordField, Map<string, Stored | null>>();
+    const lists = new Set<RecordField>();
+    for (const [key, value] of mine) {
+      if (key === this.key) {
+        const small = parse<Partial<OpsState> & { format?: number }>(value);
+        if (small) {
+          const { format: _, ...fields } = small;
+          Object.assign(next, fields);
+        }
+      } else if (key === this.revKey) this.rev = value;
+      else if (key.startsWith(`${prefix}list:`)) {
+        const [field] = key.slice(`${prefix}list:`.length).split(':');
+        if (isRecordField(field)) lists.add(field);
+      } else if (key.startsWith(`${prefix}rec:`)) {
+        const [field, ...id] = key.slice(`${prefix}rec:`.length).split(':');
+        if (!isRecordField(field)) continue;
+        if (!records.has(field)) records.set(field, new Map());
+        records.get(field)!.set(id.join(':'), parse<Stored>(value));
+      }
+    }
+    for (const field of new Set([...records.keys(), ...lists])) {
+      const known = new Map((this.state[field] as Stored[]).map((record) => [record.id, record]));
+      const changed = records.get(field) ?? new Map<string, Stored | null>();
+      // The disk already holds this batch, so a changed list reads back whole.
+      const ids = lists.has(field) ? this.readIds(field) : [...known.keys()];
+      (next as Record<RecordField, Stored[]>)[field] = ids
+        .map((id) => (changed.has(id) ? changed.get(id) : known.get(id) ?? parse<Stored>(this.kv.getItem(this.recordKey(field, id)))))
+        .filter((record): record is Stored => !!record);
+    }
+    this.state = { ...this.state, ...next };
+    this.emit();
+  }
+
+  private smallDocument(state: OpsState): string {
+    const small: Record<string, unknown> = { format: 2 };
+    for (const [key, value] of Object.entries(state)) if (!isRecordField(key)) small[key] = value;
+    return JSON.stringify(small);
+  }
+
+  /** Every key of a state, for a workspace saved for the first time or split from one document. */
+  private everything(state: OpsState): KeyWrite[] {
+    const writes: KeyWrite[] = [];
+    for (const field of RECORD_FIELDS) {
+      const list = state[field] as Stored[];
+      for (const record of list) writes.push([this.recordKey(field, record.id), JSON.stringify(record)]);
+      writes.push(...this.listWrites(field, null, list));
+    }
+    writes.push([this.key, this.smallDocument(state)]);
+    return writes;
+  }
+
+  /** What changed between two states, as keys to write. Records first, lists next, removals last. */
+  private changes(before: OpsState, after: OpsState): KeyWrite[] {
+    const records: KeyWrite[] = [];
+    const lists: KeyWrite[] = [];
+    const removed: KeyWrite[] = [];
+    for (const field of RECORD_FIELDS) {
+      const old = before[field] as Stored[];
+      const now = after[field] as Stored[];
+      if (old === now) continue;
+      // Identity tells what changed: the draft copied exactly the records it wrote to. New records
+      // go in at the front, so walking both lists from the old end pairs up everything else.
+      let i = old.length - 1;
+      let j = now.length - 1;
+      for (; i >= 0 && j >= 0 && old[i].id === now[j].id; i -= 1, j -= 1) {
+        if (old[i] !== now[j]) records.push([this.recordKey(field, now[j].id), JSON.stringify(now[j])]);
+      }
+      if (i < 0 && j < 0) continue;
+      // What did not pair up: new, moved or removed records.
+      const previous = new Set(old.slice(0, i + 1));
+      for (let k = 0; k <= j; k += 1) if (!previous.has(now[k])) records.push([this.recordKey(field, now[k].id), JSON.stringify(now[k])]);
+      if (i >= 0) {
+        const ids = new Set(now.map((record) => record.id));
+        for (let k = 0; k <= i; k += 1) if (!ids.has(old[k].id)) removed.push([this.recordKey(field, old[k].id), null]);
+      }
+      lists.push(...this.listWrites(field, old, now, old.length - 1 - i));
+    }
+    const small = (Object.keys(after) as (keyof OpsState)[]).some((key) => !isRecordField(key) && after[key] !== before[key]);
+    return [...records, ...lists, ...(small ? [[this.key, this.smallDocument(after)] as KeyWrite] : []), ...removed];
+  }
+
+  private write(writes: readonly KeyWrite[]): void {
+    if (this.kv.batch) return this.kv.batch(writes);
+    for (const [key, value] of writes) {
+      if (value === null) this.kv.removeItem(key);
+      else this.kv.setItem(key, value);
     }
   }
 
@@ -161,28 +341,29 @@ export class OpsStore {
   }
 
   /**
-   * Applies a change to a copy of the state, then saves, logs and tells every window. A change
-   * that throws, or that the device cannot save, leaves the state untouched.
+   * Applies a change to a draft of the state, then saves what it touched, logs it and tells every
+   * window. A change that throws, or that the device cannot save, leaves the state untouched.
    */
   update(change: (draft: OpsState) => void, entry?: Omit<ActivityEntry, 'id' | 'at'>): void {
-    // Re-read first: another window (the customer screen, a second till) may have written since.
-    this.state = this.read() ?? this.state;
-    // Parsing the saved text makes the copy: it takes a third of the time structuredClone needs on
-    // a large document, and the state is plain JSON either way.
-    const draft: OpsState = this.raw ? JSON.parse(this.raw) : structuredClone(this.state);
-    change(draft);
-    if (entry) {
-      draft.activity.unshift({ id: this.id(), at: this.now(), ...entry });
-      draft.activity.length = Math.min(draft.activity.length, ACTIVITY_LIMIT);
-    }
-    const raw = JSON.stringify(draft);
+    // Another window (the customer screen, a second till) may have written without this store hearing.
+    if (this.kv.getItem(this.revKey) !== this.rev) this.reload();
+    const before = this.state;
+    const after = produce(before, (draft) => {
+      change(draft);
+      if (entry) {
+        draft.activity.unshift({ id: this.id(), at: this.now(), ...entry });
+        draft.activity.length = Math.min(draft.activity.length, ACTIVITY_LIMIT);
+      }
+    });
+    const rev = this.id();
     try {
-      this.kv.setItem(this.key, raw);
+      this.write([...(this.split ? this.changes(before, after) : this.everything(after)), [this.revKey, rev]]);
     } catch {
       throw new Error('Penyimpanan perangkat ini penuh, jadi perubahan tidak tersimpan. Kosongkan ruang atau hubungi bantuan sebelum lanjut berjualan.');
     }
-    this.state = draft;
-    this.raw = raw;
+    this.rev = rev;
+    this.split = true;
+    this.state = after;
     this.channel?.postMessage('changed');
     this.emit();
   }

@@ -81,9 +81,14 @@ export interface KeyValueStore {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
-  /** Calls `listener` when another window of this browser changes `key`. Stores that can tell have it. */
-  watch?(key: string, listener: () => void): void;
+  /** Writes several keys as one change: other windows hear them together. `null` removes a key. */
+  batch?(writes: readonly KeyWrite[]): void;
+  /** Hears every change another window of this browser makes. Stores that can tell have it. */
+  onRemote?(listener: (writes: readonly KeyWrite[]) => void): void;
 }
+
+/** One key to write, or to remove when the value is null. */
+export type KeyWrite = readonly [key: string, value: string | null];
 
 export function memoryStore(): KeyValueStore {
   const map = new Map<string, string>();

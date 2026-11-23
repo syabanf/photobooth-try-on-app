@@ -5,17 +5,16 @@
 // memory at once, goes to the disk in the background, and reaches the other windows of this
 // browser (the customer screen, the queue TV) through a BroadcastChannel.
 
-import { browserStore, type KeyValueStore } from '../account/backend';
+import { browserStore, type KeyValueStore, type KeyWrite } from '../account/backend';
 
 /** The disk under the cache. IndexedDB in the browser; a fake in tests. */
 export interface Backing {
   load(): Promise<Array<[string, string]>>;
-  put(key: string, value: string): Promise<void>;
-  remove(key: string): Promise<void>;
+  /** Saves several keys in one transaction; `null` removes a key. */
+  write(writes: readonly KeyWrite[]): Promise<void>;
 }
 
-type Change = { key: string; value: string | null };
-type Channel = { postMessage(change: Change): void; onmessage: ((event: { data: Change }) => void) | null };
+type Channel = { postMessage(writes: readonly KeyWrite[]): void; onmessage: ((event: { data: readonly KeyWrite[] }) => void) | null };
 
 export interface CachedStoreOptions {
   /** Where these records lived before. A key found only there moves over on first read. */
@@ -27,7 +26,7 @@ export interface CachedStoreOptions {
 
 export function cachedStore(entries: Array<[string, string]>, backing: Backing, { legacy = null, channel = null, onFailure = () => {} }: CachedStoreOptions = {}): Required<KeyValueStore> {
   const cache = new Map(entries);
-  const watchers = new Map<string, Set<() => void>>();
+  const listeners = new Set<(writes: readonly KeyWrite[]) => void>();
   /** What still has to reach the disk. A key written twice before its turn goes out once. */
   const pending = new Map<string, string | null>();
   let writing = false;
@@ -36,13 +35,15 @@ export function cachedStore(entries: Array<[string, string]>, backing: Backing, 
     if (writing) return;
     writing = true;
     try {
-      for (const [key, value] of pending) {
-        pending.delete(key);
+      while (pending.size) {
+        const batch = [...pending];
+        pending.clear();
         try {
-          await (value === null ? backing.remove(key) : backing.put(key, value));
-          legacy?.removeItem(key);
+          await backing.write(batch);
+          for (const [key] of batch) legacy?.removeItem(key);
         } catch (error) {
-          if (!pending.has(key)) pending.set(key, value);
+          // Put back what no newer write replaced, and wait for the next write to try again.
+          for (const [key, value] of batch) if (!pending.has(key)) pending.set(key, value);
           onFailure(error as Error);
           return;
         }
@@ -52,18 +53,25 @@ export function cachedStore(entries: Array<[string, string]>, backing: Backing, 
     }
   }
 
-  function write(key: string, value: string | null): void {
-    if (value === null) cache.delete(key);
-    else cache.set(key, value);
-    pending.set(key, value);
+  function apply(writes: readonly KeyWrite[]): void {
+    for (const [key, value] of writes) {
+      if (value === null) cache.delete(key);
+      else cache.set(key, value);
+    }
+  }
+
+  function batch(writes: readonly KeyWrite[]): void {
+    if (writes.length === 0) return;
+    apply(writes);
+    for (const [key, value] of writes) pending.set(key, value);
     void flush();
+    channel?.postMessage(writes);
   }
 
   if (channel) {
-    channel.onmessage = ({ data: { key, value } }) => {
-      if (value === null) cache.delete(key);
-      else cache.set(key, value);
-      for (const listener of watchers.get(key) ?? []) listener();
+    channel.onmessage = ({ data }) => {
+      apply(data);
+      for (const listener of listeners) listener(data);
     };
   }
 
@@ -72,21 +80,17 @@ export function cachedStore(entries: Array<[string, string]>, backing: Backing, 
       const value = cache.get(key);
       if (value !== undefined) return value;
       const old = legacy?.getItem(key) ?? null;
-      if (old !== null) write(key, old);
+      if (old !== null) {
+        cache.set(key, old);
+        pending.set(key, old);
+        void flush();
+      }
       return old;
     },
-    setItem(key, value) {
-      write(key, value);
-      channel?.postMessage({ key, value });
-    },
-    removeItem(key) {
-      write(key, null);
-      channel?.postMessage({ key, value: null });
-    },
-    watch(key, listener) {
-      if (!watchers.has(key)) watchers.set(key, new Set());
-      watchers.get(key)!.add(listener);
-    },
+    setItem: (key, value) => batch([[key, value]]),
+    removeItem: (key) => batch([[key, null]]),
+    batch,
+    onRemote: (listener) => void listeners.add(listener),
   };
 }
 
@@ -116,8 +120,13 @@ function indexedDbBacking(db: IDBDatabase): Backing {
       const { keys, values } = await run('readonly', (store) => ({ keys: store.getAllKeys(), values: store.getAll() }));
       return keys.result.map((key, index) => [String(key), values.result[index] as string]);
     },
-    put: (key, value) => run('readwrite', (store) => void store.put(value, key)),
-    remove: (key) => run('readwrite', (store) => void store.delete(key)),
+    write: (writes) =>
+      run('readwrite', (store) => {
+        for (const [key, value] of writes) {
+          if (value === null) store.delete(key);
+          else store.put(value, key);
+        }
+      }),
   };
 }
 

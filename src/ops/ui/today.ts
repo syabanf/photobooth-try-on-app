@@ -38,7 +38,7 @@ export function renderToday(ops: Ops, nav: (view: View) => void): HTMLElement {
       { label: 'Pendapatan', value: money(gross - refunded), hint: refunded ? `${money(refunded)} di-refund` : `${orders.length} pesanan` },
       { label: 'Booth online', value: `${online} / ${booths.length}` },
       { label: 'Peringatan terbuka', value: String(openAlerts.length), hint: openAlerts[0]?.message ?? 'Semua aman' },
-      { label: 'Menunggu di antrean', value: String(state.tickets.filter((ticket) => ticket.status === 'waiting').length), hint: `${ops.outbox.pending().length} data belum terkirim` },
+      { label: 'Menunggu di antrean', value: String(state.tickets.filter((ticket) => ticket.status === 'waiting').length), hint: `${ops.outbox.size()} data belum terkirim` },
     ]),
   );
 
