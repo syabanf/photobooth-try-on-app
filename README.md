@@ -184,6 +184,25 @@ The rail on tablets and desktops holds every page: Dashboard, then each group un
 3. Open `http://127.0.0.1:4173` on the booth and sign in. Open the kiosk and the TV from **Queue** so they start locked.
 4. Run the kiosk and TV browsers full screen, for example `chrome --kiosk --kiosk-printing http://127.0.0.1:4173/#display=queue&lock=1`. Turn off the OS screen sleep: the Wake Lock API that keeps screens on needs HTTPS or localhost.
 
+**Linux booth computer with Docker**
+
+`Dockerfile` builds the app with the camera models inside it, and `deploy/docker-compose.yml` runs it with the photo and QRIS data on a volume (`booth-data`) and a restart after every reboot. Building needs internet once, to download the models.
+
+```bash
+cd deploy
+PHOTO_PUBLIC_ORIGIN=http://<booth-IP>:4173 docker compose up -d --build
+```
+
+The container uses the host network, which works on Linux only. Photo uploads, the DSLR proxy and QRIS management answer only the booth computer itself, and with a published port every request, guests' phones included, would arrive from Docker's gateway address. On Windows or macOS keep `pnpm serve` under the OS's service manager.
+
+For HTTPS, put `booth.crt` and `booth.key` in `deploy/certs` (see below; that folder stays out of git) and start the nginx service too:
+
+```bash
+PHOTO_PUBLIC_ORIGIN=http://<booth-IP> BOOTH_HOST=127.0.0.1 docker compose --profile https up -d --build
+```
+
+Back up the `booth-data` volume: it holds the customers' photos and the QRIS token. Business records stay in each browser, as described above.
+
 **Other devices over HTTPS (nginx)**
 
 A tablet or a second kiosk on the venue network needs HTTPS before its browser hands over the camera. `deploy/nginx.conf` puts nginx in front of `pnpm serve` for that and changes nothing else: Node still serves the app, the photos and every `/api/` route.
