@@ -27,8 +27,8 @@ export async function checkSecret(secret: string, hash: string, salt: string): P
 }
 
 export const PASSWORD_RULES = [
-  { label: 'At least 8 characters', test: (password: string) => password.length >= 8 },
-  { label: 'A letter and a number', test: (password: string) => /[a-z]/i.test(password) && /\d/.test(password) },
+  { label: 'Minimal 8 karakter', test: (password: string) => password.length >= 8 },
+  { label: 'Berisi huruf dan angka', test: (password: string) => /[a-z]/i.test(password) && /\d/.test(password) },
 ] as const;
 
 /** The first rule the password breaks, or null when it passes. */

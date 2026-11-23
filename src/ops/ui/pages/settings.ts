@@ -14,25 +14,25 @@ const MODES = Object.keys(SESSION_MODES) as SessionMode[];
 
 export function renderSettings({ ops }: PageContext): HTMLElement {
   const { state } = ops;
-  const view = page('Prices and rules', 'Prices and rules every booth and till in this workspace follows. Jump to a part below, or work down the page in order.');
+  const view = page('Harga dan aturan', 'Harga dan aturan yang diikuti setiap booth dan kasir di workspace ini. Lompat ke bagian di bawah, atau kerjakan berurutan dari atas.');
 
   // ---------- booth categories ----------
-  const categories = section('Booth categories', 'A kind of booth with its own price per session mode. Each booth belongs to one.');
+  const categories = section('Kategori booth', 'Jenis booth dengan harga sendiri per mode sesi. Setiap booth masuk ke satu kategori.');
   const editCategory = (id?: string) => {
     const category = state.categories.find((entry) => entry.id === id);
     formDialog({
-      title: category ? `Edit ${category.name}` : 'Add booth category',
-      submitLabel: 'Save',
+      title: category ? `Ubah ${category.name}` : 'Tambah kategori booth',
+      submitLabel: 'Simpan',
       fields: [
-        { name: 'name', label: 'Name', value: category?.name ?? '', placeholder: 'Photobox' },
-        ...MODES.map((mode) => ({ name: mode, label: `${SESSION_MODES[mode].label} price`, value: String(category?.prices[mode] ?? ''), type: 'number' as const, hint: 'Leave empty to stop selling this mode.' })),
+        { name: 'name', label: 'Nama', value: category?.name ?? '', placeholder: 'Contoh: Photobox' },
+        ...MODES.map((mode) => ({ name: mode, label: `Harga ${SESSION_MODES[mode].label}`, value: String(category?.prices[mode] ?? ''), type: 'number' as const, hint: 'Kosongkan untuk berhenti menjual mode ini.' })),
       ],
-      danger: category && state.categories.length > 1 ? { label: 'Delete', run: (close) => { ops.edit('settings.manage', 'category.delete', `Deleted booth category ${category.name}.`, (draft) => { draft.categories = draft.categories.filter((entry) => entry.id !== id); }); close(); } } : undefined,
+      danger: category && state.categories.length > 1 ? { label: 'Hapus', run: (close) => { ops.edit('settings.manage', 'category.delete', `Kategori booth ${category.name} dihapus.`, (draft) => { draft.categories = draft.categories.filter((entry) => entry.id !== id); }); close(); } } : undefined,
       async submit(values) {
         const name = String(values.name).trim();
-        if (!name) throw new Error('Enter a name.');
+        if (!name) throw new Error('Isi nama.');
         const prices = Object.fromEntries(MODES.filter((mode) => String(values[mode]).trim()).map((mode) => [mode, parseAmount(String(values[mode]))]));
-        ops.edit('settings.manage', 'category.save', `Saved booth category ${name}.`, (draft) => {
+        ops.edit('settings.manage', 'category.save', `Kategori booth ${name} disimpan.`, (draft) => {
           const existing = draft.categories.find((entry) => entry.id === id);
           if (existing) Object.assign(existing, { name, prices });
           else draft.categories.push({ id: ops.store.id(), name, prices });
@@ -40,11 +40,11 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
       },
     });
   };
-  categories.actions.append(act('Add category', 'btn btn-outline btn-sm', () => editCategory(), 'plus'));
+  categories.actions.append(act('Tambah kategori', 'btn btn-outline btn-sm', () => editCategory(), 'plus'));
   categories.body.append(
     table(
       [
-        { label: 'Category', cell: (row) => row.name },
+        { label: 'Kategori', cell: (row) => row.name },
         ...MODES.map((mode) => ({ label: SESSION_MODES[mode].label, className: 'num', cell: (row: (typeof state.categories)[number]) => (row.prices[mode] === undefined ? '—' : money(row.prices[mode]!)) })),
       ],
       state.categories,
@@ -53,33 +53,33 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
   );
 
   // ---------- booth profiles ----------
-  const booths = section('Booths', 'Category, time zone and session modes per booth. Vouchers and reports follow each booth’s own clock.');
+  const booths = section('Booth', 'Kategori, zona waktu dan mode sesi per booth. Voucher dan laporan mengikuti jam masing-masing booth.');
   booths.body.append(
     table(
       [
         { label: 'Booth', cell: (point) => `${point.name} · ${ops.branchName(point.locationId)}` },
-        { label: 'Category', cell: (point) => state.categories.find((entry) => entry.id === ops.profile(point.id).categoryId)?.name ?? '—' },
-        { label: 'Time zone', cell: (point) => ops.profile(point.id).timeZone },
-        { label: 'Modes', cell: (point) => ops.profile(point.id).modes.map((mode) => SESSION_MODES[mode].label).join(', ') },
+        { label: 'Kategori', cell: (point) => state.categories.find((entry) => entry.id === ops.profile(point.id).categoryId)?.name ?? '—' },
+        { label: 'Zona waktu', cell: (point) => ops.profile(point.id).timeZone },
+        { label: 'Mode', cell: (point) => ops.profile(point.id).modes.map((mode) => SESSION_MODES[mode].label).join(', ') },
       ],
       ops.visibleBooths(),
       {
-        empty: 'Add booths on the Locations page first.',
+        empty: 'Tambahkan booth di halaman Lokasi dulu.',
         onRow: (point) => {
           const profile = ops.profile(point.id);
           formDialog({
             title: point.name,
-            submitLabel: 'Save',
+            submitLabel: 'Simpan',
             fields: [
-              { name: 'categoryId', label: 'Category', value: profile.categoryId, options: state.categories.map((entry) => ({ value: entry.id, label: entry.name })) },
-              { name: 'timeZone', label: 'Time zone', value: profile.timeZone, hint: 'An IANA name, such as Asia/Jakarta, Asia/Makassar or Asia/Singapore.' },
-              { name: 'modes', label: 'Session modes', value: profile.modes, options: MODES.map((mode) => ({ value: mode, label: SESSION_MODES[mode].label })) },
+              { name: 'categoryId', label: 'Kategori', value: profile.categoryId, options: state.categories.map((entry) => ({ value: entry.id, label: entry.name })) },
+              { name: 'timeZone', label: 'Zona waktu', value: profile.timeZone, hint: 'Nama IANA, misalnya Asia/Jakarta, Asia/Makassar atau Asia/Singapore.' },
+              { name: 'modes', label: 'Mode sesi', value: profile.modes, options: MODES.map((mode) => ({ value: mode, label: SESSION_MODES[mode].label })) },
             ],
             async submit(values) {
               const timeZone = String(values.timeZone).trim();
-              if (!isTimeZone(timeZone)) throw new Error(`${timeZone} is not a time zone.`);
+              if (!isTimeZone(timeZone)) throw new Error(`${timeZone} bukan zona waktu.`);
               const modes = values.modes as SessionMode[];
-              if (modes.length === 0) throw new Error('Pick at least one mode.');
+              if (modes.length === 0) throw new Error('Pilih minimal satu mode.');
               ops.saveProfile({ pointId: point.id, categoryId: String(values.categoryId), timeZone, modes });
             },
           });
@@ -89,64 +89,64 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
   );
 
   // ---------- print prices ----------
-  const prints = section('Print prices', 'What an extra print costs at the booth and at the till.');
+  const prints = section('Harga cetak', 'Harga cetakan tambahan di booth dan di kasir.');
   const editPrint = (size?: string) => {
     const existing = state.printPrices.find((entry) => entry.size === size);
     formDialog({
-      title: existing ? `Edit ${existing.size}` : 'Add print size',
-      submitLabel: 'Save',
+      title: existing ? `Ubah ${existing.size}` : 'Tambah ukuran cetak',
+      submitLabel: 'Simpan',
       fields: [
-        { name: 'size', label: 'Size', value: existing?.size ?? '4R', options: PAPER_SIZES.map((paper) => ({ value: paper, label: PAPER[paper].label })) },
-        { name: 'price', label: 'Price', value: String(existing?.price ?? ''), type: 'number' },
+        { name: 'size', label: 'Ukuran', value: existing?.size ?? '4R', options: PAPER_SIZES.map((paper) => ({ value: paper, label: PAPER[paper].label })) },
+        { name: 'price', label: 'Harga', value: String(existing?.price ?? ''), type: 'number' },
       ],
-      danger: existing ? { label: 'Delete', run: (close) => { ops.edit('settings.manage', 'print.delete', `Stopped selling ${existing.size} prints.`, (draft) => { draft.printPrices = draft.printPrices.filter((entry) => entry.size !== size); }); close(); } } : undefined,
+      danger: existing ? { label: 'Hapus', run: (close) => { ops.edit('settings.manage', 'print.delete', `Cetakan ${existing.size} tidak dijual lagi.`, (draft) => { draft.printPrices = draft.printPrices.filter((entry) => entry.size !== size); }); close(); } } : undefined,
       async submit(values) {
         const price = parseAmount(String(values.price));
-        if (price <= 0) throw new Error('Enter a price.');
-        ops.edit('settings.manage', 'print.save', `${values.size} prints cost ${money(price)}.`, (draft) => {
+        if (price <= 0) throw new Error('Isi harga.');
+        ops.edit('settings.manage', 'print.save', `Harga cetakan ${values.size} menjadi ${money(price)}.`, (draft) => {
           draft.printPrices = [...draft.printPrices.filter((entry) => entry.size !== values.size && entry.size !== size), { size: values.size as never, price }];
         });
       },
     });
   };
   prints.actions.append(
-    act(`AI preset ${state.settings.presetPrice ? money(state.settings.presetPrice) : 'free'}`, 'btn btn-ghost btn-sm', () =>
+    act(`Preset AI ${state.settings.presetPrice ? money(state.settings.presetPrice) : 'gratis'}`, 'btn btn-ghost btn-sm', () =>
       formDialog({
-        title: 'AI preset print',
-        description: 'What the booth charges for one printed AI preset. 0 makes them free.',
-        submitLabel: 'Save',
-        fields: [{ name: 'price', label: 'Price', value: String(state.settings.presetPrice), type: 'number' }],
+        title: 'Cetakan preset AI',
+        description: 'Harga yang ditagih booth untuk satu cetakan preset AI. Isi 0 agar gratis.',
+        submitLabel: 'Simpan',
+        fields: [{ name: 'price', label: 'Harga', value: String(state.settings.presetPrice), type: 'number' }],
         async submit(values) {
           const presetPrice = parseAmount(String(values.price));
-          if (presetPrice < 0) throw new Error('A price cannot be negative.');
+          if (presetPrice < 0) throw new Error('Harga tidak boleh negatif.');
           ops.savePresetPrice(presetPrice);
         },
       }), 'sparkles'),
-    act('Add size', 'btn btn-outline btn-sm', () => editPrint(), 'plus'),
+    act('Tambah ukuran', 'btn btn-outline btn-sm', () => editPrint(), 'plus'),
   );
-  prints.body.append(table([{ label: 'Size', cell: (row) => PAPER[row.size].label }, { label: 'Price', className: 'num', cell: (row) => money(row.price) }], state.printPrices, { onRow: (row) => editPrint(row.size) }));
+  prints.body.append(table([{ label: 'Ukuran', cell: (row) => PAPER[row.size].label }, { label: 'Harga', className: 'num', cell: (row) => money(row.price) }], state.printPrices, { onRow: (row) => editPrint(row.size) }));
 
   // ---------- merchandise ----------
-  const products = section('Merchandise', 'Sold at the till. Stock goes down with each sale and back up on a refund.');
+  const products = section('Merchandise', 'Dijual di kasir. Stok berkurang di setiap penjualan dan bertambah lagi saat refund.');
   const editProduct = (id?: string) => {
     const product = state.products.find((entry) => entry.id === id);
     formDialog({
-      title: product ? `Edit ${product.name}` : 'Add product',
-      submitLabel: 'Save',
+      title: product ? `Ubah ${product.name}` : 'Tambah produk',
+      submitLabel: 'Simpan',
       fields: [
-        { name: 'name', label: 'Name', value: product?.name ?? '', placeholder: 'Keychain frame' },
+        { name: 'name', label: 'Nama', value: product?.name ?? '', placeholder: 'Contoh: Gantungan kunci bingkai' },
         { name: 'sku', label: 'SKU', value: product?.sku ?? '' },
-        { name: 'price', label: 'Price', value: String(product?.price ?? ''), type: 'number' },
-        { name: 'stock', label: 'In stock', value: String(product?.stock ?? 0), type: 'number' },
+        { name: 'price', label: 'Harga', value: String(product?.price ?? ''), type: 'number' },
+        { name: 'stock', label: 'Stok', value: String(product?.stock ?? 0), type: 'number' },
       ],
-      danger: product ? { label: 'Delete', run: (close) => { ops.edit('settings.manage', 'product.delete', `Deleted ${product.name}.`, (draft) => { draft.products = draft.products.filter((entry) => entry.id !== id); }); close(); } } : undefined,
+      danger: product ? { label: 'Hapus', run: (close) => { ops.edit('settings.manage', 'product.delete', `${product.name} dihapus.`, (draft) => { draft.products = draft.products.filter((entry) => entry.id !== id); }); close(); } } : undefined,
       async submit(values) {
         const name = String(values.name).trim();
         const price = parseAmount(String(values.price));
         const stock = parseAmount(String(values.stock));
-        if (!name || price <= 0) throw new Error('Enter a name and a price.');
-        if (stock < 0) throw new Error('Stock cannot be negative.');
-        ops.edit('settings.manage', 'product.save', `${product ? 'Updated' : 'Added'} ${name}, ${stock} in stock.`, (draft) => {
+        if (!name || price <= 0) throw new Error('Isi nama dan harga.');
+        if (stock < 0) throw new Error('Stok tidak boleh negatif.');
+        ops.edit('settings.manage', 'product.save', `${name} ${product ? 'diperbarui' : 'ditambahkan'}, stok ${stock}.`, (draft) => {
           const existing = draft.products.find((entry) => entry.id === id);
           const fields = { name, sku: String(values.sku).trim(), price, stock };
           if (existing) Object.assign(existing, fields);
@@ -155,39 +155,39 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
       },
     });
   };
-  products.actions.append(act('Add product', 'btn btn-outline btn-sm', () => editProduct(), 'plus'));
+  products.actions.append(act('Tambah produk', 'btn btn-outline btn-sm', () => editProduct(), 'plus'));
   products.body.append(
     table(
       [
-        { label: 'Product', cell: (row) => row.name },
+        { label: 'Produk', cell: (row) => row.name },
         { label: 'SKU', cell: (row) => row.sku || '—' },
-        { label: 'Price', className: 'num', cell: (row) => money(row.price) },
-        { label: 'Stock', className: 'num', cell: (row) => (row.stock === 0 ? badge('Sold out', 'error') : String(row.stock)) },
+        { label: 'Harga', className: 'num', cell: (row) => money(row.price) },
+        { label: 'Stok', className: 'num', cell: (row) => (row.stock === 0 ? badge('Habis', 'error') : String(row.stock)) },
       ],
       state.products,
-      { empty: 'No merchandise yet.', onRow: (row) => editProduct(row.id) },
+      { empty: 'Belum ada merchandise.', onRow: (row) => editProduct(row.id) },
     ),
   );
 
   // ---------- discount presets ----------
-  const presets = section('Discount presets', 'One-tap discounts at the till, such as a staff or bundle price. Needs the discount permission.');
+  const presets = section('Preset diskon', 'Diskon sekali ketuk di kasir, misalnya harga staf atau paket. Perlu izin diskon.');
   const editPreset = (id?: string) => {
     const preset = state.presets.find((entry) => entry.id === id);
     formDialog({
-      title: preset ? `Edit ${preset.name}` : 'Add discount preset',
-      submitLabel: 'Save',
+      title: preset ? `Ubah ${preset.name}` : 'Tambah preset diskon',
+      submitLabel: 'Simpan',
       fields: [
-        { name: 'name', label: 'Name', value: preset?.name ?? '', placeholder: 'Student 10%' },
-        { name: 'kind', label: 'Type', value: preset?.kind ?? 'percent', options: [{ value: 'percent', label: 'Percent off' }, { value: 'amount', label: 'Rupiah off' }] },
-        { name: 'value', label: 'Value', value: String(preset?.value ?? ''), type: 'number' },
+        { name: 'name', label: 'Nama', value: preset?.name ?? '', placeholder: 'Contoh: Pelajar 10%' },
+        { name: 'kind', label: 'Jenis', value: preset?.kind ?? 'percent', options: [{ value: 'percent', label: 'Diskon persen' }, { value: 'amount', label: 'Diskon rupiah' }] },
+        { name: 'value', label: 'Nilai', value: String(preset?.value ?? ''), type: 'number' },
       ],
-      danger: preset ? { label: 'Delete', run: (close) => { ops.edit('settings.manage', 'preset.delete', `Deleted preset ${preset.name}.`, (draft) => { draft.presets = draft.presets.filter((entry) => entry.id !== id); }); close(); } } : undefined,
+      danger: preset ? { label: 'Hapus', run: (close) => { ops.edit('settings.manage', 'preset.delete', `Preset ${preset.name} dihapus.`, (draft) => { draft.presets = draft.presets.filter((entry) => entry.id !== id); }); close(); } } : undefined,
       async submit(values) {
         const name = String(values.name).trim();
         const value = parseAmount(String(values.value));
-        if (!name || value <= 0) throw new Error('Enter a name and a value.');
-        if (values.kind === 'percent' && value > 100) throw new Error('A percentage goes up to 100.');
-        ops.edit('settings.manage', 'preset.save', `Saved preset ${name}.`, (draft) => {
+        if (!name || value <= 0) throw new Error('Isi nama dan nilai.');
+        if (values.kind === 'percent' && value > 100) throw new Error('Persentase paling tinggi 100.');
+        ops.edit('settings.manage', 'preset.save', `Preset ${name} disimpan.`, (draft) => {
           const existing = draft.presets.find((entry) => entry.id === id);
           const fields = { name, kind: values.kind as 'percent' | 'amount', value };
           if (existing) Object.assign(existing, fields);
@@ -196,34 +196,34 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
       },
     });
   };
-  presets.actions.append(act('Add preset', 'btn btn-outline btn-sm', () => editPreset(), 'plus'));
-  presets.body.append(table([{ label: 'Preset', cell: (row) => row.name }, { label: 'Discount', className: 'num', cell: (row) => (row.kind === 'percent' ? `${row.value}%` : money(row.value)) }], state.presets, { empty: 'No presets yet.', onRow: (row) => editPreset(row.id) }));
+  presets.actions.append(act('Tambah preset', 'btn btn-outline btn-sm', () => editPreset(), 'plus'));
+  presets.body.append(table([{ label: 'Preset', cell: (row) => row.name }, { label: 'Diskon', className: 'num', cell: (row) => (row.kind === 'percent' ? `${row.value}%` : money(row.value)) }], state.presets, { empty: 'Belum ada preset.', onRow: (row) => editPreset(row.id) }));
 
   // ---------- operations ----------
-  const rules = section('Operations', 'Shifts, retention and the queue.');
+  const rules = section('Operasional', 'Shift, masa simpan dan antrean.');
   const s = state.settings;
   rules.actions.append(
-    act('Edit', 'btn btn-outline btn-sm', () =>
+    act('Ubah', 'btn btn-outline btn-sm', () =>
       formDialog({
-        title: 'Operations',
-        submitLabel: 'Save',
+        title: 'Operasional',
+        submitLabel: 'Simpan',
         fields: [
-          { name: 'shiftsEnabled', label: 'Require an open shift to sell', value: s.shiftsEnabled, hint: 'Turn off for a booth with no cashier.' },
-          { name: 'retentionDays', label: 'Keep customer photos for (days)', value: String(s.retentionDays), type: 'number', hint: '0 keeps them forever. Older files are deleted every day; the sales record stays.' },
-          { name: 'queuePrefix', label: 'Queue number prefix', value: s.queuePrefix },
+          { name: 'shiftsEnabled', label: 'Wajib buka shift untuk berjualan', value: s.shiftsEnabled, hint: 'Matikan untuk booth tanpa kasir.' },
+          { name: 'retentionDays', label: 'Simpan foto pelanggan selama (hari)', value: String(s.retentionDays), type: 'number', hint: 'Isi 0 untuk menyimpan selamanya. File yang lebih lama dihapus setiap hari; catatan penjualan tetap ada.' },
+          { name: 'queuePrefix', label: 'Awalan nomor antrean', value: s.queuePrefix },
           {
             name: 'faceLibrary',
-            label: 'Face list on the AI presets page',
+            label: 'Daftar wajah di halaman Preset AI',
             value: s.faceLibrary,
-            options: [{ value: 'all', label: 'Every face captured, until retention deletes it' }, { value: 'visit', label: 'Only the current customer’s faces' }],
-            hint: 'Every face lets regulars reuse theirs, but every customer can see them. Pick the second for public booths.',
+            options: [{ value: 'all', label: 'Semua wajah yang terekam, sampai terhapus oleh masa simpan' }, { value: 'visit', label: 'Hanya wajah pelanggan saat ini' }],
+            hint: 'Semua wajah memudahkan pelanggan tetap memakai wajahnya lagi, tetapi setiap pelanggan bisa melihatnya. Pilih yang kedua untuk booth umum.',
           },
-          { name: 'receiptFooter', label: 'Receipt footer', value: s.receiptFooter, type: 'textarea' },
+          { name: 'receiptFooter', label: 'Catatan kaki struk', value: s.receiptFooter, type: 'textarea' },
         ],
         async submit(values) {
           const retentionDays = parseAmount(String(values.retentionDays));
-          if (retentionDays < 0) throw new Error('Retention cannot be negative.');
-          ops.edit('settings.manage', 'settings.save', 'Updated operations settings.', (draft) => {
+          if (retentionDays < 0) throw new Error('Masa simpan tidak boleh negatif.');
+          ops.edit('settings.manage', 'settings.save', 'Pengaturan operasional diperbarui.', (draft) => {
             Object.assign(draft.settings, {
               shiftsEnabled: values.shiftsEnabled as boolean,
               retentionDays,
@@ -235,43 +235,43 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
         },
       }),
     'edit'),
-    act('Purge now', 'btn btn-ghost btn-sm', async () => notice(`Purged ${await ops.purgeExpired()} sessions.`, 'ok')),
+    act('Hapus sekarang', 'btn btn-ghost btn-sm', async () => notice(`${await ops.purgeExpired()} sesi dihapus.`, 'ok')),
   );
   const facts = el('dl', 'facts');
   for (const [label, value] of [
-    ['Shifts', s.shiftsEnabled ? 'Required to sell' : 'Off'],
-    ['Photo retention', s.retentionDays ? `${s.retentionDays} days, then deleted` : 'Kept forever'],
-    ['Payments', 'Methods, fees and the gateway live on the Payments page'],
-    ['Queue numbers', `${s.queuePrefix}001, ${s.queuePrefix}002 …`],
-    ['Face list', s.faceLibrary === 'all' ? `Every face captured (${state.faces.length} kept)` : 'Current customer only'],
+    ['Shift', s.shiftsEnabled ? 'Wajib untuk berjualan' : 'Mati'],
+    ['Masa simpan foto', s.retentionDays ? `${s.retentionDays} hari, lalu dihapus` : 'Disimpan selamanya'],
+    ['Pembayaran', 'Metode, biaya dan gateway ada di halaman Pembayaran'],
+    ['Nomor antrean', `${s.queuePrefix}001, ${s.queuePrefix}002 …`],
+    ['Daftar wajah', s.faceLibrary === 'all' ? `Semua wajah yang terekam (${state.faces.length} tersimpan)` : 'Hanya pelanggan saat ini'],
   ]) {
     facts.append(el('dt', '', label), el('dd', '', value));
   }
   rules.body.append(facts);
 
   // ---------- idle-screen ads ----------
-  const ads = section('Idle-screen ads', 'Played full screen on a booth that waits with no customer. A tap goes back to the start screen.');
+  const ads = section('Iklan layar diam', 'Diputar layar penuh di booth yang sedang menunggu tanpa pelanggan. Satu ketukan kembali ke layar awal.');
   const upload = fileInput('image/*,video/*', async (file) => {
     const src = await putBlob(file);
-    ops.edit('branding.manage', 'ad.add', `Added ad ${file.name}.`, (draft) => {
+    ops.edit('branding.manage', 'ad.add', `Iklan ${file.name} ditambahkan.`, (draft) => {
       draft.ads.push({ id: ops.store.id(), name: file.name, kind: file.type.startsWith('video/') ? 'video' : 'image', src, seconds: 8, active: true });
     });
   });
   ads.actions.append(
     upload,
-    act('Upload ad', 'btn btn-outline btn-sm', () => upload.click(), 'upload'),
-    act(s.adsEnabled ? 'Turn off' : 'Turn on', 'btn btn-ghost btn-sm', () =>
-      ops.edit('branding.manage', 'ads.toggle', `${s.adsEnabled ? 'Stopped' : 'Started'} the idle-screen ads.`, (draft) => { draft.settings.adsEnabled = !draft.settings.adsEnabled; }),
+    act('Unggah iklan', 'btn btn-outline btn-sm', () => upload.click(), 'upload'),
+    act(s.adsEnabled ? 'Matikan' : 'Nyalakan', 'btn btn-ghost btn-sm', () =>
+      ops.edit('branding.manage', 'ads.toggle', `Iklan layar diam ${s.adsEnabled ? 'dihentikan' : 'dimulai'}.`, (draft) => { draft.settings.adsEnabled = !draft.settings.adsEnabled; }),
     ),
-    act(`Idle ${s.idleSeconds}s`, 'btn btn-ghost btn-sm', () =>
+    act(`Diam ${s.idleSeconds} detik`, 'btn btn-ghost btn-sm', () =>
       formDialog({
-        title: 'Idle time',
-        submitLabel: 'Save',
-        fields: [{ name: 'seconds', label: 'Seconds without a touch before ads play', value: String(s.idleSeconds), type: 'number' }],
+        title: 'Waktu diam',
+        submitLabel: 'Simpan',
+        fields: [{ name: 'seconds', label: 'Detik tanpa sentuhan sebelum iklan diputar', value: String(s.idleSeconds), type: 'number' }],
         async submit(values) {
           const seconds = parseAmount(String(values.seconds));
-          if (seconds < 10) throw new Error('Use at least 10 seconds.');
-          ops.edit('branding.manage', 'ads.idle', `Ads start after ${seconds} idle seconds.`, (draft) => { draft.settings.idleSeconds = seconds; });
+          if (seconds < 10) throw new Error('Isi minimal 10 detik.');
+          ops.edit('branding.manage', 'ads.idle', `Iklan mulai setelah ${seconds} detik tanpa sentuhan.`, (draft) => { draft.settings.idleSeconds = seconds; });
         },
       }),
     ),
@@ -279,18 +279,18 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
   ads.body.append(
     table(
       [
-        { label: 'Ad', cell: (row) => row.name },
-        { label: 'Type', cell: (row) => (row.kind === 'video' ? 'Video' : 'Image') },
-        { label: 'Seconds', className: 'num', cell: (row) => (row.kind === 'video' ? 'Full clip' : String(row.seconds)) },
-        { label: 'Status', cell: (row) => badge(row.active ? 'Playing' : 'Paused', row.active ? 'ok' : 'muted') },
+        { label: 'Iklan', cell: (row) => row.name },
+        { label: 'Jenis', cell: (row) => (row.kind === 'video' ? 'Video' : 'Gambar') },
+        { label: 'Detik', className: 'num', cell: (row) => (row.kind === 'video' ? 'Klip penuh' : String(row.seconds)) },
+        { label: 'Status', cell: (row) => badge(row.active ? 'Diputar' : 'Dijeda', row.active ? 'ok' : 'muted') },
         {
           label: '',
           className: 'actions',
           cell: (row) => {
-            const remove = iconButton('trash', `Delete ${row.name}`);
+            const remove = iconButton('trash', `Hapus ${row.name}`);
             remove.addEventListener('click', async () => {
               await deleteBlob(row.src);
-              ops.edit('branding.manage', 'ad.delete', `Deleted ad ${row.name}.`, (draft) => { draft.ads = draft.ads.filter((entry) => entry.id !== row.id); });
+              ops.edit('branding.manage', 'ad.delete', `Iklan ${row.name} dihapus.`, (draft) => { draft.ads = draft.ads.filter((entry) => entry.id !== row.id); });
             });
             return remove;
           },
@@ -298,31 +298,31 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
       ],
       state.ads,
       {
-        empty: s.adsEnabled ? 'Upload an image or a short video.' : 'Ads are off. Upload some, then turn them on.',
-        onRow: (row) => ops.edit('branding.manage', 'ad.toggle', `${row.active ? 'Paused' : 'Resumed'} ad ${row.name}.`, (draft) => { const ad = draft.ads.find((entry) => entry.id === row.id)!; ad.active = !ad.active; }),
+        empty: s.adsEnabled ? 'Unggah gambar atau video pendek.' : 'Iklan mati. Unggah beberapa, lalu nyalakan.',
+        onRow: (row) => ops.edit('branding.manage', 'ad.toggle', `Iklan ${row.name} ${row.active ? 'dijeda' : 'diputar lagi'}.`, (draft) => { const ad = draft.ads.find((entry) => entry.id === row.id)!; ad.active = !ad.active; }),
       },
     ),
   );
 
   // ---------- events ----------
-  const events = section('Events', 'Group the sessions of an event under one gallery link, such as a wedding or a brand activation.');
+  const events = section('Acara', 'Kelompokkan sesi dari satu acara di bawah satu tautan galeri, misalnya pernikahan atau aktivasi merek.');
   const editEvent = (id?: string) => {
     const event = state.events.find((entry) => entry.id === id);
     formDialog({
-      title: event ? `Edit ${event.name}` : 'Add event',
-      submitLabel: 'Save',
+      title: event ? `Ubah ${event.name}` : 'Tambah acara',
+      submitLabel: 'Simpan',
       fields: [
-        { name: 'name', label: 'Name', value: event?.name ?? '', placeholder: 'Rani & Dimas wedding' },
-        { name: 'from', label: 'From', value: event?.from ?? '', type: 'date' },
-        { name: 'to', label: 'To', value: event?.to ?? '', type: 'date' },
-        { name: 'boothIds', label: 'Booths', value: event?.boothIds ?? [], options: ops.visibleBooths().map((point) => ({ value: point.id, label: point.name })), hint: 'None ticked means every booth.' },
+        { name: 'name', label: 'Nama', value: event?.name ?? '', placeholder: 'Contoh: Pernikahan Rani & Dimas' },
+        { name: 'from', label: 'Dari', value: event?.from ?? '', type: 'date' },
+        { name: 'to', label: 'Sampai', value: event?.to ?? '', type: 'date' },
+        { name: 'boothIds', label: 'Booth', value: event?.boothIds ?? [], options: ops.visibleBooths().map((point) => ({ value: point.id, label: point.name })), hint: 'Bila tidak ada yang dicentang, berlaku di semua booth.' },
       ],
-      danger: event ? { label: 'Delete', run: (close) => { ops.edit('settings.manage', 'event.delete', `Deleted event ${event.name}.`, (draft) => { draft.events = draft.events.filter((entry) => entry.id !== id); }); close(); } } : undefined,
+      danger: event ? { label: 'Hapus', run: (close) => { ops.edit('settings.manage', 'event.delete', `Acara ${event.name} dihapus.`, (draft) => { draft.events = draft.events.filter((entry) => entry.id !== id); }); close(); } } : undefined,
       async submit(values) {
         const name = String(values.name).trim();
-        if (!name) throw new Error('Enter a name.');
-        if (values.from && values.to && String(values.to) < String(values.from)) throw new Error('The event ends before it starts.');
-        ops.edit('settings.manage', 'event.save', `Saved event ${name}.`, (draft) => {
+        if (!name) throw new Error('Isi nama.');
+        if (values.from && values.to && String(values.to) < String(values.from)) throw new Error('Acara berakhir sebelum dimulai.');
+        ops.edit('settings.manage', 'event.save', `Acara ${name} disimpan.`, (draft) => {
           const fields = { name, from: String(values.from), to: String(values.to), boothIds: values.boothIds as string[] };
           const existing = draft.events.find((entry) => entry.id === id);
           if (existing) Object.assign(existing, fields);
@@ -331,17 +331,17 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
       },
     });
   };
-  events.actions.append(act('Add event', 'btn btn-outline btn-sm', () => editEvent(), 'plus'));
+  events.actions.append(act('Tambah acara', 'btn btn-outline btn-sm', () => editEvent(), 'plus'));
   events.body.append(
     table(
       [
-        { label: 'Event', cell: (row) => row.name },
-        { label: 'Dates', cell: (row) => [row.from, row.to].filter(Boolean).join(' – ') || 'Open' },
-        { label: 'Sessions', className: 'num', cell: (row) => String(state.sessions.filter((session) => session.eventId === row.id).length) },
+        { label: 'Acara', cell: (row) => row.name },
+        { label: 'Tanggal', cell: (row) => [row.from, row.to].filter(Boolean).join(' – ') || 'Tanpa batas' },
+        { label: 'Sesi', className: 'num', cell: (row) => String(state.sessions.filter((session) => session.eventId === row.id).length) },
         {
-          label: 'Gallery link',
+          label: 'Tautan galeri',
           cell: (row) => {
-            const link = el('a', 'link', 'Open');
+            const link = el('a', 'link', 'Buka');
             link.href = ops.eventLink(row.id);
             link.target = '_blank';
             return link;
@@ -349,23 +349,23 @@ export function renderSettings({ ops }: PageContext): HTMLElement {
         },
       ],
       state.events,
-      { empty: 'No events yet.', onRow: (row) => editEvent(row.id) },
+      { empty: 'Belum ada acara.', onRow: (row) => editEvent(row.id) },
     ),
   );
 
   const parts: [string, string, HTMLElement][] = [
-    ['categories', 'Categories', categories.root],
-    ['booths', 'Booths', booths.root],
-    ['prints', 'Print prices', prints.root],
+    ['categories', 'Kategori', categories.root],
+    ['booths', 'Booth', booths.root],
+    ['prints', 'Harga cetak', prints.root],
     ['products', 'Merchandise', products.root],
-    ['presets', 'Discounts', presets.root],
-    ['rules', 'Operations', rules.root],
-    ['ads', 'Idle ads', ads.root],
-    ['events', 'Events', events.root],
+    ['presets', 'Diskon', presets.root],
+    ['rules', 'Operasional', rules.root],
+    ['ads', 'Iklan', ads.root],
+    ['events', 'Acara', events.root],
   ];
   // A jump bar over the long page: each part keeps an anchor the setup guide links to.
   const jump = el('nav', 'section-jump');
-  jump.setAttribute('aria-label', 'Parts of this page');
+  jump.setAttribute('aria-label', 'Bagian halaman ini');
   for (const [key, label, root] of parts) {
     root.id = `settings-${key}`;
     const link = el('a', 'section-jump-link', label);

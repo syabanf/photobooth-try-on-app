@@ -12,10 +12,12 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { dirname } from 'node:path';
-import { fromBoothComputer } from './booth-only.mjs';
+import { clientAddress, fromBoothComputer, sameSite } from './booth-only.mjs';
 
 const MAX_BODY = 8 * 1024;
 const MAX_WAITING = 200;
+/** One device on the network cannot take every slot and block payments at the other booths. */
+const MAX_PER_SOURCE = 30;
 const MAX_CODE = 99;
 const KEEP_PAID_MS = 86_400_000;
 /** A payment made in the QR's last seconds still counts: the notification takes a moment to arrive. */
@@ -68,16 +70,17 @@ export class QrisDesk {
   }
 
   /** Registers a charge and picks its total. Asking again for the same key returns the same one. */
-  charge(key, amount, expiresInMs, always) {
+  charge(key, amount, expiresInMs, always, source = '') {
     this.purge();
     if (this.charges[key]) return this.charges[key];
     const waiting = this.waiting();
     if (waiting.length >= MAX_WAITING) throw Object.assign(new Error('Too many payments are waiting.'), { status: 429 });
+    if (source && waiting.filter((charge) => charge.source === source).length >= MAX_PER_SOURCE) throw Object.assign(new Error('This device has too many payments waiting. Cancel the old ones first.'), { status: 429 });
     const taken = new Set(waiting.map((charge) => charge.total));
     let code = always ? 1 : 0;
     while (code <= MAX_CODE && taken.has(amount + code)) code += 1;
     if (code > MAX_CODE) throw Object.assign(new Error('Too many payments of this amount are waiting. Try again in a minute.'), { status: 409 });
-    const charge = { key, amount, code, total: amount + code, status: 'pending', createdAt: this.now(), expiresAt: this.now() + expiresInMs };
+    const charge = { key, amount, code, total: amount + code, status: 'pending', source, createdAt: this.now(), expiresAt: this.now() + expiresInMs };
     this.charges[key] = charge;
     this.save(this.snapshot());
     return charge;
@@ -211,12 +214,14 @@ export function qrisHandler(file, origin) {
 
   async function handle(req, res, url) {
     const path = url.pathname.slice('/api/qris/'.length);
+    // A page on another site cannot create charges or settle notifications through a booth's browser.
+    if (req.method !== 'GET' && !sameSite(req)) return send(res, 403, { error: 'Cross-site request refused.' });
     if (path === 'charges' && req.method === 'POST') {
       const input = JSON.parse(await body(req));
       const amount = Number(input.amount);
       const expiresInMs = Number(input.expiresInMs);
       if (!KEY.test(input.key) || !Number.isSafeInteger(amount) || amount < 1 || !(expiresInMs >= 60_000 && expiresInMs <= 7_200_000)) return send(res, 400, { error: 'Invalid charge.' });
-      const { key, code, total } = desk.charge(input.key, amount, expiresInMs, input.uniqueCode === 'always');
+      const { key, code, total } = desk.charge(input.key, amount, expiresInMs, input.uniqueCode === 'always', clientAddress(req));
       return send(res, 200, { key, code, total });
     }
     if (path.startsWith('charges/') && req.method === 'DELETE') {

@@ -16,7 +16,7 @@ export interface GalleryView {
   refresh(): Promise<void>;
 }
 
-const LAYOUT_LABELS = { strip: 'Strip', grid: 'Grid', single: 'Single' } as const;
+const LAYOUT_LABELS = { strip: 'Strip', grid: 'Grid', single: 'Tunggal' } as const;
 
 function describe(shot: Shot): string {
   return shot.kind === 'photobooth' && shot.layout ? `Photobooth · ${LAYOUT_LABELS[shot.layout]}` : SHOT_LABELS[shot.kind];
@@ -59,14 +59,14 @@ export function mountGalleryView(handlers: GalleryHandlers): GalleryView {
     tile.append(icon('images'));
     const title = document.createElement('p');
     title.className = 'empty-title';
-    title.textContent = 'Nothing saved yet';
+    title.textContent = 'Belum ada yang tersimpan';
     const desc = document.createElement('p');
     desc.className = 'empty-desc';
-    desc.textContent = 'Snapshots and photobooth sheets you take appear here.';
+    desc.textContent = 'Foto dan lembar photobooth yang diambil muncul di sini.';
     const action = document.createElement('button');
     action.type = 'button';
     action.className = 'btn btn-outline btn-sm';
-    action.textContent = 'Open photobooth';
+    action.textContent = 'Buka photobooth';
     action.addEventListener('click', handlers.onNewBooth);
     empty.append(tile, title, desc, action);
     return empty;
@@ -90,20 +90,20 @@ export function mountGalleryView(handlers: GalleryHandlers): GalleryView {
     const date = document.createElement('span');
     date.className = 'shot-date';
     const point = handlers.pointLabel(shot.pointId);
-    const stamp = new Date(shot.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    const stamp = new Date(shot.createdAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
     date.textContent = point ? `${stamp} · ${point}` : stamp;
     when.append(kind, date);
 
-    const share = iconButton('share', 'Share');
+    const share = iconButton('share', 'Bagikan');
     share.addEventListener('click', () => handlers.onShare(shot));
     // The social sizes are laid out from a still, so clips download as they are.
     share.hidden = isMotion(shot);
 
-    const download = iconButton('download', 'Download');
+    const download = iconButton('download', 'Unduh');
     download.addEventListener('click', () => downloadBlob(shot.blob, `${shot.kind}-${shot.createdAt}.${extensionOf(shot.blob)}`));
 
     // Two taps to delete: the first arms the button, the second removes the shot.
-    const remove = iconButton('trash', 'Delete');
+    const remove = iconButton('trash', 'Hapus');
     let armTimer = 0;
     const disarm = () => {
       remove.className = 'btn btn-ghost btn-icon';
@@ -112,7 +112,7 @@ export function mountGalleryView(handlers: GalleryHandlers): GalleryView {
     remove.addEventListener('click', async () => {
       if (!remove.classList.contains('btn-armed')) {
         remove.className = 'btn btn-sm btn-armed';
-        remove.replaceChildren('Delete?');
+        remove.replaceChildren('Hapus?');
         armTimer = window.setTimeout(disarm, 3000);
         return;
       }
@@ -139,7 +139,7 @@ export function mountGalleryView(handlers: GalleryHandlers): GalleryView {
       urls = [];
       const sheets = shots.filter((s) => s.kind === 'photobooth').length;
       meta.textContent =
-        shots.length === 0 ? 'Saved on this device only.' : `${shots.length} saved · ${sheets} photobooth sheets`;
+        shots.length === 0 ? 'Hanya tersimpan di perangkat ini.' : `${shots.length} tersimpan · ${sheets} lembar photobooth`;
       grid.replaceChildren(...(shots.length ? shots.map(card) : [emptyState()]));
       handlers.onCount(shots.length);
     },

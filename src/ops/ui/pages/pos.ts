@@ -3,7 +3,7 @@
 
 import { formDialog, openDialog } from '../../../dialogs';
 import { SHOT_LABELS, listShots, type Shot } from '../../../gallery';
-import { iconButton } from '../../../icons';
+import { icon, iconButton, type IconName } from '../../../icons';
 import { printDocument, printImage } from '../../adapters';
 import { amountDue, lineGross } from '../../cart';
 import { PAYMENT_LABELS, SESSION_MODES, type Order, type PaperSize, type Payment, type PaymentMethod, type SessionMode } from '../../model';
@@ -52,15 +52,18 @@ function addLine(line: CartLine): void {
   else cart.lines.push(line);
 }
 
+/** One picture per session mode, so the cashier finds it without reading. */
+const MODE_ICONS: Record<SessionMode, IconName> = { strip: 'strip', gif: 'repeat', video: 'video', live: 'play', vintage: 'film' };
+
 export function renderPos(context: PageContext): HTMLElement {
   const { ops, redraw } = context;
   const { state } = ops;
   const branches = ops.visibleBranches();
   if (!branches.some((branch) => branch.id === cart.branchId)) cart.branchId = ops.branchOf(ops.hooks.devicePointId()) ?? branches[0]?.id ?? '';
-  const view = page('Point of sale', 'Sell sessions, prints and merchandise in one cart. Paid sessions get a code and a queue number on the receipt.');
+  const view = page('Kasir', 'Jual sesi, cetakan dan merchandise dalam satu keranjang. Sesi yang lunas mendapat kode dan nomor antrean di struk.');
 
   if (branches.length === 0) {
-    view.body.append(el('p', 'card-desc', 'Add a location and its booths first, on the Locations page.'));
+    view.body.append(el('p', 'card-desc', 'Tambahkan lokasi dan booth-nya dulu di halaman Lokasi.'));
     return view.root;
   }
 
@@ -75,30 +78,20 @@ export function renderPos(context: PageContext): HTMLElement {
   });
   const shiftText = el('p', 'pos-shift');
   if (shift) {
-    const person = state.staff.find((entry) => entry.id === shift.staffId)?.name ?? 'someone';
-    shiftText.append(badge('Shift open', 'ok'), ` since ${new Date(shift.openedAt).toLocaleTimeString(undefined, { timeStyle: 'short' })} by ${person}`);
+    const person = state.staff.find((entry) => entry.id === shift.staffId)?.name ?? 'seseorang';
+    shiftText.append(badge('Shift buka', 'ok'), ` sejak ${new Date(shift.openedAt).toLocaleTimeString('id-ID', { timeStyle: 'short' })} oleh ${person}`);
   } else {
-    shiftText.append(badge(state.settings.shiftsEnabled ? 'No shift' : 'Shifts off', state.settings.shiftsEnabled ? 'warn' : 'muted'));
+    shiftText.append(badge(state.settings.shiftsEnabled ? 'Belum ada shift' : 'Shift mati', state.settings.shiftsEnabled ? 'warn' : 'muted'));
   }
   bar.append(branchPick, shiftText);
-  if (shift) bar.append(act('Close shift', 'btn btn-outline btn-sm', () => closeShiftDialog(ops, shift.id)));
-  else if (state.settings.shiftsEnabled) {
-    bar.append(
-      act('Open shift', 'btn btn-secondary btn-sm', () =>
-        formDialog({
-          title: 'Open shift',
-          description: 'Count the cash in the drawer before the first sale.',
-          submitLabel: 'Open shift',
-          fields: [{ name: 'cash', label: 'Opening cash', value: '', type: 'number' }],
-          async submit(values) {
-            ops.openShift(cart.branchId, parseAmount(String(values.cash)));
-          },
-        }),
-      ),
-    );
-  }
-  bar.append(act('Customer screen', 'btn btn-ghost btn-sm', () => window.open(`${location.pathname}#display=customer&lock=1`, 'vto-customer', 'popup,width=900,height=640'), 'tv'));
+  if (shift) bar.append(act('Tutup shift', 'btn btn-outline btn-sm', () => closeShiftDialog(ops, shift.id)));
+  bar.append(act('Layar pelanggan', 'btn btn-ghost btn-sm', () => window.open(`${location.pathname}#display=customer&lock=1`, 'vto-customer', 'popup,width=900,height=640'), 'tv'));
   view.actions.append(bar);
+  // Nothing sells before a shift opens, so the till asks for one before it shows anything to sell.
+  if (!shift && state.settings.shiftsEnabled) {
+    view.body.append(openShiftPanel(context));
+    return view.root;
+  }
 
   // ---------- catalogue ----------
   const layout = el('div', 'pos-layout');
@@ -106,10 +99,10 @@ export function renderPos(context: PageContext): HTMLElement {
   catalogue.append(
     pills(
       [
-        { value: 'sessions', label: 'Sessions' },
-        { value: 'prints', label: 'Prints' },
+        { value: 'sessions', label: 'Sesi' },
+        { value: 'prints', label: 'Cetak' },
         { value: 'merch', label: 'Merchandise' },
-        { value: 'reprint', label: 'Reprint' },
+        { value: 'reprint', label: 'Cetak ulang' },
       ] as const,
       cart.tab,
       (tab) => {
@@ -119,11 +112,13 @@ export function renderPos(context: PageContext): HTMLElement {
     ),
   );
   const grid = el('div', 'pos-grid');
-  const tile = (title: string, meta: string, price: number, onAdd: () => void, disabled = false) => {
+  const tile = (title: string, meta: string, price: number, onAdd: () => void, disabled = false, iconName: IconName = 'package') => {
     const button = el('button', 'pos-tile');
     button.type = 'button';
     button.disabled = disabled;
-    button.append(el('span', 'pos-tile-title', title), el('span', 'pos-tile-meta', meta), el('span', 'pos-tile-price', money(price)));
+    button.append(icon(iconName), el('span', 'pos-tile-title', title));
+    if (meta) button.append(el('span', 'pos-tile-meta', meta));
+    button.append(el('span', 'pos-tile-price', money(price)));
     button.addEventListener('click', () => {
       onAdd();
       redraw();
@@ -136,16 +131,17 @@ export function renderPos(context: PageContext): HTMLElement {
       for (const mode of Object.keys(SESSION_MODES) as SessionMode[]) {
         const price = category.prices[mode];
         if (price === undefined) continue;
-        grid.append(tile(SESSION_MODES[mode].label, category.name, price, () => addLine({ kind: 'session', refId: category.id, label: `${category.name} · ${SESSION_MODES[mode].label}`, unitPrice: price, qty: 1, mode })));
+        const meta = state.categories.length > 1 ? category.name : '';
+        grid.append(tile(SESSION_MODES[mode].label, meta, price, () => addLine({ kind: 'session', refId: category.id, label: `${category.name} · ${SESSION_MODES[mode].label}`, unitPrice: price, qty: 1, mode }), false, MODE_ICONS[mode]));
       }
     }
   } else if (cart.tab === 'prints') {
-    for (const entry of state.printPrices) grid.append(tile(`Print ${entry.size}`, PAPER[entry.size].label.split(' · ')[1] ?? '', entry.price, () => addLine({ kind: 'print', refId: entry.size, label: `Extra print ${entry.size}`, unitPrice: entry.price, qty: 1, size: entry.size })));
+    for (const entry of state.printPrices) grid.append(tile(`Cetak ${entry.size}`, PAPER[entry.size].label.split(' · ')[1] ?? '', entry.price, () => addLine({ kind: 'print', refId: entry.size, label: `Cetakan tambahan ${entry.size}`, unitPrice: entry.price, qty: 1, size: entry.size }), false, 'printer'));
   } else if (cart.tab === 'merch') {
-    if (state.products.length === 0) grid.append(el('p', 'card-desc', 'Add merchandise in Settings.'));
+    if (state.products.length === 0) grid.append(el('p', 'card-desc', 'Tambahkan merchandise di Pengaturan.'));
     for (const product of state.products) {
       const inCart = cart.lines.filter((line) => line.refId === product.id).reduce((sum, line) => sum + line.qty, 0);
-      grid.append(tile(product.name, product.stock - inCart > 0 ? `${product.stock - inCart} left` : 'Sold out', product.price, () => addLine({ kind: 'merch', refId: product.id, label: product.name, unitPrice: product.price, qty: 1 }), product.stock - inCart <= 0));
+      grid.append(tile(product.name, product.stock - inCart > 0 ? `sisa ${product.stock - inCart}` : 'Habis', product.price, () => addLine({ kind: 'merch', refId: product.id, label: product.name, unitPrice: product.price, qty: 1 }), product.stock - inCart <= 0));
     }
   } else {
     if (!reprintShots) void listShots().then((shots) => {
@@ -153,7 +149,7 @@ export function renderPos(context: PageContext): HTMLElement {
       redraw();
     });
     const size = state.printPrices[0];
-    if (!size) grid.append(el('p', 'card-desc', 'Add a print price in Settings first.'));
+    if (!size) grid.append(el('p', 'card-desc', 'Tambahkan harga cetak di Pengaturan dulu.'));
     for (const shot of (reprintShots ?? []).slice(0, 24)) {
       const button = el('button', 'pos-tile pos-shot');
       button.type = 'button';
@@ -163,7 +159,7 @@ export function renderPos(context: PageContext): HTMLElement {
       button.append(img, el('span', 'pos-tile-meta', dateTime(shot.createdAt)));
       button.disabled = !size;
       button.addEventListener('click', () => {
-        addLine({ kind: 'reprint', refId: shot.id, label: `Reprint ${size.size} · ${SHOT_LABELS[shot.kind]}`, unitPrice: size.price, qty: 1, size: size.size });
+        addLine({ kind: 'reprint', refId: shot.id, label: `Cetak ulang ${size.size} · ${SHOT_LABELS[shot.kind]}`, unitPrice: size.price, qty: 1, size: size.size });
         redraw();
       });
       grid.append(button);
@@ -174,20 +170,20 @@ export function renderPos(context: PageContext): HTMLElement {
   // ---------- cart ----------
   const quote = ops.quote(cart.lines, cart.presetId, cart.voucherCode, null);
   const cartBox = el('section', 'pos-cart');
-  cartBox.append(el('h3', 'ops-section-title', 'Cart'));
+  cartBox.append(el('h3', 'ops-section-title', 'Keranjang'));
   const list = el('div', 'cart-lines');
-  if (cart.lines.length === 0) list.append(el('p', 'card-desc', 'Tap an item to add it.'));
+  if (cart.lines.length === 0) list.append(el('p', 'card-desc', 'Ketuk item untuk menambahkannya.'));
   cart.lines.forEach((line, index) => {
     const row = el('div', 'cart-line');
     const text = el('div', 'cart-text');
-    text.append(el('span', 'rank-name', line.label), el('span', 'rank-meta', `${money(line.unitPrice)} each`));
-    const minus = iconButton('arrowDown', 'One less');
+    text.append(el('span', 'rank-name', line.label), el('span', 'rank-meta', `${money(line.unitPrice)} per item`));
+    const minus = iconButton('minus', 'Kurangi satu');
     minus.addEventListener('click', () => {
       line.qty -= 1;
       if (line.qty <= 0) cart.lines.splice(index, 1);
       redraw();
     });
-    const plus = iconButton('arrowUp', 'One more');
+    const plus = iconButton('plus', 'Tambah satu');
     plus.addEventListener('click', () => {
       line.qty += 1;
       redraw();
@@ -199,14 +195,14 @@ export function renderPos(context: PageContext): HTMLElement {
   const extras = el('div', 'cart-extras');
   if (state.presets.length && ops.can('pos.discount')) {
     extras.append(
-      pills([{ value: '', label: 'No discount' }, ...state.presets.map((preset) => ({ value: preset.id, label: preset.name }))], cart.presetId ?? '', (value) => {
+      pills([{ value: '', label: 'Tanpa diskon' }, ...state.presets.map((preset) => ({ value: preset.id, label: preset.name }))], cart.presetId ?? '', (value) => {
         cart.presetId = value || null;
         redraw();
       }),
     );
   }
   const voucher = el('input', 'input');
-  voucher.placeholder = 'Voucher code';
+  voucher.placeholder = 'Kode voucher';
   voucher.value = cart.voucherCode;
   voucher.addEventListener('change', () => {
     cart.voucherCode = voucher.value.trim().toUpperCase();
@@ -214,20 +210,20 @@ export function renderPos(context: PageContext): HTMLElement {
   });
   const email = el('input', 'input');
   email.type = 'email';
-  email.placeholder = 'Customer email for the receipt (optional)';
+  email.placeholder = 'Email pelanggan untuk struk (opsional)';
   email.value = cart.email;
   email.addEventListener('change', () => (cart.email = email.value.trim()));
   extras.append(voucher);
   if (quote.voucherError) extras.append(el('p', 'field-error', quote.voucherError));
-  else if (quote.voucher) extras.append(el('p', 'field-hint', `${quote.voucher.code} applied to the sessions.`));
+  else if (quote.voucher) extras.append(el('p', 'field-hint', `${quote.voucher.code} dipakai untuk sesi.`));
   extras.append(email);
 
   const totals = el('dl', 'cart-totals');
   totals.append(el('dt', '', 'Subtotal'), el('dd', '', money(quote.subtotal)));
-  if (quote.discount) totals.append(el('dt', '', 'Discount'), el('dd', '', `−${money(quote.discount)}`));
+  if (quote.discount) totals.append(el('dt', '', 'Diskon'), el('dd', '', `−${money(quote.discount)}`));
   totals.append(el('dt', 'cart-total-label', 'Total'), el('dd', 'cart-total', money(quote.total)));
 
-  const charge = actionButton(`Charge ${money(quote.total)}`, 'btn btn-primary btn-lg btn-block');
+  const charge = actionButton(`Bayar ${money(quote.total)}`, 'btn btn-primary btn-lg btn-block');
   charge.disabled = cart.lines.length === 0 || !!quote.voucherError;
   charge.addEventListener('click', () => {
     try {
@@ -238,7 +234,7 @@ export function renderPos(context: PageContext): HTMLElement {
       notice((error as Error).message, 'error');
     }
   });
-  const clear = act('Clear', 'btn btn-ghost btn-block', () => {
+  const clear = act('Kosongkan', 'btn btn-ghost btn-block', () => {
     Object.assign(cart, { lines: [], presetId: null, voucherCode: '', email: '' });
     redraw();
   });
@@ -266,12 +262,12 @@ export function qrExact(ops: Ops, payment: Payment, { bahasa = false, showAmount
   if (code || !lockAmount) {
     const notes = bahasa
       ? [lockAmount ? '' : 'Ketik nominal ini persis di aplikasi Anda.', code ? `${money(payment.amount)} + kode unik ${money(code)}, supaya pembayaran Anda langsung dikenali.` : '']
-      : [lockAmount ? '' : 'Type exactly this amount in your app.', code ? `${money(payment.amount)} plus a ${money(code)} code, so this payment is known as yours.` : ''];
-    if (showAmount) box.append(el('p', 'qr-exact-label', bahasa ? 'Bayar tepat' : 'Pay exactly'), el('p', 'qr-exact-amount', money(payable(payment))));
+      : [lockAmount ? '' : 'Ketik nominal ini persis di aplikasi pelanggan.', code ? `${money(payment.amount)} ditambah kode unik ${money(code)}, supaya pembayaran ini langsung dikenali.` : ''];
+    if (showAmount) box.append(el('p', 'qr-exact-label', 'Bayar tepat'), el('p', 'qr-exact-amount', money(payable(payment))));
     box.append(el('p', 'card-desc', notes.filter(Boolean).join(' ')));
   }
-  box.append(el('p', 'card-desc', `${bahasa ? 'Nama penerima di aplikasi Anda' : 'Your app will show'}: ${readQris(staticQris).merchantName}`));
-  const help = el('p', 'qr-exact-help', bahasa ? 'Sudah bayar tetapi layar belum berubah? Tunjukkan bukti bayar ke petugas.' : 'Paid, but this screen has not changed? Show the payment in your app to the staff.');
+  box.append(el('p', 'card-desc', `${bahasa ? 'Nama penerima di aplikasi Anda' : 'Nama penerima di aplikasi'}: ${readQris(staticQris).merchantName}`));
+  const help = el('p', 'qr-exact-help', bahasa ? 'Sudah bayar tetapi layar belum berubah? Tunjukkan bukti bayar ke petugas.' : 'Sudah bayar tetapi layar belum berubah? Minta pelanggan menunjukkan bukti bayar.');
   help.hidden = true;
   box.append(help);
   setTimeout(() => (help.hidden = false), HELP_AFTER_MS);
@@ -288,10 +284,10 @@ function phoneLink(ops: Ops): HTMLElement {
     const stale = quiet === null || (quiet !== undefined && quiet > QUIET_WARN_MS);
     line.classList.toggle('is-warn', stale);
     line.textContent =
-      quiet === undefined ? 'Checking the forwarding phone…'
-      : quiet === null ? 'The forwarding phone has never reached the booth computer. Settle this one with Mark paid by hand.'
-      : stale ? `The forwarding phone has been quiet for ${minutes >= 120 ? `${Math.round(minutes / 60)} hours` : `${minutes} minutes`}. If this does not settle, check the phone or mark it paid by hand.`
-      : `Forwarding phone heard ${minutes < 1 ? 'just now' : `${minutes} min ago`}.`;
+      quiet === undefined ? 'Memeriksa ponsel penerus notifikasi…'
+      : quiet === null ? 'Ponsel penerus notifikasi belum pernah terhubung ke komputer booth. Selesaikan pembayaran ini dengan Tandai lunas manual.'
+      : stale ? `Ponsel penerus notifikasi tidak mengirim kabar selama ${minutes >= 120 ? `${Math.round(minutes / 60)} jam` : `${minutes} menit`}. Kalau pembayaran ini tidak lunas sendiri, periksa ponselnya atau tandai lunas manual.`
+      : `Kabar terakhir dari ponsel penerus: ${minutes < 1 ? 'baru saja' : `${minutes} menit lalu`}.`;
   };
   const timer = setInterval(tick, 3_000);
   tick();
@@ -299,7 +295,7 @@ function phoneLink(ops: Ops): HTMLElement {
 }
 
 /** "Valid for 14:59", counting down, or the state the QR ended in. */
-export function qrClock(ops: Ops, orderId: string, paymentId: string, onEnd: (status: Payment['status']) => void, label = (time: string) => `Valid for ${time}`): HTMLElement {
+export function qrClock(ops: Ops, orderId: string, paymentId: string, onEnd: (status: Payment['status']) => void, label = (time: string) => `Berlaku ${time} lagi`): HTMLElement {
   const line = el('p', 'card-desc qr-clock');
   const tick = () => {
     const payment = ops.order(orderId).payments.find((entry) => entry.id === paymentId);
@@ -341,7 +337,7 @@ function paymentDialog(context: PageContext, orderId: string): void {
     const dueLine = el('p', 'pay-due', money(due));
     body.replaceChildren(
       dueLine,
-      el('p', 'card-desc', `${order.number} · ${order.lines.length} ${order.lines.length === 1 ? 'item' : 'items'}`),
+      el('p', 'card-desc', `${order.number} · ${order.lines.length} item`),
       pills(methods.map((value) => ({ value, label: PAYMENT_LABELS[value] })), method, (value) => {
         method = value;
         draw();
@@ -349,25 +345,26 @@ function paymentDialog(context: PageContext, orderId: string): void {
     );
     error.hidden = true;
     if (methods.length === 0) {
-      body.append(el('p', 'field-error', 'Every payment method is switched off for the till. Turn one on under Payments → Methods and fees.'));
+      body.append(el('p', 'field-error', 'Semua metode bayar dimatikan untuk kasir. Nyalakan salah satu di Pembayaran → Metode dan biaya.'));
       return;
     }
     if (method === 'cash') {
       const tendered = el('input', 'input pay-input');
       tendered.inputMode = 'numeric';
-      tendered.placeholder = 'Cash received';
+      tendered.placeholder = 'Uang diterima';
       const quick = el('div', 'pay-quick');
       for (const amount of [...new Set([due, Math.ceil(due / 50_000) * 50_000, Math.ceil(due / 100_000) * 100_000])]) {
         const button = actionButton(money(amount), 'btn btn-outline btn-sm');
         button.addEventListener('click', () => (tendered.value = String(amount)));
         quick.append(button);
       }
-      const take = actionButton('Take cash', 'btn btn-primary btn-block');
+      const take = actionButton('Terima tunai', 'btn btn-primary btn-block');
       take.addEventListener('click', () => {
         try {
           const change = ops.pay(orderId, 'cash', parseAmount(tendered.value));
-          if (change) notice(`Change: ${money(change)}`, 'ok');
           const after = ops.order(orderId);
+          // A part payment stays open; the paid screen shows the change of a full one.
+          if (change && after.status !== 'paid') notice(`Kembalian: ${money(change)}`, 'ok');
           if (after.status === 'paid') done(after);
           else draw();
         } catch (e) {
@@ -380,18 +377,18 @@ function paymentDialog(context: PageContext, orderId: string): void {
     } else if (method === 'qris') {
       const area = el('div', 'pay-qris');
       body.append(area);
-      area.append(el('p', 'card-desc', 'Creating the QR…'));
+      area.append(el('p', 'card-desc', 'Membuat QR…'));
       void ops.chargeQris(orderId).then((payment) => {
         const ended = (status: Payment['status']) => {
           if (status === 'paid') return;
-          const again = actionButton('New QR', 'btn btn-primary btn-sm');
+          const again = actionButton('QR baru', 'btn btn-primary btn-sm');
           again.addEventListener('click', draw);
-          area.replaceChildren(el('p', 'field-error', status === 'expired' ? 'This QR ran out.' : 'This QR was cancelled.'), again);
+          area.replaceChildren(el('p', 'field-error', status === 'expired' ? 'QR ini sudah kedaluwarsa.' : 'QR ini dibatalkan.'), again);
         };
         area.replaceChildren(
           qrCanvas(payment.qrString ?? '', 240),
           ...[qrExact(ops, payment, { showAmount: false })].filter((node) => node !== null),
-          el('p', 'card-desc', `Scan with any bank or e-wallet app. ${payment.gateway} · ${payment.reference}`),
+          el('p', 'card-desc', `Pindai dengan aplikasi bank atau e-wallet apa saja. ${payment.gateway} · ${payment.reference}`),
           qrClock(ops, orderId, payment.id, ended),
         );
         broadcast(ops, { type: 'qris', qr: payment.qrString, amount: payable(payment), reference: payment.reference });
@@ -400,12 +397,12 @@ function paymentDialog(context: PageContext, orderId: string): void {
         if (ops.payments.gateway.provider === 'static') {
           // One amount on the screen: what the customer pays, unique code included.
           dueLine.textContent = money(payable(payment));
-          area.append(phoneLink(ops), act('Mark paid by hand', 'btn btn-ghost btn-sm', () => markPaidDialog(ops, orderId, payment.id)));
+          area.append(phoneLink(ops), act('Tandai lunas manual', 'btn btn-ghost btn-sm', () => markPaidDialog(ops, orderId, payment.id)));
         }
         if (ops.gateway.simulated) {
-          const simulate = actionButton('Simulate payment', 'btn btn-outline btn-sm');
+          const simulate = actionButton('Simulasikan pembayaran', 'btn btn-outline btn-sm');
           simulate.addEventListener('click', () => ops.gateway.simulatePaid!(payment.reference));
-          area.append(badge('Simulator: no money moves', 'warn'), simulate);
+          area.append(badge('Simulator: tidak ada uang yang berpindah', 'warn'), simulate);
         }
         stop?.();
         stop = ops.store.subscribe(() => {
@@ -421,8 +418,8 @@ function paymentDialog(context: PageContext, orderId: string): void {
       let picked = choices[0]?.value ?? '';
       if (choices.length) body.append(pills(choices, picked, (value) => (picked = value)));
       const reference = el('input', 'input pay-input');
-      reference.placeholder = method === 'card' ? 'EDC approval code' : 'E-wallet reference';
-      const take = actionButton(`Record ${PAYMENT_LABELS[method]} payment`, 'btn btn-primary btn-block');
+      reference.placeholder = method === 'card' ? 'Kode approval EDC' : 'Referensi e-wallet';
+      const take = actionButton(`Catat pembayaran ${PAYMENT_LABELS[method]}`, 'btn btn-primary btn-block');
       take.addEventListener('click', () => {
         try {
           ops.pay(orderId, method as 'card' | 'ewallet', due, reference.value, method === 'card' ? { terminalId: picked || undefined } : { wallet: picked || undefined });
@@ -438,7 +435,7 @@ function paymentDialog(context: PageContext, orderId: string): void {
     body.append(error);
   }
 
-  const cancel = actionButton('Void order', 'btn btn-ghost btn-danger');
+  const cancel = actionButton('Batalkan pesanan', 'btn btn-ghost btn-danger');
   cancel.addEventListener('click', () => {
     try {
       ops.cancelOrder(orderId);
@@ -450,8 +447,42 @@ function paymentDialog(context: PageContext, orderId: string): void {
       error.hidden = false;
     }
   });
-  const dialog = openDialog({ title: 'Payment', body: [body], footer: [cancel] });
+  const dialog = openDialog({ title: 'Pembayaran', body: [body], footer: [cancel] });
   draw();
+}
+
+/** The till before a shift: count the drawer, then sell. Quick amounts cover the usual floats. */
+function openShiftPanel(context: PageContext): HTMLElement {
+  const { ops, redraw } = context;
+  const panel = el('section', 'pos-start');
+  const cash = el('input', 'input pay-input');
+  cash.inputMode = 'numeric';
+  cash.placeholder = money(0);
+  cash.setAttribute('aria-label', 'Modal awal');
+  cash.addEventListener('input', () => {
+    const amount = parseAmount(cash.value);
+    cash.value = amount ? money(amount) : '';
+  });
+  const quick = el('div', 'pay-quick');
+  for (const amount of [0, 100_000, 200_000, 500_000]) {
+    const button = actionButton(money(amount), 'btn btn-outline');
+    button.addEventListener('click', () => (cash.value = money(amount)));
+    quick.append(button);
+  }
+  const error = el('p', 'field-error');
+  error.hidden = true;
+  const open = actionButton('Buka shift', 'btn btn-primary btn-lg btn-block');
+  open.addEventListener('click', () => {
+    try {
+      ops.openShift(cart.branchId, parseAmount(cash.value));
+      redraw();
+    } catch (e) {
+      error.textContent = (e as Error).message;
+      error.hidden = false;
+    }
+  });
+  panel.append(el('h3', 'pos-start-title', 'Buka shift untuk mulai berjualan'), el('p', 'card-desc', 'Hitung uang di laci, ketik jumlahnya di sini, lalu buka shift.'), cash, quick, error, open);
+  return panel;
 }
 
 /** After payment: the receipt, its codes and queue number, reprints, and a fresh cart. */
@@ -465,24 +496,31 @@ function finish(context: PageContext, order: Order): void {
   void printReprints(ops, order);
 
   const body = el('div', 'receipt-summary');
-  body.append(el('p', 'pay-due', money(order.total)), el('p', 'card-desc', `${order.number} paid by ${order.payments.filter((p) => p.status === 'paid').map((p) => PAYMENT_LABELS[p.method]).join(' + ')}`));
-  if (order.ticketNumbers.length) body.append(el('p', 'receipt-queue', `Queue ${order.ticketNumbers.join(', ')}`));
+  // The cashier reads the change off this screen while counting it out, so it is the biggest line.
+  const change = order.payments.reduce((sum, p) => sum + (p.status === 'paid' && p.method === 'cash' && p.tendered ? Math.max(0, p.tendered - p.amount) : 0), 0);
+  if (change) {
+    const box = el('div', 'receipt-change');
+    box.append(el('span', 'kicker', 'Kembalian'), el('strong', 'receipt-change-amount', money(change)));
+    body.append(box);
+  }
+  body.append(el('p', 'pay-due', money(order.total)), el('p', 'card-desc', `${order.number} lunas dengan ${order.payments.filter((p) => p.status === 'paid').map((p) => PAYMENT_LABELS[p.method]).join(' + ')}`));
+  if (order.ticketNumbers.length) body.append(el('p', 'receipt-queue', `Antrean ${order.ticketNumbers.join(', ')}`));
   if (order.sessionVouchers.length) {
     const codes = el('div', 'receipt-codes');
     for (const code of order.sessionVouchers) codes.append(el('span', 'code receipt-code', code));
-    body.append(el('p', 'kicker', 'Session codes, one per session'), codes);
+    body.append(el('p', 'kicker', 'Kode sesi, satu per sesi'), codes);
   }
-  const printButton = act('Print receipt', 'btn btn-outline', () => printReceipt(ops, order), 'printer');
-  const emailButton = act('Email receipt', 'btn btn-outline', () => {
-    if (!order.customerEmail) throw new Error('No email on this order.');
-    ops.edit('pos.sell', 'receipt.email', `Emailed the receipt for ${order.number}.`, (draft) => {
-      draft.notifications.unshift({ id: ops.store.id(), channel: 'email', to: order.customerEmail, subject: `Receipt ${order.number}`, body: receiptText(ops, order), at: Date.now() });
+  const printButton = act('Cetak struk', 'btn btn-outline', () => printReceipt(ops, order), 'printer');
+  const emailButton = act('Kirim struk', 'btn btn-outline', () => {
+    if (!order.customerEmail) throw new Error('Pesanan ini tidak punya email.');
+    ops.edit('pos.sell', 'receipt.email', `Struk ${order.number} dikirim lewat email.`, (draft) => {
+      draft.notifications.unshift({ id: ops.store.id(), channel: 'email', to: order.customerEmail, subject: `Struk ${order.number}`, body: receiptText(ops, order), at: Date.now() });
     });
-    notice(`Receipt queued for ${order.customerEmail}.`, 'ok');
+    notice(`Struk akan dikirim ke ${order.customerEmail}.`, 'ok');
   }, 'mail');
-  const next = actionButton('New sale', 'btn btn-primary');
+  const next = actionButton('Penjualan baru', 'btn btn-primary');
   next.dataset.close = '';
-  openDialog({ title: 'Paid', body: [body], footer: [printButton, emailButton, next] });
+  openDialog({ title: 'Lunas', body: [body], footer: [printButton, emailButton, next] });
   context.redraw();
 }
 
@@ -511,12 +549,12 @@ function receiptText(ops: Ops, order: Order): string {
     `${order.number} · ${dateTime(order.paidAt ?? order.createdAt)}`,
     '',
     ...lines,
-    order.discount ? `Discount  −${money(order.discount)}` : '',
+    order.discount ? `Diskon  −${money(order.discount)}` : '',
     `Total  ${money(order.total)}`,
-    ...order.payments.filter((p) => p.status === 'paid').map((p) => `${PAYMENT_LABELS[p.method]}  ${money(p.tendered ?? p.amount)}${p.tendered && p.tendered > p.amount ? `  change ${money(p.tendered - p.amount)}` : ''}`),
+    ...order.payments.filter((p) => p.status === 'paid').map((p) => `${PAYMENT_LABELS[p.method]}  ${money(p.tendered ?? p.amount)}${p.tendered && p.tendered > p.amount ? `  kembalian ${money(p.tendered - p.amount)}` : ''}`),
     '',
-    order.ticketNumbers.length ? `Queue number: ${order.ticketNumbers.join(', ')}` : '',
-    ...order.sessionVouchers.map((code) => `Session code: ${code}`),
+    order.ticketNumbers.length ? `Nomor antrean: ${order.ticketNumbers.join(', ')}` : '',
+    ...order.sessionVouchers.map((code) => `Kode sesi: ${code}`),
     '',
     ops.state.settings.receiptFooter,
   ]
@@ -535,10 +573,10 @@ function closeShiftDialog(ops: Ops, shiftId: string): void {
   const shift = ops.state.shifts.find((entry) => entry.id === shiftId)!;
   const preview = shiftSlip(shift, ops.state.orders, ops.state.refunds);
   formDialog({
-    title: 'Close shift',
-    description: `Expected in the drawer: ${money(preview.expectedCash)} (opening ${money(preview.openingCash)} + cash ${money(preview.byMethod.cash)} − cash refunds ${money(preview.refundsByMethod.cash)}).`,
-    submitLabel: 'Close shift',
-    fields: [{ name: 'counted', label: 'Cash counted', value: '', type: 'number' }],
+    title: 'Tutup shift',
+    description: `Seharusnya di laci: ${money(preview.expectedCash)} (modal awal ${money(preview.openingCash)} + tunai ${money(preview.byMethod.cash)} − refund tunai ${money(preview.refundsByMethod.cash)}).`,
+    submitLabel: 'Tutup shift',
+    fields: [{ name: 'counted', label: 'Uang di laci', value: '', type: 'number' }],
     async submit(values) {
       const slip = ops.closeShift(shiftId, parseAmount(String(values.counted)));
       setTimeout(() => showSlip(ops, slip, shiftId));
@@ -548,15 +586,15 @@ function closeShiftDialog(ops: Ops, shiftId: string): void {
 
 function slipRows(slip: ShiftSlip): [string, string][] {
   return [
-    ['Orders', String(slip.orders)],
-    ['Gross', money(slip.gross)],
-    ['Refunds', `−${money(slip.refunds)}`],
-    ['Net', money(slip.net)],
+    ['Pesanan', String(slip.orders)],
+    ['Kotor', money(slip.gross)],
+    ['Refund', `−${money(slip.refunds)}`],
+    ['Bersih', money(slip.net)],
     ...(['cash', 'qris', 'card', 'ewallet'] as PaymentMethod[]).map((method): [string, string] => [PAYMENT_LABELS[method], money(slip.byMethod[method] - slip.refundsByMethod[method])]),
-    ['Opening cash', money(slip.openingCash)],
-    ['Expected cash', money(slip.expectedCash)],
-    ['Counted cash', slip.countedCash === null ? '—' : money(slip.countedCash)],
-    ['Difference', slip.variance === null ? '—' : `${slip.variance > 0 ? '+' : ''}${money(slip.variance)}`],
+    ['Modal awal', money(slip.openingCash)],
+    ['Tunai seharusnya', money(slip.expectedCash)],
+    ['Uang di laci', slip.countedCash === null ? '—' : money(slip.countedCash)],
+    ['Selisih', slip.variance === null ? '—' : `${slip.variance > 0 ? '+' : ''}${money(slip.variance)}`],
   ];
 }
 
@@ -564,12 +602,12 @@ export function showSlip(ops: Ops, slip: ShiftSlip, shiftId: string): void {
   const facts = el('dl', 'facts');
   for (const [label, value] of slipRows(slip)) facts.append(el('dt', '', label), el('dd', '', value));
   const shift = ops.state.shifts.find((entry) => entry.id === shiftId)!;
-  const print = act('Print slip', 'btn btn-outline', () =>
+  const print = act('Cetak slip', 'btn btn-outline', () =>
     printDocument('@page { size: 80mm auto; margin: 4mm } body { font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; margin: 0 }', (doc) => {
-      doc.body.textContent = [`Shift slip · ${ops.branchName(shift.branchId)}`, `${dateTime(shift.openedAt)} – ${dateTime(shift.closedAt)}`, '', ...slipRows(slip).map(([label, value]) => `${label.padEnd(16)}${value}`)].join('\n');
+      doc.body.textContent = [`Slip shift · ${ops.branchName(shift.branchId)}`, `${dateTime(shift.openedAt)} – ${dateTime(shift.closedAt)}`, '', ...slipRows(slip).map(([label, value]) => `${label.padEnd(16)}${value}`)].join('\n');
     }),
   'printer');
-  const close = actionButton('Done', 'btn btn-primary');
+  const close = actionButton('Selesai', 'btn btn-primary');
   close.dataset.close = '';
-  openDialog({ title: 'Shift slip', description: `${ops.branchName(shift.branchId)} · ${dateTime(shift.openedAt)} – ${dateTime(shift.closedAt)}`, body: [facts], footer: [print, close] });
+  openDialog({ title: 'Slip shift', description: `${ops.branchName(shift.branchId)} · ${dateTime(shift.openedAt)} – ${dateTime(shift.closedAt)}`, body: [facts], footer: [print, close] });
 }

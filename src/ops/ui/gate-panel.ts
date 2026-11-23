@@ -5,17 +5,19 @@
 
 import { canvasToBlob } from '../../render/overlay';
 import { blobUrl } from '../blobs';
-import type { FaceRecord, Ticket } from '../model';
+import type { FaceRecord, Ticket, TicketStatus } from '../model';
 import type { Ops } from '../ops';
 import { arrivals } from '../queue';
 import { nameButton, tagFaceDialog } from './face-tag';
-import { act, badge, count, el, notice } from './kit';
+import { act, badge, el, notice } from './kit';
 
 export interface GateHooks {
   /** One 4:5 headshot per face in view; throws when nobody is there. */
   captureFaces(): Promise<HTMLCanvasElement[]>;
   flash(): void;
 }
+
+const TICKET_STATUS: Record<TicketStatus, string> = { waiting: 'Menunggu', called: 'Dipanggil', done: 'Selesai', skipped: 'Dilewati' };
 
 interface Arrival {
   ticket: Ticket;
@@ -34,10 +36,10 @@ export function mountGatePanel(ops: Ops, hooks: GateHooks) {
   // ---------- the scanner ----------
   const form = el('form', 'field-row');
   const input = el('input', 'input');
-  input.placeholder = 'Ticket number or QR';
+  input.placeholder = 'Nomor tiket atau QR';
   input.autocomplete = 'off';
-  input.setAttribute('aria-label', 'Ticket number or QR');
-  const submit = el('button', 'btn btn-primary', 'Check in');
+  input.setAttribute('aria-label', 'Nomor tiket atau QR');
+  const submit = el('button', 'btn btn-primary', 'Check-in');
   submit.type = 'submit';
   form.append(input, submit);
   form.addEventListener('submit', (event) => {
@@ -51,7 +53,7 @@ export function mountGatePanel(ops: Ops, hooks: GateHooks) {
       notice((error as Error).message, 'error');
     }
   });
-  const scanner = card('Gate', 'Scan the ticket QR or type its number. The camera photographs everyone standing here, and their faces wait at the booth.', null, form);
+  const scanner = card('Gerbang', 'Scan QR tiket atau ketik nomornya. Kamera memotret semua orang yang berdiri di sini, lalu wajah mereka menunggu di booth.', null, form);
   const arrivalsCard = el('div');
 
   function card(title: string, description: string, aside: Node | null, ...content: Node[]): HTMLElement {
@@ -81,7 +83,7 @@ export function mountGatePanel(ops: Ops, hooks: GateHooks) {
     if (earlier.length) {
       last = { ticket, faces: earlier, error: '' };
       draw();
-      notice(`${ticket.number} was photographed already. Tap Take again for a new photo.`, 'info');
+      notice(`${ticket.number} sudah dipotret. Ketuk Foto ulang untuk foto baru.`, 'info');
       return;
     }
     void photograph(ticket);
@@ -113,9 +115,9 @@ export function mountGatePanel(ops: Ops, hooks: GateHooks) {
   function arrivalCard(arrival: Arrival): HTMLElement {
     // The scan checked the ticket in after the arrival was noted; show it as it is now.
     const ticket = ops.state.tickets.find((entry) => entry.id === arrival.ticket.id) ?? arrival.ticket;
-    const status = ticket.status === 'called' ? badge(`Called to ${ops.boothName(ticket.calledBoothId)}`, 'info') : badge(ticket.checkedIn ? 'Checked in' : ticket.status, ticket.checkedIn ? 'ok' : 'warn');
+    const status = ticket.status === 'called' ? badge(`Dipanggil ke ${ops.boothName(ticket.calledBoothId)}`, 'info') : badge(ticket.checkedIn ? 'Sudah check-in' : TICKET_STATUS[ticket.status], ticket.checkedIn ? 'ok' : 'warn');
     const body: Node[] = [];
-    if (pending.has(ticket.id)) body.push(el('p', 'card-desc', 'Photographing…'));
+    if (pending.has(ticket.id)) body.push(el('p', 'card-desc', 'Memotret…'));
     else if (arrival.error) body.push(el('p', 'callout', arrival.error));
     else {
       // Names and deletions from the tag panel show at once.
@@ -125,7 +127,7 @@ export function mountGatePanel(ops: Ops, hooks: GateHooks) {
         const tile = el('button', 'face-tile');
         tile.type = 'button';
         const img = el('img');
-        img.alt = face.name || 'Captured face';
+        img.alt = face.name || 'Wajah yang dipotret';
         void blobUrl(face.image).then((url) => (img.src = url));
         tile.append(img);
         tile.addEventListener('click', () => tagFaceDialog(ops, face));
@@ -133,9 +135,9 @@ export function mountGatePanel(ops: Ops, hooks: GateHooks) {
         cell.append(tile, nameButton(ops, face));
         grid.append(cell);
       }
-      body.push(el('p', 'card-desc', `${count(faces.length, 'face')} saved for ${ticket.number}. Tap a face to name who it is.`), grid);
+      body.push(el('p', 'card-desc', `${faces.length} wajah tersimpan untuk ${ticket.number}. Ketuk wajah untuk memberi nama.`), grid);
     }
-    const again = act('Take again', 'btn btn-outline btn-sm', () => photograph(ticket), 'camera');
+    const again = act('Foto ulang', 'btn btn-outline btn-sm', () => photograph(ticket), 'camera');
     again.disabled = pending.has(ticket.id);
     return card(ticket.number, [ticket.name, ticket.boothIds.map((id) => ops.boothName(id)).join(' / ')].filter(Boolean).join(' · '), status, ...body, again);
   }
@@ -147,12 +149,12 @@ export function mountGatePanel(ops: Ops, hooks: GateHooks) {
     const rows: HTMLElement[] = recent.map((ticket) => {
       const row = el('button', 'cart-line gate-row');
       row.type = 'button';
-      row.append(el('span', 'queue-number', ticket.number), el('span', 'rank-meta', ticket.name || ops.boothName(ticket.boothIds[0])), badge(count(counts.get(ticket.id)!, 'face'), ticket.status === 'done' ? 'muted' : 'ok'));
+      row.append(el('span', 'queue-number', ticket.number), el('span', 'rank-meta', ticket.name || ops.boothName(ticket.boothIds[0])), badge(`${counts.get(ticket.id)!} wajah`, ticket.status === 'done' ? 'muted' : 'ok'));
       row.addEventListener('click', () => void photograph(ticket));
       return row;
     });
-    if (rows.length === 0) rows.push(el('p', 'card-desc', last ? 'No other party has been photographed yet.' : 'Nobody has been photographed yet.'));
-    return card('Photographed today', 'Tap a ticket to photograph the party again.', null, ...rows);
+    if (rows.length === 0) rows.push(el('p', 'card-desc', last ? 'Belum ada rombongan lain yang dipotret.' : 'Belum ada yang dipotret.'));
+    return card('Dipotret hari ini', 'Ketuk tiket untuk memotret rombongan itu lagi.', null, ...rows);
   }
 
   function draw(): void {

@@ -35,7 +35,8 @@ function write(hash: string | null): void {
  */
 export function enforceDisplayLock(): void {
   const params = new URLSearchParams(location.hash.replace(/^#/, ''));
-  if (params.get('lock') === '1') {
+  // Screens that face customers lock even when the link forgot `lock=1`.
+  if (params.get('lock') === '1' || params.get('display') === 'kiosk' || params.get('display') === 'customer') {
     params.delete('lock');
     write(`#${params}`);
   }
@@ -84,11 +85,11 @@ export function mountLockControl(ops: Ops, host: HTMLElement): void {
   function unlock(): void {
     formDialog({
       title: 'Buka kunci layar',
-      description: 'Khusus petugas. Masuk dengan email dan password akun tim Anda.',
+      description: 'Khusus petugas. Masuk dengan email dan kata sandi akun tim Anda.',
       submitLabel: 'Buka kunci',
       fields: [
         { name: 'email', label: 'Email', value: '', type: 'email' },
-        { name: 'password', label: 'Password', value: '', type: 'password' },
+        { name: 'password', label: 'Kata sandi', value: '', type: 'password' },
       ],
       async submit(values) {
         if (!ops.accounts) throw new Error('Akun tidak tersedia di layar ini.');

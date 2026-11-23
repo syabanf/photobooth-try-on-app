@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f1f0f1" />
     <title>Dusun Bambu Photobooth</title>
-    <meta name="description" content="Photobooth, AI presets, queue and cashier for Dusun Bambu." />
+    <meta name="description" content="Photobooth, preset AI, antrean dan kasir untuk Dusun Bambu." />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -19,59 +19,58 @@
         <div class="rail-brand" aria-hidden="true">DB</div>
         <div class="auth-hero-copy">
           <p class="kicker">Dusun Bambu · Photobooth</p>
-          <h1>Every visit leaves with a photo<span class="accent-dot">.</span></h1>
-          <p class="auth-lede">Sign in to run the gate, the booths and the cashier. Each crew member sees only what their role needs.</p>
+          <h1>Setiap kunjungan pulang membawa foto<span class="accent-dot">.</span></h1>
+          <p class="auth-lede">Masuk untuk menjalankan gerbang, booth dan kasir. Setiap kru hanya melihat yang dibutuhkan perannya.</p>
         </div>
         <ul class="auth-perks">
-          <li><span class="perk-icon"><i data-icon="qr"></i></span><span><strong>One scan at the gate</strong> photographs the whole party.</span></li>
-          <li><span class="perk-icon"><i data-icon="sparkles"></i></span><span><strong>AI presets</strong> paid and printed on the spot.</span></li>
-          <li><span class="perk-icon"><i data-icon="users"></i></span><span><strong>A role for every crew:</strong> owner, supervisor, cashier, operator.</span></li>
+          <li><span class="perk-icon"><i data-icon="qr"></i></span><span><strong>Sekali pindai di gerbang</strong>, seluruh rombongan langsung difoto.</span></li>
+          <li><span class="perk-icon"><i data-icon="sparkles"></i></span><span><strong>Preset AI</strong> dibayar dan dicetak di tempat.</span></li>
+          <li><span class="perk-icon"><i data-icon="users"></i></span><span><strong>Peran untuk setiap kru:</strong> pemilik, supervisor, kasir, operator.</span></li>
         </ul>
       </section>
 
       <section class="auth-panel">
         <div id="authCard" class="card auth-card"></div>
-        <p class="auth-note">This build keeps accounts in this browser. The production server keeps them for every device.</p>
       </section>
     </div>
 
     <div class="shell" hidden>
       <div class="ambient" aria-hidden="true"></div>
 
-      <aside id="rail" class="rail" aria-label="Main">
+      <aside id="rail" class="rail" aria-label="Menu utama">
         <div class="rail-brand" aria-hidden="true">DB</div>
-        <button id="railCapture" type="button" class="rail-action" aria-label="Take snapshot" title="Take snapshot">
+        <button id="railCapture" type="button" class="rail-action" aria-label="Ambil foto" title="Ambil foto">
           <i data-icon="camera"></i>
         </button>
         <!-- Built from the page menu in src/ui.ts: Dashboard, then every group of pages. -->
-        <nav id="railNav" class="rail-nav" aria-label="Pages"></nav>
-        <button id="railToggle" type="button" class="rail-toggle" aria-label="Expand menu">
+        <nav id="railNav" class="rail-nav" aria-label="Halaman"></nav>
+        <button id="railToggle" type="button" class="rail-toggle" aria-label="Bentangkan menu">
           <i data-icon="expand" class="when-collapsed"></i>
           <i data-icon="collapse" class="when-expanded"></i>
-          <span class="rail-label">Collapse menu</span>
+          <span class="rail-label">Ciutkan menu</span>
         </button>
       </aside>
 
       <div class="workspace">
         <header class="topbar">
           <div class="topbar-title">
-            <p id="viewKicker" class="kicker">Virtual try-on</p>
-            <h1><span id="viewTitle">Try on</span><span class="accent-dot">.</span></h1>
+            <p id="viewKicker" class="kicker">Coba pakai virtual</p>
+            <h1><span id="viewTitle">Coba pakai</span><span class="accent-dot">.</span></h1>
           </div>
           <div class="topbar-actions">
             <p class="status-row">
               <span id="status" class="badge" data-kind="info"></span>
-              <button id="retry" type="button" class="btn btn-outline btn-sm" hidden>Retry</button>
+              <button id="retry" type="button" class="btn btn-outline btn-sm" hidden>Coba lagi</button>
             </p>
-            <button id="boothModeToggle" type="button" class="btn btn-outline btn-sm" hidden>Staff controls</button>
+            <button id="boothModeToggle" type="button" class="btn btn-outline btn-sm" hidden>Kontrol staf</button>
             <button id="handToggle" type="button" class="btn btn-outline hand-toggle" aria-pressed="false">
-              <i data-icon="hand"></i><span>Hand control</span>
+              <i data-icon="hand"></i><span>Kontrol tangan</span>
             </button>
-            <div id="modes" class="pill-tabs" aria-label="Rendering mode">
-              <button id="modeLocal" type="button" class="pill-tab is-active">On device</button>
+            <div id="modes" class="pill-tabs" aria-label="Mode tampilan">
+              <button id="modeLocal" type="button" class="pill-tab is-active">Di perangkat</button>
               <button id="modeAi" type="button" class="pill-tab"><i data-icon="sparkles"></i>Decart AI</button>
             </div>
-            <button id="accountButton" type="button" class="account-pill" aria-label="Workspace">
+            <button id="accountButton" type="button" class="account-pill" aria-label="Akun">
               <span id="accountTrial" class="account-trial"></span>
               <span id="accountInitials" class="avatar"></span>
             </button>
@@ -81,10 +80,10 @@
         <main class="main">
           <section id="dashboardView" class="dashboard" hidden>
             <div class="dash-toolbar">
-              <p class="field-hint">Counts the captures saved on this device.</p>
-              <div id="dashPeriod" class="pill-tabs" role="group" aria-label="Period">
-                <button type="button" class="pill-tab" data-days="7">7 days</button>
-                <button type="button" class="pill-tab" data-days="30">30 days</button>
+              <p class="field-hint">Menghitung hasil foto yang tersimpan di perangkat ini.</p>
+              <div id="dashPeriod" class="pill-tabs" role="group" aria-label="Periode">
+                <button type="button" class="pill-tab" data-days="7">7 hari</button>
+                <button type="button" class="pill-tab" data-days="30">30 hari</button>
               </div>
             </div>
 
@@ -106,8 +105,8 @@
               <section class="card">
                 <header class="card-head">
                   <div>
-                    <h2 class="card-title">Top points</h2>
-                    <p class="card-desc">Captures per point in the chosen period.</p>
+                    <h2 class="card-title">Booth teratas</h2>
+                    <p class="card-desc">Hasil foto per booth dalam periode terpilih.</p>
                   </div>
                 </header>
                 <div id="dashPoints" class="card-body rank-list"></div>
@@ -115,8 +114,8 @@
               <section class="card">
                 <header class="card-head">
                   <div>
-                    <h2 class="card-title">By location</h2>
-                    <p class="card-desc">Every point in a location, added up.</p>
+                    <h2 class="card-title">Per lokasi</h2>
+                    <p class="card-desc">Jumlah semua booth di satu lokasi.</p>
                   </div>
                 </header>
                 <div id="dashLocations" class="card-body rank-list"></div>
@@ -126,10 +125,10 @@
             <section class="card">
               <header class="card-head">
                 <div>
-                  <h2 class="card-title">Recent captures</h2>
-                  <p class="card-desc">The latest snapshots and sheets, with the point that took them.</p>
+                  <h2 class="card-title">Hasil foto terbaru</h2>
+                  <p class="card-desc">Foto dan lembar cetak terbaru, beserta booth yang mengambilnya.</p>
                 </div>
-                <button id="dashOpenGallery" type="button" class="btn btn-outline btn-sm">Open gallery</button>
+                <button id="dashOpenGallery" type="button" class="btn btn-outline btn-sm">Buka galeri</button>
               </header>
               <div id="dashRecent" class="card-body recent-grid"></div>
             </section>
@@ -137,8 +136,8 @@
 
           <section id="stageView" class="stage-layout">
             <div class="stage-card">
-              <button id="cameraPick" type="button" class="stage-tool" title="Camera source">
-                <i data-icon="camera"></i><span id="cameraName">Camera</span>
+              <button id="cameraPick" type="button" class="stage-tool" title="Sumber kamera">
+                <i data-icon="camera"></i><span id="cameraName">Kamera</span>
               </button>
               <div class="stage">
                 <video id="cam" autoplay muted playsinline></video>
@@ -152,10 +151,10 @@
               <div id="boothCountdown" class="booth-countdown" hidden></div>
               <div id="boothFlash" class="booth-flash" aria-hidden="true"></div>
               <p id="handHint" class="hand-hint" hidden>
-                <span>☝️ Move</span><span>🤏 Pinch to click</span><span>✌️ Hold to capture</span>
+                <span>☝️ Gerakkan</span><span>🤏 Jepit untuk klik</span><span>✌️ Tahan untuk memotret</span>
               </p>
               <div id="boothPreview" class="sheet-float" hidden>
-                <span class="sheet-float-label">Preview</span>
+                <span class="sheet-float-label">Pratinjau</span>
               </div>
             </div>
 
@@ -166,36 +165,36 @@
               <section class="card device-card">
                 <span class="tile tile--ink"><i data-icon="point"></i></span>
                 <div class="device-text">
-                  <p class="kicker">This device</p>
-                  <p id="deviceName" class="device-name">No point set</p>
-                  <p id="deviceMeta" class="card-desc">Captures are not linked to a point.</p>
+                  <p class="kicker">Perangkat ini</p>
+                  <p id="deviceName" class="device-name">Belum ada booth</p>
+                  <p id="deviceMeta" class="card-desc">Hasil foto belum terhubung ke booth.</p>
                 </div>
-                <button id="deviceChange" type="button" class="btn btn-outline btn-sm">Set point</button>
+                <button id="deviceChange" type="button" class="btn btn-outline btn-sm">Pilih booth</button>
               </section>
               <div id="tryonPanel" class="panel-stack">
                 <section class="card">
                   <header class="card-head">
                     <div>
-                      <h2 class="card-title">Wear</h2>
-                      <p class="card-desc">One item per category, worn together. Tap a worn item to take it off.</p>
+                      <h2 class="card-title">Pakai</h2>
+                      <p class="card-desc">Satu item per kategori, dipakai bersamaan. Ketuk item yang dipakai untuk melepasnya.</p>
                     </div>
                   </header>
                   <div class="card-body">
-                    <nav id="tabs" class="pill-tabs pill-tabs--full" aria-label="Item category"></nav>
-                    <div id="strip" class="item-grid" aria-label="Items"></div>
+                    <nav id="tabs" class="pill-tabs pill-tabs--full" aria-label="Kategori item"></nav>
+                    <div id="strip" class="item-grid" aria-label="Item"></div>
                     <button id="stripMore" type="button" class="btn btn-outline btn-sm btn-block" hidden></button>
                     <label class="size">
-                      <span>Size</span>
+                      <span>Ukuran</span>
                       <input id="size" type="range" min="70" max="150" step="1" value="100" />
                       <output id="sizeValue">100%</output>
                     </label>
                   </div>
                   <footer class="card-foot">
                     <label class="btn btn-outline">
-                      <i data-icon="upload"></i>Upload PNG
+                      <i data-icon="upload"></i>Unggah PNG
                       <input id="upload" type="file" accept="image/png" hidden />
                     </label>
-                    <button id="snap" type="button" class="btn btn-primary"><i data-icon="camera"></i>Snapshot</button>
+                    <button id="snap" type="button" class="btn btn-primary"><i data-icon="camera"></i>Foto</button>
                   </footer>
                 </section>
 
@@ -203,7 +202,7 @@
                   <header class="card-head">
                     <div>
                       <h2 class="card-title">Decart AI</h2>
-                      <p class="card-desc">A hosted model repaints every frame with the garment worn.</p>
+                      <p class="card-desc">Model di server menggambar ulang setiap frame dengan pakaian yang dipilih.</p>
                     </div>
                   </header>
                   <div class="card-body">
@@ -212,20 +211,20 @@
                         id="apiKey"
                         class="input"
                         type="password"
-                        placeholder="Decart API key"
+                        placeholder="API key Decart"
                         autocomplete="off"
                         spellcheck="false"
                       />
-                      <button id="aiConnect" type="button" class="btn btn-secondary">Connect</button>
+                      <button id="aiConnect" type="button" class="btn btn-secondary">Hubungkan</button>
                     </div>
                     <p class="callout">
-                      <strong>Streams your camera.</strong> Decart bills per second of streaming, and this mode
-                      changes clothing only. The key stays in this tab and is dropped when you close it.
+                      <strong>Kamera dikirim ke Decart.</strong> Decart menagih per detik streaming, dan mode ini
+                      hanya mengganti pakaian. Key hanya disimpan di tab ini dan hilang saat tab ditutup.
                     </p>
                   </div>
                 </section>
 
-                <p class="tip">Hold up ✌️ to start a 3 second snapshot countdown. Snapshots land in the gallery.</p>
+                <p class="tip">Angkat ✌️ untuk hitung mundur foto 3 detik. Foto masuk ke galeri.</p>
               </div>
 
               <div id="boothPanel" class="panel-stack" hidden>
@@ -238,70 +237,70 @@
                     <span id="boothStepCount" class="step-count"></span>
                   </header>
                   <div class="card-body">
-                    <nav id="boothSteps" class="stepper" aria-label="Photobooth steps">
-                      <button type="button" class="step" data-step="0"><span class="step-num">1</span><span class="step-label">Layout</span></button>
-                      <button type="button" class="step" data-step="1"><span class="step-num">2</span><span class="step-label">Background</span></button>
-                      <button type="button" class="step" data-step="2"><span class="step-num">3</span><span class="step-label">Stickers</span></button>
-                      <button type="button" class="step" data-step="3"><span class="step-num">4</span><span class="step-label">Print</span></button>
+                    <nav id="boothSteps" class="stepper" aria-label="Langkah photobooth">
+                      <button type="button" class="step" data-step="0"><span class="step-num">1</span><span class="step-label">Tata letak</span></button>
+                      <button type="button" class="step" data-step="1"><span class="step-num">2</span><span class="step-label">Latar</span></button>
+                      <button type="button" class="step" data-step="2"><span class="step-num">3</span><span class="step-label">Stiker</span></button>
+                      <button type="button" class="step" data-step="3"><span class="step-num">4</span><span class="step-label">Cetak</span></button>
                     </nav>
 
                     <div class="step-panel" data-panel="0">
                       <div id="boothLayouts" class="layout-grid">
                         <button type="button" class="layout-tile is-active" data-layout="strip">
                           <span class="layout-diagram layout-diagram--strip"><i></i><i></i><i></i><i></i></span>
-                          <span class="layout-name">Strip</span><span class="layout-meta">4 shots</span>
+                          <span class="layout-name">Strip</span><span class="layout-meta">4 foto</span>
                         </button>
                         <button type="button" class="layout-tile" data-layout="grid">
                           <span class="layout-diagram layout-diagram--grid"><i></i><i></i><i></i><i></i></span>
-                          <span class="layout-name">Grid</span><span class="layout-meta">4 shots</span>
+                          <span class="layout-name">Grid</span><span class="layout-meta">4 foto</span>
                         </button>
                         <button type="button" class="layout-tile" data-layout="single">
                           <span class="layout-diagram layout-diagram--single"><i></i></span>
-                          <span class="layout-name">Single</span><span class="layout-meta">1 shot</span>
+                          <span class="layout-name">Tunggal</span><span class="layout-meta">1 foto</span>
                         </button>
                       </div>
                     </div>
 
                     <div class="step-panel" data-panel="1" hidden>
                       <div id="bgModes" class="pill-tabs pill-tabs--full">
-                        <button type="button" class="pill-tab is-active" data-blend="swap">Swap background</button>
-                        <button type="button" class="pill-tab" data-blend="ai"><i data-icon="sparkles"></i>AI blend</button>
+                        <button type="button" class="pill-tab is-active" data-blend="swap">Ganti latar</button>
+                        <button type="button" class="pill-tab" data-blend="ai"><i data-icon="sparkles"></i>Paduan AI</button>
                       </div>
                       <div id="aiBlend" class="form-stack" hidden>
                         <input
                           id="boothApiKey"
                           class="input"
                           type="password"
-                          placeholder="Decart API key"
+                          placeholder="API key Decart"
                           autocomplete="off"
                           spellcheck="false"
                         />
                         <p class="callout">
-                          <strong>Each shot goes to Decart</strong> with the backdrop you pick, and comes back redrawn in that
-                          scene with its light and shadows. Decart bills per image, and the key stays in this tab.
+                          <strong>Setiap foto dikirim ke Decart</strong> bersama latar yang dipilih, lalu kembali digambar ulang di
+                          adegan itu lengkap dengan cahaya dan bayangannya. Decart menagih per gambar, dan key hanya disimpan di tab ini.
                         </p>
                       </div>
                       <div id="bgTabs" class="pill-tabs pill-tabs--full">
-                        <button type="button" class="pill-tab is-active" data-bg-tab="scenery">Scenery</button>
+                        <button type="button" class="pill-tab is-active" data-bg-tab="scenery">Pemandangan</button>
                         <button type="button" class="pill-tab" data-bg-tab="studio">Studio</button>
                       </div>
                       <div id="sceneryGrid" class="bg-grid bg-grid--photos"></div>
                       <div id="boothBackgrounds" class="bg-grid" hidden></div>
                       <input id="bgUpload" type="file" accept="image/*" hidden />
-                      <p class="field-hint">Hover a backdrop to see it on the camera. Click to use it.</p>
+                      <p class="field-hint">Arahkan kursor ke latar untuk melihatnya di kamera. Klik untuk memakainya.</p>
                     </div>
 
                     <div class="step-panel" data-panel="2" hidden>
                       <div id="boothStickers" class="sticker-palette"></div>
                       <div class="field-head">
-                        <p class="field-hint">Drag them on the camera. Select one to resize or remove it.</p>
-                        <button id="stickerClear" type="button" class="btn btn-ghost btn-sm">Clear</button>
+                        <p class="field-hint">Seret stiker ke kamera. Pilih satu untuk mengubah ukuran atau menghapusnya.</p>
+                        <button id="stickerClear" type="button" class="btn btn-ghost btn-sm">Bersihkan</button>
                       </div>
                     </div>
 
                     <div class="step-panel" data-panel="3" hidden>
                       <div class="field">
-                        <p class="kicker">Frame · <span id="boothFrameName" class="kicker-value">Paper</span></p>
+                        <p class="kicker">Bingkai · <span id="boothFrameName" class="kicker-value">Kertas</span></p>
                         <div id="boothFrames" class="swatches"></div>
                       </div>
                       <div class="field">
@@ -313,7 +312,7 @@
                         </div>
                       </div>
                       <label class="field">
-                        <span class="kicker">Caption</span>
+                        <span class="kicker">Keterangan</span>
                         <input id="boothCaption" class="input" type="text" maxlength="32" value="Virtual Try-On" />
                       </label>
                     </div>
@@ -324,16 +323,16 @@
                   </div>
 
                   <footer id="boothNav" class="card-foot">
-                    <button id="boothBack" type="button" class="btn btn-outline">Back</button>
-                    <button id="boothNext" type="button" class="btn btn-secondary">Continue</button>
+                    <button id="boothBack" type="button" class="btn btn-outline">Kembali</button>
+                    <button id="boothNext" type="button" class="btn btn-secondary">Lanjut</button>
                     <button id="boothStart" type="button" class="btn btn-primary" hidden>
-                      <i data-icon="aperture"></i><span>Start photobooth</span>
+                      <i data-icon="aperture"></i><span>Mulai photobooth</span>
                     </button>
                   </footer>
                   <footer id="boothResultActions" class="card-foot" hidden>
-                    <button id="boothOpenGallery" type="button" class="btn btn-ghost"><i data-icon="images"></i>Gallery</button>
-                    <button id="boothAgain" type="button" class="btn btn-outline">New sheet</button>
-                    <button id="boothShare" type="button" class="btn btn-primary"><i data-icon="share"></i>Share</button>
+                    <button id="boothOpenGallery" type="button" class="btn btn-ghost"><i data-icon="images"></i>Galeri</button>
+                    <button id="boothAgain" type="button" class="btn btn-outline">Lembar baru</button>
+                    <button id="boothShare" type="button" class="btn btn-primary"><i data-icon="share"></i>Bagikan</button>
                   </footer>
                   <p id="boothMeta" class="tip booth-meta"></p>
                 </section>
@@ -347,11 +346,11 @@
             <div class="card page-card">
               <header class="page-head">
                 <div>
-                  <h2 class="card-title">Captures</h2>
+                  <h2 class="card-title">Hasil foto</h2>
                   <p id="galleryMeta" class="card-desc"></p>
                 </div>
                 <button id="galleryNewBooth" type="button" class="btn btn-primary">
-                  <i data-icon="aperture"></i>New photobooth
+                  <i data-icon="aperture"></i>Photobooth baru
                 </button>
               </header>
               <div id="galleryGrid" class="gallery-grid"></div>
@@ -362,23 +361,23 @@
             <div class="card page-card">
               <header class="page-head">
                 <div>
-                  <h2 class="card-title">Locations and points</h2>
-                  <p class="card-desc">A location is a store or venue. A point is one kiosk, mirror or booth inside it.</p>
+                  <h2 class="card-title">Lokasi dan booth</h2>
+                  <p class="card-desc">Lokasi adalah toko atau tempat acara. Booth adalah satu kiosk, cermin atau booth di dalamnya.</p>
                 </div>
                 <div class="page-actions">
-                  <button id="sitesAddPoint" type="button" class="btn btn-outline"><i data-icon="plus"></i>Add point</button>
-                  <button id="sitesAddLocation" type="button" class="btn btn-primary"><i data-icon="plus"></i>Add location</button>
+                  <button id="sitesAddPoint" type="button" class="btn btn-outline"><i data-icon="plus"></i>Tambah booth</button>
+                  <button id="sitesAddLocation" type="button" class="btn btn-primary"><i data-icon="plus"></i>Tambah lokasi</button>
                 </div>
               </header>
               <div id="sitesStats" class="stat-row"></div>
               <div class="sites-toolbar">
                 <label class="search-pill">
                   <i data-icon="search"></i>
-                  <input id="sitesSearch" type="search" placeholder="Search locations, cities, points or codes" autocomplete="off" />
+                  <input id="sitesSearch" type="search" placeholder="Cari lokasi, kota, booth atau kode" autocomplete="off" />
                 </label>
-                <div id="sitesLayout" class="pill-tabs" role="group" aria-label="Layout">
-                  <button type="button" class="pill-tab" data-layout="cards" aria-label="Card view"><i data-icon="grid"></i><span>Cards</span></button>
-                  <button type="button" class="pill-tab" data-layout="table" aria-label="Table view"><i data-icon="table"></i><span>Table</span></button>
+                <div id="sitesLayout" class="pill-tabs" role="group" aria-label="Tampilan">
+                  <button type="button" class="pill-tab" data-layout="cards" aria-label="Tampilan kartu"><i data-icon="grid"></i><span>Kartu</span></button>
+                  <button type="button" class="pill-tab" data-layout="table" aria-label="Tampilan tabel"><i data-icon="table"></i><span>Tabel</span></button>
                 </div>
               </div>
               <div id="sitesList" class="sites-grid"></div>
@@ -387,13 +386,13 @@
         </main>
       </div>
 
-      <nav class="bottombar" aria-label="Main">
-        <button type="button" class="bar-item" data-view="dashboard" aria-label="Dashboard"><i data-icon="dashboard"></i></button>
-        <button type="button" class="bar-item" data-view="session" aria-label="Booth"><i data-icon="booth"></i></button>
-        <button id="barCapture" type="button" class="bar-action" aria-label="Take snapshot"><i data-icon="camera"></i></button>
-        <button type="button" class="bar-item" data-view="queue" aria-label="Queue"><i data-icon="queue"></i></button>
-        <button id="barMore" type="button" class="bar-item" aria-label="More pages">
-          <i data-icon="more"></i><span class="rail-badge" data-gallery-count hidden>0</span>
+      <nav class="bottombar" aria-label="Menu utama">
+        <button type="button" class="bar-item" data-view="dashboard"><i data-icon="dashboard"></i><span class="bar-label">Beranda</span></button>
+        <button type="button" class="bar-item" data-view="session"><i data-icon="booth"></i><span class="bar-label">Booth</span></button>
+        <button id="barCapture" type="button" class="bar-action" aria-label="Ambil foto"><i data-icon="camera"></i></button>
+        <button type="button" class="bar-item" data-view="queue"><i data-icon="queue"></i><span class="bar-label">Antrean</span></button>
+        <button id="barMore" type="button" class="bar-item">
+          <i data-icon="more"></i><span class="bar-label">Lainnya</span><span class="rail-badge" data-gallery-count hidden>0</span>
         </button>
       </nav>
 
@@ -403,10 +402,10 @@
           <span class="sheet-handle" aria-hidden="true"></span>
           <header class="dialog-head">
             <div>
-              <h2 id="shareTitle" class="card-title">Share to social</h2>
-              <p class="card-desc">Sized for Instagram. Pick a format, then share or save the soft copy.</p>
+              <h2 id="shareTitle" class="card-title">Bagikan ke media sosial</h2>
+              <p class="card-desc">Ukuran untuk Instagram. Pilih format, lalu bagikan atau simpan file digitalnya.</p>
             </div>
-            <button type="button" class="btn btn-ghost btn-icon" data-close aria-label="Close"><i data-icon="close"></i></button>
+            <button type="button" class="btn btn-ghost btn-icon" data-close aria-label="Tutup"><i data-icon="close"></i></button>
           </header>
           <div class="dialog-body">
             <div class="share-preview"><canvas id="sharePreview"></canvas></div>
@@ -415,26 +414,26 @@
                 <p class="kicker">Format</p>
                 <div id="shareFormats" class="choice-grid">
                   <button type="button" class="choice is-active" data-format="post"><span class="choice-title">Post</span><span class="choice-meta">4:5 · 1080 × 1350</span></button>
-                  <button type="button" class="choice" data-format="square"><span class="choice-title">Square</span><span class="choice-meta">1:1 · 1080 × 1080</span></button>
+                  <button type="button" class="choice" data-format="square"><span class="choice-title">Persegi</span><span class="choice-meta">1:1 · 1080 × 1080</span></button>
                   <button type="button" class="choice" data-format="story"><span class="choice-title">Story</span><span class="choice-meta">9:16 · 1080 × 1920</span></button>
-                  <button type="button" class="choice" data-format="original"><span class="choice-title">Original</span><span class="choice-meta">As captured</span></button>
+                  <button type="button" class="choice" data-format="original"><span class="choice-title">Asli</span><span class="choice-meta">Sesuai hasil foto</span></button>
                 </div>
               </div>
               <div id="shareFillField" class="field">
-                <p class="kicker">Fill</p>
+                <p class="kicker">Isian</p>
                 <div id="shareFills" class="pill-tabs pill-tabs--full">
-                  <button type="button" class="pill-tab is-active" data-fill="blur">Blur</button>
-                  <button type="button" class="pill-tab" data-fill="paper">Paper</button>
-                  <button type="button" class="pill-tab" data-fill="ink">Ink</button>
+                  <button type="button" class="pill-tab is-active" data-fill="blur">Buram</button>
+                  <button type="button" class="pill-tab" data-fill="paper">Kertas</button>
+                  <button type="button" class="pill-tab" data-fill="ink">Gelap</button>
                 </div>
               </div>
               <p id="shareMeta" class="field-hint"></p>
             </div>
           </div>
           <footer class="dialog-foot">
-            <button id="shareCopy" type="button" class="btn btn-ghost"><i data-icon="copy"></i><span>Copy</span></button>
-            <button id="shareSave" type="button" class="btn btn-outline"><i data-icon="download"></i>Save</button>
-            <button id="shareSend" type="button" class="btn btn-primary"><i data-icon="share"></i>Share</button>
+            <button id="shareCopy" type="button" class="btn btn-ghost"><i data-icon="copy"></i><span>Salin</span></button>
+            <button id="shareSave" type="button" class="btn btn-outline"><i data-icon="download"></i>Simpan</button>
+            <button id="shareSend" type="button" class="btn btn-primary"><i data-icon="share"></i>Bagikan</button>
           </footer>
         </section>
       </div>

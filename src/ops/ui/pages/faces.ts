@@ -18,11 +18,11 @@ export function renderFaces({ ops, redraw }: PageContext): HTMLElement {
   const tagged = faces.filter((face) => face.name).length;
   const tickets = new Set(faces.map((face) => face.ticketId).filter(Boolean));
   const days = state.settings.retentionDays;
-  const root = page('Faces', `Every face the gate and the booths captured, with who it is. Tap a face to name it. ${days ? `Faces are deleted after ${days} days.` : 'Faces are kept until someone deletes them.'}`);
+  const root = page('Wajah', `Setiap wajah yang dipotret gerbang dan booth, beserta namanya. Ketuk wajah untuk memberi nama. ${days ? `Wajah dihapus setelah ${days} hari.` : 'Wajah disimpan sampai ada yang menghapusnya.'}`);
 
   const search = el('input', 'input');
   search.type = 'search';
-  search.placeholder = 'Name or ticket number';
+  search.placeholder = 'Nama atau nomor tiket';
   search.value = view.query;
   search.addEventListener('change', () => {
     view.query = search.value;
@@ -31,7 +31,7 @@ export function renderFaces({ ops, redraw }: PageContext): HTMLElement {
   });
   const filters = el('div', 'ops-filters');
   filters.append(
-    pills<FaceFilter>([{ value: 'all', label: 'All' }, { value: 'untagged', label: 'No name' }, { value: 'tagged', label: 'Named' }], view.filter, (filter) => {
+    pills<FaceFilter>([{ value: 'all', label: 'Semua' }, { value: 'untagged', label: 'Tanpa nama' }, { value: 'tagged', label: 'Bernama' }], view.filter, (filter) => {
       view.filter = filter;
       view.shown = PAGE;
       redraw();
@@ -46,31 +46,31 @@ export function renderFaces({ ops, redraw }: PageContext): HTMLElement {
     const card = el('button', 'face-card');
     card.type = 'button';
     const img = el('img');
-    img.alt = face.name || 'Captured face';
+    img.alt = face.name || 'Wajah terpotret';
     img.loading = 'lazy';
     void blobUrl(face.image).then((url) => (img.src = url));
-    card.append(img, faceName(face, 'No name'), el('span', 'rank-meta', [ticket?.number, ops.boothName(face.boothId), dateTime(face.createdAt)].filter(Boolean).join(' · ')));
+    card.append(img, faceName(face, 'Tanpa nama'), el('span', 'rank-meta', [ticket?.number, ops.boothName(face.boothId), dateTime(face.createdAt)].filter(Boolean).join(' · ')));
     card.addEventListener('click', () => tagFaceDialog(ops, face));
     grid.append(card);
   }
 
   root.body.append(
     statRow([
-      { label: 'Faces', value: String(faces.length) },
-      { label: 'Named', value: String(tagged) },
-      { label: 'No name', value: String(faces.length - tagged) },
-      { label: 'Tickets', value: String(tickets.size), hint: 'Parties the gate photographed' },
+      { label: 'Wajah', value: String(faces.length) },
+      { label: 'Bernama', value: String(tagged) },
+      { label: 'Tanpa nama', value: String(faces.length - tagged) },
+      { label: 'Tiket', value: String(tickets.size), hint: 'Rombongan yang dipotret gerbang' },
     ]),
     filters,
   );
   if (matches.length === 0) {
     const [title, detail] = !faces.length
-      ? ['No faces yet', 'Faces arrive when the Gate scans a ticket or a customer captures one in AI presets.']
+      ? ['Belum ada wajah', 'Wajah masuk saat Gerbang memindai tiket atau pelanggan memotret wajah di Preset AI.']
       : view.query
-        ? ['No face matches', `Nothing matches "${view.query}". Clear the search or pick All.`]
+        ? ['Tidak ada wajah yang cocok', `Tidak ada yang cocok dengan "${view.query}". Kosongkan pencarian atau pilih Semua.`]
         : view.filter === 'untagged'
-          ? ['Everyone has a name', 'Every face kept here is named.']
-          : ['No names yet', 'Tap a face under All to name it.'];
+          ? ['Semua sudah bernama', 'Setiap wajah di sini sudah punya nama.']
+          : ['Belum ada nama', 'Ketuk wajah di Semua untuk memberi nama.'];
     const empty = el('div', 'empty');
     empty.append(el('p', 'empty-title', title), el('p', 'empty-desc', detail));
     root.body.append(empty);
@@ -78,7 +78,7 @@ export function renderFaces({ ops, redraw }: PageContext): HTMLElement {
     root.body.append(grid);
   }
   if (matches.length > view.shown) {
-    root.body.append(act(`Show more · ${count(matches.length - view.shown, 'face')} left`, 'btn btn-outline btn-block', () => {
+    root.body.append(act(`Tampilkan lagi · sisa ${count(matches.length - view.shown, 'wajah')}`, 'btn btn-outline btn-block', () => {
       view.shown += PAGE;
       redraw();
     }));

@@ -12,23 +12,23 @@ import { checkLink, DEFAULT_PORTS, dslrClient, PROTOCOL_LABELS, type DslrInfo } 
 type Choice = DslrProtocol | 'browser' | 'simulator';
 
 const CHOICES: { value: Choice; title: string; meta: string }[] = [
-  { value: 'ccapi', title: 'Canon over Wi-Fi or LAN', meta: 'CCAPI, by the camera’s IP address' },
-  { value: 'digicam', title: 'DSLR over USB', meta: 'Canon or Nikon through digiCamControl on a PC' },
-  { value: 'browser', title: 'Webcam or IP stream', meta: 'USB webcam, built-in camera, MJPEG or HLS link' },
-  { value: 'simulator', title: 'Simulator', meta: 'No camera: try profiles, battery and alerts' },
+  { value: 'ccapi', title: 'Canon lewat Wi-Fi atau LAN', meta: 'CCAPI, lewat alamat IP kamera' },
+  { value: 'digicam', title: 'DSLR lewat USB', meta: 'Canon atau Nikon lewat digiCamControl di PC' },
+  { value: 'browser', title: 'Webcam atau stream IP', meta: 'Webcam USB, kamera bawaan, link MJPEG atau HLS' },
+  { value: 'simulator', title: 'Simulator', meta: 'Tanpa kamera: coba profil, baterai dan peringatan' },
 ];
 
 const FEATURES: { key: keyof DslrFeatures; title: string; detail: string }[] = [
-  { key: 'liveView', title: 'Live view as the booth preview', detail: 'Customers frame themselves on the camera’s own picture.' },
-  { key: 'capture', title: 'Shoot photos with the DSLR', detail: 'Strips and singles come from the camera at full resolution. GIF and video still record the preview.' },
-  { key: 'settings', title: 'Send preview and capture profiles', detail: 'ISO, aperture, shutter, white balance and picture style from this booth’s profiles.' },
-  { key: 'autofocus', title: 'Focus before each shot', detail: 'Adds a moment per shot; turn it off with manual focus.' },
-  { key: 'battery', title: 'Watch the battery', detail: 'The level shows on Devices and an alert fires when it runs low.' },
+  { key: 'liveView', title: 'Live view sebagai pratinjau booth', detail: 'Pelanggan mengatur posisi lewat gambar dari kamera itu sendiri.' },
+  { key: 'capture', title: 'Memotret dengan DSLR', detail: 'Strip dan foto tunggal diambil dari kamera dengan resolusi penuh. GIF dan video tetap merekam pratinjau.' },
+  { key: 'settings', title: 'Kirim profil pratinjau dan pemotretan', detail: 'ISO, aperture, shutter, white balance dan picture style dari profil booth ini.' },
+  { key: 'autofocus', title: 'Fokus sebelum setiap foto', detail: 'Menambah jeda sesaat per foto. Matikan bila memakai fokus manual.' },
+  { key: 'battery', title: 'Pantau baterai', detail: 'Level baterai tampil di Perangkat dan peringatan muncul saat hampir habis.' },
 ];
 
 const PROTOCOL_HINTS: Record<DslrProtocol, string> = {
-  ccapi: 'Activate CCAPI once with Canon’s free tool, connect the camera to the venue Wi-Fi or LAN, then read its IP address in the camera’s network menu. CCAPI listens on port 8080.',
-  digicam: 'Install digiCamControl on the PC the camera is plugged into, turn on its web server (Settings → Webserver), and type that PC’s IP address. The web server listens on port 5513.',
+  ccapi: 'Aktifkan CCAPI sekali dengan aplikasi gratis dari Canon, sambungkan kamera ke Wi-Fi atau LAN lokasi, lalu lihat alamat IP-nya di menu jaringan kamera. CCAPI memakai port 8080.',
+  digicam: 'Pasang digiCamControl di PC tempat kamera dicolok, nyalakan web server-nya (Settings → Webserver), lalu ketik alamat IP PC itu. Web server memakai port 5513.',
 };
 
 export function cameraSetupDialog(ops: Ops, boothId: string, onSaved: () => void): void {
@@ -40,9 +40,9 @@ export function cameraSetupDialog(ops: Ops, boothId: string, onSaved: () => void
   let preview = '';
 
   const body = el('div', 'form-stack camera-setup');
-  const save = el('button', 'btn btn-primary', 'Save');
+  const save = el('button', 'btn btn-primary', 'Simpan');
   save.type = 'button';
-  const cancel = el('button', 'btn btn-outline', 'Cancel');
+  const cancel = el('button', 'btn btn-outline', 'Batal');
   cancel.type = 'button';
   cancel.dataset.close = '';
 
@@ -75,7 +75,7 @@ export function cameraSetupDialog(ops: Ops, boothId: string, onSaved: () => void
   async function test(button: HTMLButtonElement): Promise<void> {
     error.hidden = true;
     button.disabled = true;
-    button.textContent = 'Testing…';
+    button.textContent = 'Menguji…';
     try {
       const client = dslrClient(link());
       tested = await client.info();
@@ -117,10 +117,10 @@ export function cameraSetupDialog(ops: Ops, boothId: string, onSaved: () => void
   function connectionFields(): HTMLElement {
     const row = el('div', 'camera-setup-address');
     const hostField = el('label', 'field');
-    hostField.append(el('span', 'field-label', choice === 'ccapi' ? 'Camera IP address' : 'PC IP address'), host);
+    hostField.append(el('span', 'field-label', choice === 'ccapi' ? 'Alamat IP kamera' : 'Alamat IP PC'), host);
     const portField = el('label', 'field');
     portField.append(el('span', 'field-label', 'Port'), port);
-    const testButton = el('button', 'btn btn-secondary', tested ? 'Test again' : 'Test connection');
+    const testButton = el('button', 'btn btn-secondary', tested ? 'Uji lagi' : 'Uji koneksi');
     testButton.type = 'button';
     testButton.prepend(icon('wifi'));
     testButton.addEventListener('click', () => void test(testButton));
@@ -136,17 +136,17 @@ export function cameraSetupDialog(ops: Ops, boothId: string, onSaved: () => void
     if (preview) {
       const img = el('img', 'camera-setup-preview');
       img.src = preview;
-      img.alt = `Live view from ${tested.model}`;
+      img.alt = `Live view dari ${tested.model}`;
       result.append(img);
     }
     const facts = el('dl', 'facts');
     for (const [term, value] of [
-      ['Camera', tested.model],
-      ['Connection', `${PROTOCOL_LABELS[protocol()]} · ${host.value}:${port.value}`],
-      ['Battery', tested.battery === null ? 'Not reported' : `${tested.battery}%`],
+      ['Kamera', tested.model],
+      ['Koneksi', `${PROTOCOL_LABELS[protocol()]} · ${host.value}:${port.value}`],
+      ['Baterai', tested.battery === null ? 'Tidak dilaporkan' : `${tested.battery}%`],
     ]) facts.append(el('dt', '', term), el('dd', '', value));
     const status = el('p', 'camera-setup-ok');
-    status.append(icon('check'), el('span', '', 'Connected'));
+    status.append(icon('check'), el('span', '', 'Terhubung'));
     const text = el('div');
     text.append(status, facts);
     result.append(text);
@@ -155,7 +155,7 @@ export function cameraSetupDialog(ops: Ops, boothId: string, onSaved: () => void
 
   function featureList(): HTMLElement {
     const list = el('fieldset', 'camera-setup-features');
-    list.append(el('legend', 'field-label', 'Use the camera for'));
+    list.append(el('legend', 'field-label', 'Pakai kamera untuk'));
     for (const feature of FEATURES) {
       const supported = !tested || tested.supports.includes(feature.key);
       const row = el('label', `camera-setup-feature${supported ? '' : ' is-off'}`);
@@ -166,7 +166,7 @@ export function cameraSetupDialog(ops: Ops, boothId: string, onSaved: () => void
       box.disabled = !tested || !supported;
       box.addEventListener('change', () => (features[feature.key] = box.checked));
       const text = el('span', 'camera-setup-feature-text');
-      text.append(el('span', 'camera-setup-feature-title', feature.title), el('span', 'field-hint', supported ? feature.detail : 'This camera or connection cannot do this.'));
+      text.append(el('span', 'camera-setup-feature-title', feature.title), el('span', 'field-hint', supported ? feature.detail : 'Kamera atau koneksi ini tidak mendukung fitur ini.'));
       row.append(text, box);
       list.append(row);
     }
@@ -176,11 +176,11 @@ export function cameraSetupDialog(ops: Ops, boothId: string, onSaved: () => void
   function draw(): void {
     const parts: HTMLElement[] = [choiceGrid()];
     if (isDslr()) parts.push(connectionFields(), testResult(), featureList());
-    else if (choice === 'browser') parts.push(el('p', 'field-hint', thisDevice ? `This device uses ${describeSource(readSource())}. Save opens the camera picker for a webcam, USB camera or IP stream.` : 'Pick the webcam or IP stream on the booth device itself: Devices → Cameras → Camera source.'));
-    else parts.push(el('p', 'field-hint', 'The simulator keeps profiles and a battery so alerts and power-up behaviour can be tried. It takes no pictures of its own: photos come from this device’s webcam.'));
+    else if (choice === 'browser') parts.push(el('p', 'field-hint', thisDevice ? `Perangkat ini memakai ${describeSource(readSource())}. Simpan membuka pemilih kamera untuk webcam, kamera USB atau stream IP.` : 'Pilih webcam atau stream IP di perangkat booth itu sendiri: Perangkat → Kamera → Sumber kamera.'));
+    else parts.push(el('p', 'field-hint', 'Simulator menyimpan profil dan baterai tiruan agar peringatan dan perilaku saat menyala bisa dicoba. Simulator tidak memotret sendiri: foto diambil dari webcam perangkat ini.'));
     body.replaceChildren(...parts);
     save.disabled = isDslr() && !tested;
-    save.title = save.disabled ? 'Test the connection first.' : '';
+    save.title = save.disabled ? 'Uji koneksi dulu.' : '';
   }
 
   save.addEventListener('click', () => {
@@ -208,8 +208,8 @@ export function cameraSetupDialog(ops: Ops, boothId: string, onSaved: () => void
 
   draw();
   const handle = openDialog({
-    title: `Camera for ${ops.boothName(boothId)}`,
-    description: 'How the camera connects, and what the booth uses it for.',
+    title: `Kamera untuk ${ops.boothName(boothId)}`,
+    description: 'Cara kamera tersambung, dan untuk apa booth memakainya.',
     body: [body],
     footer: [cancel, save],
   });

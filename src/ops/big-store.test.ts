@@ -101,7 +101,7 @@ describe('OpsStore', () => {
     kv.setItem = () => {
       throw new Error('QuotaExceededError');
     };
-    expect(() => store.update((draft) => void (draft.settings.queuePrefix = 'C'))).toThrow('storage is full');
+    expect(() => store.update((draft) => void (draft.settings.queuePrefix = 'C'))).toThrow('Penyimpanan perangkat ini penuh');
     expect(store.state.settings.queuePrefix).toBe('B');
   });
 });

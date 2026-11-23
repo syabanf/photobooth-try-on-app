@@ -1,7 +1,7 @@
 // The voucher engine: who may use a code, where, and when, judged on the booth's local clock.
 
 import type { Frame, Rupiah, Voucher } from './model';
-import { WEEKDAY_NAMES, clockMinutes, zonedTime } from './time';
+import { clockMinutes, WEEKDAY_NAMES, zonedTime } from './time';
 
 export interface VoucherContext {
   now: number;
@@ -16,35 +16,36 @@ export function normalizeCode(code: string): string {
   return code.trim().toUpperCase().replace(/\s+/g, '');
 }
 
+
 function describeHours(voucher: Voucher): string {
   const hours = voucher.happyHour!;
-  const days = hours.days.length === 7 ? 'every day' : hours.days.map((day) => WEEKDAY_NAMES[day]).join(', ');
+  const days = hours.days.length === 7 ? 'setiap hari' : hours.days.map((day) => WEEKDAY_NAMES[day]).join(', ');
   return `${days} ${hours.start}–${hours.end}`;
 }
 
 /** Why a voucher cannot be used right now, or null when it can. */
 export function voucherProblem(voucher: Voucher, context: VoucherContext): string | null {
-  if (!voucher.active) return 'This voucher is switched off.';
+  if (!voucher.active) return 'Voucher ini dimatikan.';
   if (context.boothId && voucher.boothIds.length && !voucher.boothIds.includes(context.boothId)) {
-    return 'This voucher is not valid at this booth.';
+    return 'Voucher ini tidak berlaku di booth ini.';
   }
   const local = zonedTime(context.now, context.timeZone);
-  if (voucher.validFrom && local.date < voucher.validFrom) return `Valid from ${voucher.validFrom}.`;
-  if (voucher.validTo && local.date > voucher.validTo) return `Expired on ${voucher.validTo}.`;
+  if (voucher.validFrom && local.date < voucher.validFrom) return `Berlaku mulai ${voucher.validFrom}.`;
+  if (voucher.validTo && local.date > voucher.validTo) return `Kedaluwarsa sejak ${voucher.validTo}.`;
   if (voucher.happyHour) {
     const { days, start, end } = voucher.happyHour;
     const inHours = local.minutes >= clockMinutes(start) && local.minutes < clockMinutes(end);
-    if (!days.includes(local.weekday) || !inHours) return `Valid ${describeHours(voucher)} only.`;
+    if (!days.includes(local.weekday) || !inHours) return `Hanya berlaku ${describeHours(voucher)}.`;
   }
-  if (voucher.uses >= voucher.maxUses) return voucher.scope === 'single' ? 'This voucher was already used.' : 'This voucher has no uses left.';
+  if (voucher.uses >= voucher.maxUses) return voucher.scope === 'single' ? 'Voucher ini sudah dipakai.' : 'Kuota voucher ini sudah habis.';
   return null;
 }
 
 export function checkVoucher(vouchers: readonly Voucher[], code: string, context: VoucherContext): VoucherCheck {
   const wanted = normalizeCode(code);
-  if (!wanted) return { ok: false, reason: 'Enter a voucher code.' };
+  if (!wanted) return { ok: false, reason: 'Isi kode voucher.' };
   const voucher = vouchers.find((candidate) => candidate.code === wanted);
-  if (!voucher) return { ok: false, reason: `No voucher matches ${wanted}.` };
+  if (!voucher) return { ok: false, reason: `Tidak ada voucher dengan kode ${wanted}.` };
   const problem = voucherProblem(voucher, context);
   return problem ? { ok: false, reason: problem } : { ok: true, voucher };
 }

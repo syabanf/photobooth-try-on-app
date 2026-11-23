@@ -24,8 +24,8 @@ describe('printing', () => {
     expect(pickPrinter(printers, 'b1', '4R')?.id).toBe('p2');
     expect(pickPrinter(printers, 'b2', '4R')?.id).toBe('p2');
     expect(pickPrinter(printers, 'b1', 'A3')).toBeNull();
-    expect(noPrinterReason(printers, 'b1', 'A3')).toBe('No printer here takes A3.');
-    expect(noPrinterReason(printers, 'b9', '4R')).toBe('No printer is assigned to this booth.');
+    expect(noPrinterReason(printers, 'b1', 'A3')).toBe('Tidak ada printer di sini yang menerima ukuran A3.');
+    expect(noPrinterReason(printers, 'b9', '4R')).toBe('Belum ada printer untuk booth ini.');
   });
 
   it('counts paper down and reports its state', () => {
@@ -90,7 +90,7 @@ describe('telemetry', () => {
   it('routes to the owner and on-duty staff of the branch by default', () => {
     const deliveries = routeAlert({ kind: 'low-paper', branchId: 'mall' }, [], people);
     expect(deliveries.map((d) => `${d.channel}:${d.name}`)).toEqual([
-      'popup:Booth screen',
+      'popup:Layar booth',
       'email:owner',
       'email:ani',
       'whatsapp:owner',

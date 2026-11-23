@@ -19,30 +19,30 @@ type Range = 'today' | '7' | '30' | 'month' | 'custom';
 const view = { tab: 'sales' as Tab, range: '30' as Range, groupBy: 'day' as GroupBy, payGroup: 'method' as PaymentGroup, from: '', to: '', settlement: null as Settlement | null, fileName: '' };
 
 const TABS: { value: Tab; label: string }[] = [
-  { value: 'sales', label: 'Sales' },
-  { value: 'products', label: 'Products' },
-  { value: 'payments', label: 'Payments' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'floor', label: 'Floor' },
-  { value: 'settlement', label: 'Settlement' },
+  { value: 'sales', label: 'Penjualan' },
+  { value: 'products', label: 'Produk' },
+  { value: 'payments', label: 'Pembayaran' },
+  { value: 'cash', label: 'Tunai' },
+  { value: 'floor', label: 'Lantai' },
+  { value: 'settlement', label: 'Rekonsiliasi' },
 ];
 
 const RANGES: { value: Range; label: string }[] = [
-  { value: 'today', label: 'Today' },
-  { value: '7', label: '7 days' },
-  { value: '30', label: '30 days' },
-  { value: 'month', label: 'This month' },
-  { value: 'custom', label: 'Custom' },
+  { value: 'today', label: 'Hari ini' },
+  { value: '7', label: '7 hari' },
+  { value: '30', label: '30 hari' },
+  { value: 'month', label: 'Bulan ini' },
+  { value: 'custom', label: 'Pilih tanggal' },
 ];
 
 const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 const GROUPS: { value: GroupBy; label: string }[] = [
-  { value: 'day', label: 'Day' },
-  { value: 'branch', label: 'Branch' },
+  { value: 'day', label: 'Hari' },
+  { value: 'branch', label: 'Cabang' },
   { value: 'booth', label: 'Booth' },
   { value: 'shift', label: 'Shift' },
-  { value: 'frame', label: 'Frame' },
+  { value: 'frame', label: 'Bingkai' },
   { value: 'mode', label: 'Mode' },
 ];
 
@@ -71,13 +71,13 @@ export function renderReports({ ops, redraw }: PageContext): HTMLElement {
   const refunds = state.refunds.filter((refund) => inRange(refund.at) && orders.some((order) => order.id === refund.orderId));
   const label = (groupBy: GroupBy, key: string): string => {
     if (groupBy === 'branch') return ops.branchName(key);
-    if (groupBy === 'booth') return key === 'cashier' ? 'Till' : ops.boothName(key);
+    if (groupBy === 'booth') return key === 'cashier' ? 'Kasir' : ops.boothName(key);
     if (groupBy === 'product') return PRODUCT_LABELS[key as LineKind] ?? key;
-    if (groupBy === 'frame') return key === 'none' ? 'No frame' : (state.frames.find((frame) => frame.id === key)?.name ?? 'Deleted frame');
+    if (groupBy === 'frame') return key === 'none' ? 'Tanpa bingkai' : (state.frames.find((frame) => frame.id === key)?.name ?? 'Bingkai terhapus');
     if (groupBy === 'mode') return SESSION_MODES[key as SessionMode]?.label ?? key;
     if (groupBy === 'shift') {
       const shift = state.shifts.find((entry) => entry.id === key);
-      return shift ? `${ops.branchName(shift.branchId)} · ${new Date(shift.openedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}` : 'No shift';
+      return shift ? `${ops.branchName(shift.branchId)} · ${new Date(shift.openedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}` : 'Tanpa shift';
     }
     return key;
   };
@@ -88,18 +88,18 @@ export function renderReports({ ops, redraw }: PageContext): HTMLElement {
     if (sheet) actions.append(act('XLSX', 'btn btn-outline btn-sm', () => downloadBytes(xlsx(sheet, headers, rows), `${name}-${view.from}-to-${view.to}.xlsx`, XLSX_TYPE), 'download'));
   };
 
-  const root = page('Reports', 'Pick the dates once; every tab reads the same range. Exports open in Excel or Google Sheets.');
+  const root = page('Laporan', 'Pilih tanggal sekali; semua tab memakai rentang yang sama. Hasil ekspor bisa dibuka di Excel atau Google Sheets.');
 
   // ---------- the range and the tabs ----------
   const controls = el('div', 'ops-filters');
   const from = el('input', 'input');
   from.type = 'date';
   from.value = view.from;
-  from.setAttribute('aria-label', 'From');
+  from.setAttribute('aria-label', 'Dari');
   const to = el('input', 'input');
   to.type = 'date';
   to.value = view.to;
-  to.setAttribute('aria-label', 'To');
+  to.setAttribute('aria-label', 'Sampai');
   for (const input of [from, to]) {
     input.addEventListener('change', () => {
       view.range = 'custom';
@@ -130,31 +130,31 @@ export function renderReports({ ops, redraw }: PageContext): HTMLElement {
   function salesTab(): HTMLElement[] {
     const rows = revenue(view.groupBy);
     const totals = sum(rows);
-    const headers = ['Group', 'Orders', 'Sessions sold', 'Gross', 'Refunds', 'Net'];
-    const sales = section('Sales', 'Revenue grouped the way you need. Frame and mode count booth sessions at their price.');
-    exports(sales.actions, `sales-${view.groupBy}`, headers, rows.map((row) => [row.label, row.orders, row.sessions, row.gross, row.refunds, row.net]), 'Sales');
+    const headers = ['Kelompok', 'Pesanan', 'Sesi terjual', 'Kotor', 'Refund', 'Bersih'];
+    const sales = section('Penjualan', 'Pendapatan dikelompokkan sesuai kebutuhan. Bingkai dan mode menghitung sesi booth sesuai harganya.');
+    exports(sales.actions, `sales-${view.groupBy}`, headers, rows.map((row) => [row.label, row.orders, row.sessions, row.gross, row.refunds, row.net]), 'Penjualan');
     sales.body.append(
       pills(GROUPS, view.groupBy, (groupBy) => {
         view.groupBy = groupBy;
         redraw();
       }),
       statRow([
-        { label: 'Gross', value: money(totals.gross) },
-        { label: 'Refunds', value: money(totals.refunds) },
-        { label: 'Net', value: money(totals.net) },
-        { label: 'Booth sessions', value: String(sessions.length), hint: `${orders.filter((o) => o.status === 'paid').length} paid orders` },
+        { label: 'Kotor', value: money(totals.gross) },
+        { label: 'Refund', value: money(totals.refunds) },
+        { label: 'Bersih', value: money(totals.net) },
+        { label: 'Sesi booth', value: String(sessions.length), hint: `${orders.filter((o) => o.status === 'paid').length} pesanan lunas` },
       ]),
       table(
         [
           { label: GROUPS.find((group) => group.value === view.groupBy)!.label, cell: (row) => row.label },
-          { label: 'Orders', className: 'num', cell: (row) => String(row.orders) },
-          { label: 'Sessions sold', className: 'num', cell: (row) => String(row.sessions) },
-          { label: 'Gross', className: 'num', cell: (row) => money(row.gross) },
-          { label: 'Refunds', className: 'num', cell: (row) => (row.refunds ? `−${money(row.refunds)}` : '—') },
-          { label: 'Net', className: 'num', cell: (row) => money(row.net) },
+          { label: 'Pesanan', className: 'num', cell: (row) => String(row.orders) },
+          { label: 'Sesi terjual', className: 'num', cell: (row) => String(row.sessions) },
+          { label: 'Kotor', className: 'num', cell: (row) => money(row.gross) },
+          { label: 'Refund', className: 'num', cell: (row) => (row.refunds ? `−${money(row.refunds)}` : '—') },
+          { label: 'Bersih', className: 'num', cell: (row) => money(row.net) },
         ],
         rows,
-        { empty: 'No sales in these dates.' },
+        { empty: 'Tidak ada penjualan di tanggal ini.' },
       ),
     );
     return [sales.root];
@@ -164,27 +164,27 @@ export function renderReports({ ops, redraw }: PageContext): HTMLElement {
   function productsTab(): HTMLElement[] {
     const rows = revenue('product');
     const totals = sum(rows);
-    const products = section('What sold', 'Each kind of thing sold, from the order lines: photo sessions, AI presets (booth and kiosk), extra prints, reprints and merchandise. Refunds land on the line given back.');
-    exports(products.actions, 'products', ['Product', 'Orders', 'Gross', 'Refunds', 'Net', 'Share of net'], rows.map((row) => [row.label, row.orders, row.gross, row.refunds, row.net, totals.net ? Math.round((row.net / totals.net) * 100) : 0]), 'Products');
+    const products = section('Yang terjual', 'Setiap jenis barang yang terjual, dari baris pesanan: sesi foto, preset AI (booth dan kiosk), cetakan tambahan, cetak ulang dan merchandise. Refund dihitung pada baris yang dikembalikan.');
+    exports(products.actions, 'products', ['Produk', 'Pesanan', 'Kotor', 'Refund', 'Bersih', 'Porsi dari bersih'], rows.map((row) => [row.label, row.orders, row.gross, row.refunds, row.net, totals.net ? Math.round((row.net / totals.net) * 100) : 0]), 'Produk');
     products.body.append(
-      statRow(rows.slice(0, 4).map((row) => ({ label: row.label, value: money(row.net), hint: `${totals.net ? Math.round((row.net / totals.net) * 100) : 0}% of net · ${row.orders} orders` }))),
+      statRow(rows.slice(0, 4).map((row) => ({ label: row.label, value: money(row.net), hint: `${totals.net ? Math.round((row.net / totals.net) * 100) : 0}% dari bersih · ${row.orders} pesanan` }))),
       table(
         [
-          { label: 'Product', cell: (row) => row.label },
-          { label: 'Orders', className: 'num', cell: (row) => String(row.orders) },
-          { label: 'Gross', className: 'num', cell: (row) => money(row.gross) },
-          { label: 'Refunds', className: 'num', cell: (row) => (row.refunds ? `−${money(row.refunds)}` : '—') },
-          { label: 'Net', className: 'num', cell: (row) => money(row.net) },
-          { label: 'Share', className: 'num', cell: (row) => `${totals.net ? Math.round((row.net / totals.net) * 100) : 0}%` },
+          { label: 'Produk', cell: (row) => row.label },
+          { label: 'Pesanan', className: 'num', cell: (row) => String(row.orders) },
+          { label: 'Kotor', className: 'num', cell: (row) => money(row.gross) },
+          { label: 'Refund', className: 'num', cell: (row) => (row.refunds ? `−${money(row.refunds)}` : '—') },
+          { label: 'Bersih', className: 'num', cell: (row) => money(row.net) },
+          { label: 'Porsi', className: 'num', cell: (row) => `${totals.net ? Math.round((row.net / totals.net) * 100) : 0}%` },
         ],
         rows,
-        { empty: 'No sales in these dates.' },
+        { empty: 'Tidak ada penjualan di tanggal ini.' },
       ),
     );
     const top = bestSellers(orders).slice(0, 10);
-    const best = section('Best sellers', 'The ten items sold most, by quantity, refunded lines left out. Frames rank by sessions under Sales → Frame.');
-    exports(best.actions, 'best-sellers', ['Item', 'Sold', 'Revenue'], top.map((row) => [row.label, row.qty, row.revenue]));
-    best.body.append(table([{ label: 'Item', cell: (row) => row.label }, { label: 'Sold', className: 'num', cell: (row) => String(row.qty) }, { label: 'Revenue', className: 'num', cell: (row) => money(row.revenue) }], top, { empty: 'Nothing sold yet.' }));
+    const best = section('Terlaris', 'Sepuluh item yang paling banyak terjual menurut jumlah, tanpa baris yang di-refund. Peringkat bingkai menurut sesi ada di Penjualan → Bingkai.');
+    exports(best.actions, 'best-sellers', ['Item', 'Terjual', 'Pendapatan'], top.map((row) => [row.label, row.qty, row.revenue]));
+    best.body.append(table([{ label: 'Item', cell: (row) => row.label }, { label: 'Terjual', className: 'num', cell: (row) => String(row.qty) }, { label: 'Pendapatan', className: 'num', cell: (row) => money(row.revenue) }], top, { empty: 'Belum ada yang terjual.' }));
     return [products.root, best.root];
   }
 
@@ -196,19 +196,19 @@ export function renderReports({ ops, redraw }: PageContext): HTMLElement {
     );
     const payTotals = payRows.reduce((sum, row) => ({ count: sum.count + row.count, gross: sum.gross + row.gross, fees: sum.fees + row.fees, refunds: sum.refunds + row.refunds, net: sum.net + row.net }), { count: 0, gross: 0, fees: 0, refunds: 0, net: 0 });
     const PAY_GROUPS: { value: PaymentGroup; label: string }[] = [
-      { value: 'method', label: 'Method' },
-      { value: 'day', label: 'Day' },
-      { value: 'branch', label: 'Branch' },
+      { value: 'method', label: 'Metode' },
+      { value: 'day', label: 'Hari' },
+      { value: 'branch', label: 'Cabang' },
       { value: 'booth', label: 'Booth' },
       { value: 'shift', label: 'Shift' },
     ];
-    const pays = section('Payments', 'What came in by each method, the processing fees it cost, and what reaches the bank or the drawer after refunds. Same dates as above.');
-    const payHeaders = ['Group', 'Payments', 'Gross', 'Fees', 'Refunds', 'Net'];
+    const pays = section('Pembayaran', 'Uang masuk per metode, biaya prosesnya, dan yang sampai ke bank atau laci setelah refund. Tanggalnya sama dengan di atas.');
+    const payHeaders = ['Kelompok', 'Pembayaran', 'Kotor', 'Biaya', 'Refund', 'Bersih'];
     const payCells = (row: (typeof payRows)[number]) => [row.label, row.count, row.gross, row.fees, row.refunds, row.net];
     const payFile = `payments-${view.payGroup}-${view.from}-to-${view.to}`;
     pays.actions.append(
       act('CSV', 'btn btn-outline btn-sm', () => downloadText(toCsv(payHeaders, payRows.map(payCells)), `${payFile}.csv`), 'download'),
-      act('XLSX', 'btn btn-outline btn-sm', () => downloadBytes(xlsx('Payments', payHeaders, payRows.map(payCells)), `${payFile}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'), 'download'),
+      act('XLSX', 'btn btn-outline btn-sm', () => downloadBytes(xlsx('Pembayaran', payHeaders, payRows.map(payCells)), `${payFile}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'), 'download'),
     );
     pays.body.append(
       pills(PAY_GROUPS, view.payGroup, (group) => {
@@ -218,22 +218,22 @@ export function renderReports({ ops, redraw }: PageContext): HTMLElement {
       statRow([
         ...PAYMENT_METHODS.map((method) => {
           const row = paymentReport({ orders, refunds, dayOf: () => '', label: () => '' }, 'method').find((entry) => entry.key === method);
-          return { label: PAYMENT_LABELS[method], value: money(row?.gross ?? 0), hint: row ? `${row.count} payments · fees ${money(row.fees)}` : 'None' };
+          return { label: PAYMENT_LABELS[method], value: money(row?.gross ?? 0), hint: row ? `${row.count} pembayaran · biaya ${money(row.fees)}` : 'Tidak ada' };
         }),
       ]),
       table(
         [
           { label: PAY_GROUPS.find((group) => group.value === view.payGroup)!.label, cell: (row) => row.label },
-          { label: 'Payments', className: 'num', cell: (row) => String(row.count) },
-          { label: 'Gross', className: 'num', cell: (row) => money(row.gross) },
-          { label: 'Fees', className: 'num', cell: (row) => (row.fees ? `−${money(row.fees)}` : '—') },
-          { label: 'Refunds', className: 'num', cell: (row) => (row.refunds ? `−${money(row.refunds)}` : '—') },
-          { label: 'Net', className: 'num', cell: (row) => money(row.net) },
+          { label: 'Pembayaran', className: 'num', cell: (row) => String(row.count) },
+          { label: 'Kotor', className: 'num', cell: (row) => money(row.gross) },
+          { label: 'Biaya', className: 'num', cell: (row) => (row.fees ? `−${money(row.fees)}` : '—') },
+          { label: 'Refund', className: 'num', cell: (row) => (row.refunds ? `−${money(row.refunds)}` : '—') },
+          { label: 'Bersih', className: 'num', cell: (row) => money(row.net) },
         ],
         payRows,
-        { empty: 'No payments in these dates.' },
+        { empty: 'Tidak ada pembayaran di tanggal ini.' },
       ),
-      el('p', 'field-hint', `${payTotals.count} payments · gross ${money(payTotals.gross)} · fees ${money(payTotals.fees)} · refunds ${money(payTotals.refunds)} · net ${money(payTotals.net)}`),
+      el('p', 'field-hint', `${payTotals.count} pembayaran · kotor ${money(payTotals.gross)} · biaya ${money(payTotals.fees)} · refund ${money(payTotals.refunds)} · bersih ${money(payTotals.net)}`),
     );
     return [pays.root];
   }
@@ -241,26 +241,26 @@ export function renderReports({ ops, redraw }: PageContext): HTMLElement {
   // ---------- cash ----------
   function cashTab(): HTMLElement[] {
     const shifts = state.shifts.filter((shift) => seesBranch(actor, shift.branchId) && inRange(shift.openedAt)).sort((a, b) => b.openedAt - a.openedAt);
-    const deposits = section('Cash per shift', 'The drawer at the end of each shift: what should be in it, what was counted, and the difference. Open shifts show the expected amount so far.');
+    const deposits = section('Tunai per shift', 'Laci di akhir setiap shift: berapa yang seharusnya ada, berapa yang dihitung, dan selisihnya. Shift yang masih buka menampilkan jumlah seharusnya sejauh ini.');
     const slips = shifts.map((shift) => ({ shift, slip: shiftSlip(shift, state.orders, state.refunds) }));
-    const depositHeaders = ['Branch', 'Opened', 'Closed', 'Opening cash', 'Cash in', 'Cash refunds', 'Expected', 'Counted', 'Difference'];
+    const depositHeaders = ['Cabang', 'Dibuka', 'Ditutup', 'Modal awal', 'Tunai masuk', 'Refund tunai', 'Seharusnya', 'Dihitung', 'Selisih'];
     const depositCells = ({ shift, slip }: (typeof slips)[number]) => [ops.branchName(shift.branchId), new Date(shift.openedAt).toISOString(), shift.closedAt ? new Date(shift.closedAt).toISOString() : '', slip.openingCash, slip.byMethod.cash, slip.refundsByMethod.cash, slip.expectedCash, slip.countedCash ?? '', slip.variance ?? ''];
     deposits.actions.append(act('CSV', 'btn btn-outline btn-sm', () => downloadText(toCsv(depositHeaders, slips.map(depositCells)), `cash-shifts-${view.from}-to-${view.to}.csv`), 'download'));
     deposits.body.append(
       table(
         [
-          { label: 'Branch', cell: ({ shift }: (typeof slips)[number]) => ops.branchName(shift.branchId) },
-          { label: 'Opened', cell: ({ shift }) => new Date(shift.openedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) },
-          { label: 'Closed', cell: ({ shift }) => (shift.closedAt ? new Date(shift.closedAt).toLocaleTimeString(undefined, { timeStyle: 'short' }) : badge('Open', 'ok')) },
-          { label: 'Opening', className: 'num', cell: ({ slip }) => money(slip.openingCash) },
-          { label: 'Cash in', className: 'num', cell: ({ slip }) => money(slip.byMethod.cash) },
-          { label: 'Cash refunds', className: 'num', cell: ({ slip }) => (slip.refundsByMethod.cash ? `−${money(slip.refundsByMethod.cash)}` : '—') },
-          { label: 'Expected', className: 'num', cell: ({ slip }) => money(slip.expectedCash) },
-          { label: 'Counted', className: 'num', cell: ({ slip }) => (slip.countedCash === null ? '—' : money(slip.countedCash)) },
-          { label: 'Difference', className: 'num', cell: ({ slip }) => (slip.variance === null ? '—' : badge(slip.variance === 0 ? 'Matches' : `${slip.variance > 0 ? '+' : ''}${money(slip.variance)}`, slip.variance === 0 ? 'ok' : 'warn')) },
+          { label: 'Cabang', cell: ({ shift }: (typeof slips)[number]) => ops.branchName(shift.branchId) },
+          { label: 'Dibuka', cell: ({ shift }) => new Date(shift.openedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) },
+          { label: 'Ditutup', cell: ({ shift }) => (shift.closedAt ? new Date(shift.closedAt).toLocaleTimeString('id-ID', { timeStyle: 'short' }) : badge('Buka', 'ok')) },
+          { label: 'Modal awal', className: 'num', cell: ({ slip }) => money(slip.openingCash) },
+          { label: 'Tunai masuk', className: 'num', cell: ({ slip }) => money(slip.byMethod.cash) },
+          { label: 'Refund tunai', className: 'num', cell: ({ slip }) => (slip.refundsByMethod.cash ? `−${money(slip.refundsByMethod.cash)}` : '—') },
+          { label: 'Seharusnya', className: 'num', cell: ({ slip }) => money(slip.expectedCash) },
+          { label: 'Dihitung', className: 'num', cell: ({ slip }) => (slip.countedCash === null ? '—' : money(slip.countedCash)) },
+          { label: 'Selisih', className: 'num', cell: ({ slip }) => (slip.variance === null ? '—' : badge(slip.variance === 0 ? 'Cocok' : `${slip.variance > 0 ? '+' : ''}${money(slip.variance)}`, slip.variance === 0 ? 'ok' : 'warn')) },
         ],
         slips,
-        { empty: 'No shifts in these dates.' },
+        { empty: 'Tidak ada shift di tanggal ini.' },
       ),
     );
     return [deposits.root];
@@ -271,29 +271,29 @@ export function renderReports({ ops, redraw }: PageContext): HTMLElement {
     const tickets = state.tickets.filter((ticket) => inRange(ticket.createdAt) && ticket.boothIds.some((boothId) => seesBranch(actor, ops.branchOf(boothId))));
     const faces = state.faces.filter((face) => inRange(face.createdAt) && seesBranch(actor, ops.branchOf(face.boothId)));
     const floor = floorReport({ tickets, faces, orders, timeZone: zone });
-    const report = section('Floor', 'How the day ran on the floor: the queue, the gate camera, and the AI prints parties bought at the booth or the kiosk.');
-    exports(report.actions, 'floor-by-hour', ['Hour', 'Tickets'], floor.byHour.map((count, hour) => [`${String(hour).padStart(2, '0')}:00`, count]));
+    const report = section('Lantai', 'Jalannya hari di lantai: antrean, kamera gerbang, dan cetakan AI yang dibeli rombongan di booth atau kiosk.');
+    exports(report.actions, 'floor-by-hour', ['Jam', 'Tiket'], floor.byHour.map((count, hour) => [`${String(hour).padStart(2, '0')}:00`, count]));
     const busiest = Math.max(...floor.byHour);
     const chart = el('div', 'hour-bars');
     chart.setAttribute('role', 'img');
-    chart.setAttribute('aria-label', `Tickets by hour; the busiest hour had ${busiest}.`);
+    chart.setAttribute('aria-label', `Tiket per jam; jam tersibuk punya ${busiest} tiket.`);
     for (const [hour, count] of floor.byHour.entries()) {
       if (hour < 7 || hour > 22) continue;
       const bar = el('div', 'hour-bar');
       const fill = el('span', `hour-bar-fill${count === busiest && busiest > 0 ? ' is-peak' : ''}`);
       fill.style.height = `${busiest ? (count / busiest) * 100 : 0}%`;
-      bar.title = `${String(hour).padStart(2, '0')}:00 · ${count} tickets`;
+      bar.title = `${String(hour).padStart(2, '0')}:00 · ${count} tiket`;
       bar.append(el('span', 'hour-bar-count', count ? String(count) : ''), fill, el('span', 'hour-bar-label', String(hour).padStart(2, '0')));
       chart.append(bar);
     }
     report.body.append(
       statRow([
-        { label: 'Tickets', value: String(floor.tickets), hint: `${floor.served} served · ${floor.skipped} skipped` },
-        { label: 'Average wait', value: floor.averageWait === null ? '—' : `${Math.round(floor.averageWait)} min`, hint: 'Ticket to call' },
-        { label: 'Parties photographed', value: String(floor.partiesPhotographed), hint: `${floor.faces} faces at the gate` },
-        { label: 'AI prints', value: String(floor.presetPrints), hint: floor.partiesPhotographed ? `${(floor.presetPrints / floor.partiesPhotographed).toFixed(1)} per party · ${money(floor.presetRevenue)}` : money(floor.presetRevenue) },
+        { label: 'Tiket', value: String(floor.tickets), hint: `${floor.served} dilayani · ${floor.skipped} dilewati` },
+        { label: 'Rata-rata tunggu', value: floor.averageWait === null ? '—' : `${Math.round(floor.averageWait)} menit`, hint: 'Dari tiket sampai dipanggil' },
+        { label: 'Rombongan difoto', value: String(floor.partiesPhotographed), hint: `${floor.faces} wajah di gerbang` },
+        { label: 'Cetakan AI', value: String(floor.presetPrints), hint: floor.partiesPhotographed ? `${(floor.presetPrints / floor.partiesPhotographed).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} per rombongan · ${money(floor.presetRevenue)}` : money(floor.presetRevenue) },
       ]),
-      el('p', 'kicker', 'Tickets by hour, 07:00 to 22:00'),
+      el('p', 'kicker', 'Tiket per jam, 07.00 sampai 22.00'),
       chart,
     );
     return [report.root];
@@ -301,7 +301,7 @@ export function renderReports({ ops, redraw }: PageContext): HTMLElement {
 
   // ---------- settlement ----------
   function settlementTab(): HTMLElement[] {
-    const settle = section('Settlement', 'Upload the QRIS settlement export from your gateway to match it against the payments recorded here.');
+    const settle = section('Rekonsiliasi', 'Unggah ekspor settlement QRIS dari gateway untuk dicocokkan dengan pembayaran yang tercatat di sini.');
     const upload = fileInput('.csv,text/csv', async (file) => {
       try {
         const rowsIn = parseGatewayCsv(await file.text());
@@ -313,43 +313,43 @@ export function renderReports({ ops, redraw }: PageContext): HTMLElement {
         notice((error as Error).message, 'error');
       }
     });
-    settle.actions.append(upload, act('Upload export', 'btn btn-outline btn-sm', () => upload.click(), 'upload'));
+    settle.actions.append(upload, act('Unggah ekspor', 'btn btn-outline btn-sm', () => upload.click(), 'upload'));
     const result = view.settlement;
     if (!result) {
-      settle.body.append(el('p', 'card-desc', 'The file needs a reference (order_id) and amount (gross_amount) column; status and fee are read when present.'));
+      settle.body.append(el('p', 'card-desc', 'File perlu kolom referensi (order_id) dan nominal (gross_amount); kolom status dan fee dibaca bila ada.'));
     } else {
       settle.body.append(
         el('p', 'card-desc', view.fileName),
         statRow([
-          { label: 'Matched', value: String(result.matched.length) },
-          { label: 'Amount differs', value: String(result.mismatched.length) },
-          { label: 'Only at the gateway', value: String(result.missingInLedger.length) },
-          { label: 'Only in the ledger', value: String(result.missingInGateway.length) },
+          { label: 'Cocok', value: String(result.matched.length) },
+          { label: 'Nominal berbeda', value: String(result.mismatched.length) },
+          { label: 'Hanya di gateway', value: String(result.missingInLedger.length) },
+          { label: 'Hanya di pembukuan', value: String(result.missingInGateway.length) },
         ]),
-        el('p', 'card-desc', `Ledger ${money(result.ledgerTotal)} · gateway ${money(result.gatewayTotal)} · fees ${money(result.fees)} · difference ${money(result.gatewayTotal - result.ledgerTotal)}`),
+        el('p', 'card-desc', `Pembukuan ${money(result.ledgerTotal)} · gateway ${money(result.gatewayTotal)} · biaya ${money(result.fees)} · selisih ${money(result.gatewayTotal - result.ledgerTotal)}`),
         table(
           [
-            { label: 'Reference', cell: (row: { reference: string; problem: string; ledger: string; gateway: string }) => row.reference },
-            { label: 'Problem', cell: (row) => badge(row.problem, 'warn') },
-            { label: 'Ledger', className: 'num', cell: (row) => row.ledger },
+            { label: 'Referensi', cell: (row: { reference: string; problem: string; ledger: string; gateway: string }) => row.reference },
+            { label: 'Masalah', cell: (row) => badge(row.problem, 'warn') },
+            { label: 'Pembukuan', className: 'num', cell: (row) => row.ledger },
             { label: 'Gateway', className: 'num', cell: (row) => row.gateway },
           ],
           [
-            ...result.mismatched.map((row) => ({ reference: row.reference, problem: 'Amount differs', ledger: money(row.ledger), gateway: money(row.gateway) })),
-            ...result.missingInLedger.map((row) => ({ reference: row.reference, problem: 'Not in the ledger', ledger: '—', gateway: money(row.amount) })),
-            ...result.missingInGateway.map((payment) => ({ reference: payment.reference, problem: 'Not settled', ledger: money(payment.amount), gateway: '—' })),
+            ...result.mismatched.map((row) => ({ reference: row.reference, problem: 'Nominal berbeda', ledger: money(row.ledger), gateway: money(row.gateway) })),
+            ...result.missingInLedger.map((row) => ({ reference: row.reference, problem: 'Tidak ada di pembukuan', ledger: '—', gateway: money(row.amount) })),
+            ...result.missingInGateway.map((payment) => ({ reference: payment.reference, problem: 'Belum diselesaikan', ledger: money(payment.amount), gateway: '—' })),
           ],
-          { empty: 'Everything matches.' },
+          { empty: 'Semua cocok.' },
         ),
       );
       settle.actions.append(
-        act('Export result', 'btn btn-ghost btn-sm', () =>
+        act('Ekspor hasil', 'btn btn-ghost btn-sm', () =>
           downloadText(
-            toCsv(['Reference', 'Problem', 'Ledger', 'Gateway'], [
-              ...result.matched.map((row) => [row.reference, 'Matched', row.amount, row.amount]),
-              ...result.mismatched.map((row) => [row.reference, 'Amount differs', row.ledger, row.gateway]),
-              ...result.missingInLedger.map((row) => [row.reference, 'Not in the ledger', '', row.amount]),
-              ...result.missingInGateway.map((payment) => [payment.reference, 'Not settled', payment.amount, '']),
+            toCsv(['Referensi', 'Masalah', 'Pembukuan', 'Gateway'], [
+              ...result.matched.map((row) => [row.reference, 'Cocok', row.amount, row.amount]),
+              ...result.mismatched.map((row) => [row.reference, 'Nominal berbeda', row.ledger, row.gateway]),
+              ...result.missingInLedger.map((row) => [row.reference, 'Tidak ada di pembukuan', '', row.amount]),
+              ...result.missingInGateway.map((payment) => [payment.reference, 'Belum diselesaikan', payment.amount, '']),
             ]),
             `settlement-${today}.csv`,
           ),

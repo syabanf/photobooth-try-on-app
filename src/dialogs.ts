@@ -47,7 +47,7 @@ export function openDialog({ title, description, body, footer }: DialogOptions):
   desc.textContent = description ?? '';
   desc.hidden = !description;
 
-  const closeButton = iconButton('close', 'Close');
+  const closeButton = iconButton('close', 'Tutup');
   closeButton.dataset.close = '';
   root.querySelector('.dialog-head')!.append(closeButton);
   root.querySelector('.dialog-body')!.append(...body);
@@ -86,7 +86,7 @@ export function showError(form: HTMLElement, error: unknown): void {
   const slot = form.querySelector<HTMLElement>(`[data-error-for="${field}"]`)!;
   // Plain Errors carry messages written for people; TypeErrors and the like do not.
   const readable = error instanceof AccountError || (error instanceof Error && error.name === 'Error');
-  slot.textContent = readable ? (error as Error).message : 'Something went wrong. Try again.';
+  slot.textContent = readable ? (error as Error).message : 'Terjadi kesalahan. Coba lagi.';
   slot.hidden = false;
   const input = form.querySelector<HTMLElement>(`[name="${field}"]`);
   input?.setAttribute('aria-invalid', 'true');
@@ -213,7 +213,7 @@ export function formDialog(options: FormDialogOptions): FormDialogHandle {
     form.append(label, errorSlot(field.name));
   }
 
-  const cancel = button('Cancel', 'btn btn-outline');
+  const cancel = button('Batal', 'btn btn-outline');
   cancel.dataset.close = '';
   const save = button(options.submitLabel, 'btn btn-primary', 'submit');
   save.setAttribute('form', form.id);
@@ -254,7 +254,7 @@ export function formDialog(options: FormDialogOptions): FormDialogHandle {
 }
 
 export function confirmDialog(options: { title: string; message: string; confirmLabel: string; run(): Promise<void> }): void {
-  const cancel = button('Cancel', 'btn btn-outline');
+  const cancel = button('Batal', 'btn btn-outline');
   cancel.dataset.close = '';
   const confirm = button(options.confirmLabel, 'btn btn-primary');
   const error = errorSlot('form');

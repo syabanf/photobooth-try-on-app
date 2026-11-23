@@ -9,10 +9,10 @@ import { act, badge, type BadgeKind, dateTime, downloadText, el, page, pills, st
 type Show = 'all' | 'signins' | 'problems' | 'changes';
 
 const SHOWS: { value: Show; label: string; kinds: AuthEventKind[] | null }[] = [
-  { value: 'all', label: 'All', kinds: null },
-  { value: 'signins', label: 'Sign-ins', kinds: ['signin', 'signout', 'screen'] },
-  { value: 'problems', label: 'Wrong passwords', kinds: ['failed', 'locked'] },
-  { value: 'changes', label: 'Access changes', kinds: ['register', 'claim', 'invite', 'accepted', 'reset', 'password', 'disabled', 'enabled', 'unlocked'] },
+  { value: 'all', label: 'Semua', kinds: null },
+  { value: 'signins', label: 'Masuk', kinds: ['signin', 'signout', 'screen'] },
+  { value: 'problems', label: 'Kata sandi salah', kinds: ['failed', 'locked'] },
+  { value: 'changes', label: 'Perubahan akses', kinds: ['register', 'claim', 'invite', 'accepted', 'reset', 'password', 'disabled', 'enabled', 'unlocked'] },
 ];
 
 const KIND_BADGE: Partial<Record<AuthEventKind, BadgeKind>> = { signin: 'ok', failed: 'warn', locked: 'error', disabled: 'error', reset: 'info', invite: 'info' };
@@ -21,10 +21,10 @@ const view = { show: 'all' as Show, person: '' };
 const WEEK = 7 * 86_400_000;
 
 export function renderSignIns({ ops, redraw, nav }: PageContext): HTMLElement {
-  const root = page('Sign-in log', 'Who signed in, from which device, and every wrong password, lock and access change. Kept for the last 1,000 events on this device.');
-  root.actions.append(act('Users', 'btn btn-outline', () => nav('staff'), 'users'), act('Roles', 'btn btn-outline', () => nav('roles'), 'shield'));
+  const root = page('Log masuk', 'Siapa yang masuk, dari perangkat mana, serta setiap kata sandi salah, penguncian, dan perubahan akses. Menyimpan 1.000 kejadian terakhir di perangkat ini.');
+  root.actions.append(act('Pengguna', 'btn btn-outline', () => nav('staff'), 'users'), act('Peran', 'btn btn-outline', () => nav('roles'), 'shield'));
   const body = el('div', 'ops-body');
-  body.append(el('p', 'card-desc', 'Loading the log…'));
+  body.append(el('p', 'card-desc', 'Memuat log…'));
   root.body.append(body);
 
   void ops.accounts?.signInLog().then((events) => body.replaceChildren(...content(events)), (error) => body.replaceChildren(el('p', 'callout', (error as Error).message)));
@@ -36,7 +36,7 @@ export function renderSignIns({ ops, redraw, nav }: PageContext): HTMLElement {
 
     const people = [...new Map(events.map((event) => [event.userId, event.name])).entries()];
     const person = el('select', 'input select');
-    person.add(new Option('Everyone', ''));
+    person.add(new Option('Semua orang', ''));
     for (const [id, name] of people) person.add(new Option(name, id, false, id === view.person));
     person.addEventListener('change', () => {
       view.person = person.value;
@@ -50,28 +50,28 @@ export function renderSignIns({ ops, redraw, nav }: PageContext): HTMLElement {
       }),
       person,
       act('CSV', 'btn btn-outline btn-sm', () =>
-        downloadText(toCsv(['When', 'Person', 'Event', 'Device', 'By'], shown.map((event) => [new Date(event.at).toISOString(), event.name, AUTH_EVENT_LABELS[event.kind], event.device, event.byName ?? ''])), 'sign-in-log.csv'),
+        downloadText(toCsv(['Waktu', 'Orang', 'Kejadian', 'Perangkat', 'Oleh'], shown.map((event) => [new Date(event.at).toISOString(), event.name, AUTH_EVENT_LABELS[event.kind], event.device, event.byName ?? ''])), 'sign-in-log.csv'),
       'download'),
     );
 
     return [
       statRow([
-        { label: 'Sign-ins', value: String(week.filter((event) => event.kind === 'signin').length), hint: 'Last 7 days' },
-        { label: 'People', value: String(new Set(week.filter((event) => event.kind === 'signin').map((event) => event.userId)).size), hint: 'Signed in this week' },
-        { label: 'Wrong passwords', value: String(week.filter((event) => event.kind === 'failed').length), hint: 'Last 7 days' },
-        { label: 'Locks', value: String(week.filter((event) => event.kind === 'locked').length), hint: 'Last 7 days' },
+        { label: 'Masuk', value: String(week.filter((event) => event.kind === 'signin').length), hint: '7 hari terakhir' },
+        { label: 'Orang', value: String(new Set(week.filter((event) => event.kind === 'signin').map((event) => event.userId)).size), hint: 'Masuk minggu ini' },
+        { label: 'Kata sandi salah', value: String(week.filter((event) => event.kind === 'failed').length), hint: '7 hari terakhir' },
+        { label: 'Penguncian', value: String(week.filter((event) => event.kind === 'locked').length), hint: '7 hari terakhir' },
       ]),
       filters,
       table(
         [
-          { label: 'When', cell: (event: AuthEvent) => dateTime(event.at) },
-          { label: 'Person', cell: (event: AuthEvent) => event.name },
-          { label: 'Event', cell: (event: AuthEvent) => badge(AUTH_EVENT_LABELS[event.kind], KIND_BADGE[event.kind] ?? 'muted') },
-          { label: 'Device', cell: (event: AuthEvent) => event.device },
-          { label: 'By', cell: (event: AuthEvent) => event.byName ?? '—' },
+          { label: 'Waktu', cell: (event: AuthEvent) => dateTime(event.at) },
+          { label: 'Orang', cell: (event: AuthEvent) => event.name },
+          { label: 'Kejadian', cell: (event: AuthEvent) => badge(AUTH_EVENT_LABELS[event.kind], KIND_BADGE[event.kind] ?? 'muted') },
+          { label: 'Perangkat', cell: (event: AuthEvent) => event.device },
+          { label: 'Oleh', cell: (event: AuthEvent) => event.byName ?? '—' },
         ],
         shown,
-        { empty: 'Nothing matches. Pick All or Everyone.' },
+        { empty: 'Tidak ada yang cocok. Pilih Semua atau Semua orang.' },
       ),
     ];
   }

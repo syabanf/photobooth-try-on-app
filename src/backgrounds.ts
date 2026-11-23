@@ -70,12 +70,12 @@ function sunset(ctx: CanvasRenderingContext2D, w: number, h: number): void {
 }
 
 export const STUDIO_BACKGROUNDS: readonly Background[] = [
-  { id: 'none', label: 'None', kind: 'none' },
-  { id: 'blur', label: 'Blur', kind: 'blur' },
+  { id: 'none', label: 'Tanpa latar', kind: 'none' },
+  { id: 'blur', label: 'Buram', kind: 'blur' },
   { id: 'studio', label: 'Studio', kind: 'paint', paint: studio },
-  { id: 'coral', label: 'Coral', kind: 'paint', paint: coral },
-  { id: 'night', label: 'Night', kind: 'paint', paint: night },
-  { id: 'sunset', label: 'Sunset', kind: 'paint', paint: sunset },
+  { id: 'coral', label: 'Koral', kind: 'paint', paint: coral },
+  { id: 'night', label: 'Malam', kind: 'paint', paint: night },
+  { id: 'sunset', label: 'Senja', kind: 'paint', paint: sunset },
 ];
 
 export const NO_BACKGROUND = STUDIO_BACKGROUNDS[0];
@@ -97,12 +97,12 @@ function scenery(id: string, label: string, path: string): Background {
  * exportable. File pages: commons.wikimedia.org/wiki/File:<name>.
  */
 export const SCENERY: readonly Background[] = [
-  scenery('beach', 'Beach', '4/4a/Serene_Tropical_Beach_with_Lush_Greenery.jpg'),
-  scenery('rice', 'Rice field', 'a/ac/Nagari_tuo_pariangan_desa_terindah_di_dunia.jpg'),
-  scenery('forest', 'Forest', '7/75/Forest_Away_Path.jpg'),
-  scenery('lake', 'Lake', '7/75/Lake_Mountain_Landscape.jpg'),
-  scenery('mountains', 'Mountains', 'f/fb/Mirror_Lake_and_the_Beartooth_Mountains_%2848290713076%29.jpg'),
-  scenery('snow', 'Snow', '3/3c/Absaroka_Range_with_alpenglow_%28a11ac77b-6b0d-4416-9861-3d3e49355c01%29.jpg'),
+  scenery('beach', 'Pantai', '4/4a/Serene_Tropical_Beach_with_Lush_Greenery.jpg'),
+  scenery('rice', 'Sawah', 'a/ac/Nagari_tuo_pariangan_desa_terindah_di_dunia.jpg'),
+  scenery('forest', 'Hutan', '7/75/Forest_Away_Path.jpg'),
+  scenery('lake', 'Danau', '7/75/Lake_Mountain_Landscape.jpg'),
+  scenery('mountains', 'Pegunungan', 'f/fb/Mirror_Lake_and_the_Beartooth_Mountains_%2848290713076%29.jpg'),
+  scenery('snow', 'Salju', '3/3c/Absaroka_Range_with_alpenglow_%28a11ac77b-6b0d-4416-9861-3d3e49355c01%29.jpg'),
 ];
 
 const photos = new Map<string, Promise<HTMLImageElement>>();
@@ -119,7 +119,7 @@ export async function loadBackground(background: Background): Promise<Background
       image.onload = () => resolve(image);
       image.onerror = () => {
         photos.delete(src);
-        reject(new Error(`Could not load ${background.label}`));
+        reject(new Error(`${background.label} gagal dimuat`));
       };
       image.src = src;
     });
@@ -155,5 +155,5 @@ export function drawBackdrop(ctx: CanvasRenderingContext2D, background: Backgrou
 }
 
 export function imageBackground(image: HTMLImageElement): Background {
-  return { id: `image-${image.src}`, label: 'Yours', kind: 'image', image };
+  return { id: `image-${image.src}`, label: 'Milik Anda', kind: 'image', image };
 }

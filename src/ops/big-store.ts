@@ -109,7 +109,7 @@ function indexedDbBacking(db: IDBDatabase): Backing {
       const transaction = db.transaction(STORE, mode, { durability: 'strict' });
       const result = work(transaction.objectStore(STORE));
       transaction.oncomplete = () => resolve(result);
-      transaction.onerror = transaction.onabort = () => reject(transaction.error ?? new Error('The browser refused to save.'));
+      transaction.onerror = transaction.onabort = () => reject(transaction.error ?? new Error('Browser menolak menyimpan.'));
     });
   return {
     async load() {

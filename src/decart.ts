@@ -47,7 +47,7 @@ export async function connect(
     },
   });
   session.on('error', (e) => callbacks.onError(e.message));
-  session.on('sessionEnded', () => callbacks.onClosed('Decart ended the session.'));
+  session.on('sessionEnded', () => callbacks.onClosed('Decart mengakhiri sesi.'));
   return session;
 }
 

@@ -8,35 +8,35 @@ export async function pickCamera(onPick: (source: CameraSource) => void): Promis
   const cameras = await listCameras();
   const value = current.kind === 'device' ? current.deviceId : current.kind;
   const dialog = formDialog({
-    title: 'Camera',
-    description: 'Pick the camera this device uses. An IP camera works through its MJPEG or HLS link. A DSLR connects from Devices → Cameras → Set up camera.',
-    submitLabel: 'Use camera',
+    title: 'Kamera',
+    description: 'Pilih kamera untuk perangkat ini. Kamera IP tersambung lewat link MJPEG atau HLS. DSLR disambungkan dari Perangkat → Kamera → Atur kamera.',
+    submitLabel: 'Pakai kamera',
     fields: [
       {
         name: 'source',
-        label: 'Source',
+        label: 'Sumber',
         value,
         options: [
-          { value: 'auto', label: 'Default camera' },
-          ...cameras.map((camera, index) => ({ value: camera.deviceId, label: camera.label || `Camera ${index + 1}` })),
-          { value: 'ip', label: 'IP camera (link)' },
+          { value: 'auto', label: 'Kamera bawaan' },
+          ...cameras.map((camera, index) => ({ value: camera.deviceId, label: camera.label || `Kamera ${index + 1}` })),
+          { value: 'ip', label: 'Kamera IP (link)' },
           ...(current.kind === 'dslr' ? [{ value: 'dslr', label: `${describeSource(current)} (live view)` }] : []),
         ],
-        hint: cameras.some((camera) => !camera.label) ? 'Camera names appear once the browser has camera permission.' : undefined,
+        hint: cameras.some((camera) => !camera.label) ? 'Nama kamera muncul setelah browser diberi izin kamera.' : undefined,
       },
       {
         name: 'url',
-        label: 'IP camera link',
+        label: 'Link kamera IP',
         value: current.kind === 'ip' ? current.url : '',
         placeholder: 'http://192.168.1.20:1984/api/stream.mjpeg?src=booth1',
-        hint: 'For an RTSP camera, run go2rtc or MediaMTX beside it and paste the MJPEG or HLS link it serves. The camera or bridge must allow this page (CORS).',
+        hint: 'Untuk kamera RTSP, jalankan go2rtc atau MediaMTX di sampingnya lalu tempel link MJPEG atau HLS darinya. Kamera atau bridge harus mengizinkan halaman ini (CORS).',
       },
       {
         name: 'format',
-        label: 'Stream type',
+        label: 'Jenis stream',
         value: current.kind === 'ip' ? current.format : 'auto',
         options: [
-          { value: 'auto', label: 'Detect from the link' },
+          { value: 'auto', label: 'Deteksi dari link' },
           { value: 'mjpeg', label: 'MJPEG (motion JPEG)' },
           { value: 'video', label: 'Video (HLS, MP4, WebM)' },
         ],

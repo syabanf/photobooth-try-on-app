@@ -34,7 +34,7 @@ describe('a day at the till', () => {
   it('sells a session with a voucher, issues a receipt code and a queue ticket, then refunds with a PIN', async () => {
     const { ops } = setup();
     ops.saveVoucher({ code: 'half', kind: 'percent', value: 50, scope: 'multi', boothIds: [], maxUses: 5, validFrom: '', validTo: '', happyHour: null, frameIds: [], eventMode: false, active: true });
-    expect(() => ops.createOrder({ lines: [{ kind: 'session', refId: 'photobox', label: 'Photo strip', unitPrice: 35_000, qty: 1 }], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null })).toThrow('Open a shift');
+    expect(() => ops.createOrder({ lines: [{ kind: 'session', refId: 'photobox', label: 'Photo strip', unitPrice: 35_000, qty: 1 }], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null })).toThrow('Buka shift');
     ops.openShift('mall', 200_000);
 
     const order = ops.createOrder({
@@ -59,18 +59,18 @@ describe('a day at the till', () => {
     const code = paid.sessionVouchers[0];
     expect(ops.redeemAtBooth(code, 'k1', 35_000).discount).toBe(35_000);
     ops.startSession({ boothId: 'k1', mode: 'strip', price: 0, orderId: order.id, voucherCode: code, frameId: null });
-    expect(() => ops.redeemAtBooth(code, 'k2', 35_000)).toThrow('already used');
+    expect(() => ops.redeemAtBooth(code, 'k2', 35_000)).toThrow('sudah dipakai');
 
     // Refund the prints: needs a supervisor PIN.
     await ops.saveStaff({ name: 'Sari', role: 'supervisor', branchIds: [], email: '', phone: '', onDuty: true, active: true }, '2468');
     const printLine = paid.lines.find((line) => line.kind === 'print')!;
-    await expect(ops.refund(order.id, printLine.id, 'Blurry', '1111')).rejects.toThrow('does not belong to a supervisor');
+    await expect(ops.refund(order.id, printLine.id, 'Blurry', '1111')).rejects.toThrow('bukan milik supervisor');
     // A double tap sends two refunds while the PIN is still being checked: one goes through.
     const both = await Promise.allSettled([ops.refund(order.id, printLine.id, 'Blurry', '2468'), ops.refund(order.id, printLine.id, 'Blurry', '2468')]);
     expect(both.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
     expect(both.find((result) => result.status === 'fulfilled')).toMatchObject({ value: 30_000 });
     expect(ops.state.refunds).toHaveLength(1);
-    await expect(ops.refund(order.id, printLine.id, 'Again', '2468')).rejects.toThrow('refunded already');
+    await expect(ops.refund(order.id, printLine.id, 'Again', '2468')).rejects.toThrow('sudah di-refund');
 
     const slip = ops.closeShift(ops.openShiftFor('mall')!.id, 217_500);
     expect(slip).toMatchObject({ gross: 47_500, refunds: 30_000, expectedCash: 217_500, variance: 0 });
@@ -171,7 +171,7 @@ describe('a day at the till', () => {
     ops.openShift('mall', 0);
     ops.edit('settings.manage', 'product', 'add', (draft) => draft.products.push({ id: 'mug', name: 'Mug', sku: 'M1', price: 45_000, stock: 1 }));
     const line = { kind: 'merch' as const, refId: 'mug', label: 'Mug', unitPrice: 45_000, qty: 2 };
-    expect(() => ops.createOrder({ lines: [line], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null })).toThrow('Only 1 Mug left');
+    expect(() => ops.createOrder({ lines: [line], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null })).toThrow('Stok Mug tinggal 1');
     const order = ops.createOrder({ lines: [{ ...line, qty: 1 }], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null });
     ops.pay(order.id, 'card', 45_000, 'APPR-123');
     expect(ops.state.products[0].stock).toBe(0);
@@ -181,10 +181,39 @@ describe('a day at the till', () => {
     const { ops } = setup();
     await ops.saveStaff({ name: 'Budi', role: 'cashier', branchIds: ['mall'], email: '', phone: '', onDuty: true, active: true }, '1357');
     const budi = ops.state.staff.find((person) => person.name === 'Budi')!;
-    await expect(ops.switchActor(budi.id, '0000')).rejects.toThrow('Wrong PIN');
+    await expect(ops.switchActor(budi.id, '0000')).rejects.toThrow('PIN salah');
     await ops.switchActor(budi.id, '1357');
     expect(ops.can('pos.sell')).toBe(true);
-    await expect(ops.saveStaff({ name: 'X', role: 'cashier', branchIds: [], email: '', phone: '', onDuty: false, active: true }, '')).rejects.toThrow('not allowed');
+    await expect(ops.saveStaff({ name: 'X', role: 'cashier', branchIds: [], email: '', phone: '', onDuty: false, active: true }, '')).rejects.toThrow('tidak punya izin');
+    // The owner set no PIN, so the cashier cannot take the owner's place on this device.
+    await expect(ops.switchActor(ops.state.staff[0].id, '')).rejects.toThrow('belum punya PIN');
+    expect(ops.actor()?.id).toBe(budi.id);
+  });
+
+  it('takes a turned-off person\'s access away instead of handing the device to the owner', async () => {
+    const { ops } = setup();
+    expect(ops.actor()?.role).toBe('owner');
+    await ops.saveStaff({ name: 'Budi', role: 'cashier', branchIds: [], email: '', phone: '', onDuty: true, active: true }, '1357');
+    const budi = ops.state.staff.find((person) => person.name === 'Budi')!;
+    await ops.switchActor(budi.id, '1357');
+    // The owner turns Budi off from another device; this one still has Budi on it.
+    ops.store.update((draft) => void (draft.staff.find((person) => person.id === budi.id)!.active = false));
+    expect(ops.actor()).toBeNull();
+    expect(ops.can('pos.sell')).toBe(false);
+  });
+
+  it('pauses PIN entry after five wrong PINs and logs it', async () => {
+    const { ops, store } = setup();
+    await ops.saveStaff({ name: 'Sari', role: 'supervisor', branchIds: [], email: '', phone: '', onDuty: true, active: true }, '2468');
+    const sari = ops.state.staff.find((person) => person.name === 'Sari')!;
+    for (let i = 0; i < 5; i += 1) await expect(ops.switchActor(sari.id, '1111')).rejects.toThrow('PIN salah');
+    expect(ops.state.activity[0].kind).toBe('auth.pin-locked');
+    // The right PIN waits too, and so do refunds and hand confirmations on this device.
+    await expect(ops.switchActor(sari.id, '2468')).rejects.toThrow('Coba lagi dalam 5 menit');
+    const clock = vi.spyOn(store, 'now').mockReturnValue(Date.UTC(2026, 9, 19, 5, 6));
+    await ops.switchActor(sari.id, '2468');
+    expect(ops.actor()?.id).toBe(sari.id);
+    clock.mockRestore();
   });
 });
 
@@ -208,7 +237,7 @@ describe('booth capture recovery', () => {
 
     ops.endSession(session.id, false, '', undefined, 'Camera disconnected');
     expect(ops.state.sessions.find((entry) => entry.id === session.id)?.failureReason).toBe('Camera disconnected');
-    expect(ops.state.activity[0].message).toContain('closed a failed session');
+    expect(ops.state.activity[0].message).toContain('menutup sesi gagal');
   });
 
   it('restores a phone link after a completed session while keeping the saved file', async () => {
@@ -216,7 +245,7 @@ describe('booth capture recovery', () => {
     const session = ops.startSession({ boothId: 'k1', mode: 'strip', price: 0, orderId: null, voucherCode: null, frameId: null });
     const shot = await saveShot(new Blob(['photo'], { type: 'image/png' }), 'photobooth', 'k1', null, session.id);
     ops.attachShot(session.id, shot.id);
-    expect(() => ops.setSessionDelivery(session.id, 'http://booth/#g=token')).toThrow('cannot be restored');
+    expect(() => ops.setSessionDelivery(session.id, 'http://booth/#g=token')).toThrow('tidak bisa dipulihkan');
     ops.endSession(session.id, false, '');
     ops.setSessionDelivery(session.id, 'http://booth/#g=token');
     expect(ops.state.sessions.find((entry) => entry.id === session.id)?.deliveryUrl).toBe('http://booth/#g=token');
@@ -243,7 +272,7 @@ describe('queue and alerts', () => {
     ops.checkAlerts();
     ops.checkAlerts();
     expect(ops.state.alerts.filter((alert) => !alert.resolvedAt)).toHaveLength(1);
-    expect(toasts).toEqual(['DNP DS-RX1 has 5 sheets left.']);
+    expect(toasts).toEqual(['Kertas DNP DS-RX1 tinggal 5 lembar.']);
     expect(ops.state.notifications.map((n) => n.channel).sort()).toEqual(['email', 'whatsapp']);
   });
 });
@@ -254,15 +283,15 @@ describe('managing payments', () => {
     ops.openShift('mall', 0);
     const line = { kind: 'session' as const, refId: 'photobox', label: 'GIF', unitPrice: 30_000, qty: 1 };
     const order = ops.createOrder({ lines: [line], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null });
-    expect(() => ops.pay(order.id, 'ewallet', 30_000, 'GP-1')).toThrow('Pick the e-wallet');
+    expect(() => ops.pay(order.id, 'ewallet', 30_000, 'GP-1')).toThrow('Pilih e-wallet');
     ops.pay(order.id, 'ewallet', 30_000, 'GP-1', { wallet: 'GoPay' });
     expect(ops.order(order.id).payments[0]).toMatchObject({ status: 'paid', wallet: 'GoPay', fee: 450 });
 
     ops.savePaymentSettings((draft) => (draft.methods.card.cashier = false), 'No cards at the till');
     const next = ops.createOrder({ lines: [line], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null });
-    expect(() => ops.pay(next.id, 'card', 30_000, 'APPR')).toThrow('Card is switched off for the till');
+    expect(() => ops.pay(next.id, 'card', 30_000, 'APPR')).toThrow('Kartu dimatikan untuk kasir');
     const booth = ops.createOrder({ lines: [line], presetId: null, voucherCode: '', channel: 'booth', branchId: 'mall', boothId: 'k1' });
-    expect(() => ops.pay(booth.id, 'cash', 30_000)).toThrow('Cash is switched off for the booth');
+    expect(() => ops.pay(booth.id, 'cash', 30_000)).toThrow('Tunai dimatikan untuk booth');
   });
 
   it('expires a QR after its time, cancels one with a reason, and confirms one by hand with a PIN', async () => {
@@ -284,19 +313,19 @@ describe('managing payments', () => {
     expect(ops.order(first.id).status).toBe('open');
 
     const second = await ops.chargeQris(first.id);
-    expect(() => ops.cancelPayment(first.id, second.id, '')).toThrow('Enter a reason');
+    expect(() => ops.cancelPayment(first.id, second.id, '')).toThrow('Isi alasan');
     ops.cancelPayment(first.id, second.id, 'Customer left');
     expect(ops.order(first.id).payments[1]).toMatchObject({ status: 'cancelled', note: 'Customer left' });
-    expect(() => ops.cancelPayment(first.id, second.id, 'Again')).toThrow('is cancelled');
+    expect(() => ops.cancelPayment(first.id, second.id, 'Again')).toThrow('dibatalkan');
 
     await ops.saveStaff({ name: 'Sari', role: 'supervisor', branchIds: [], email: '', phone: '', onDuty: true, active: true }, '2468');
     const third = await ops.chargeQris(first.id);
-    await expect(ops.confirmPayment(first.id, third.id, 'BCA 7781', '0000')).rejects.toThrow('does not belong to a supervisor');
+    await expect(ops.confirmPayment(first.id, third.id, 'BCA 7781', '0000')).rejects.toThrow('bukan milik supervisor');
     const confirms = await Promise.allSettled([ops.confirmPayment(first.id, third.id, 'BCA 7781', '2468'), ops.confirmPayment(first.id, third.id, 'BCA 7781', '2468')]);
     expect(confirms.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect(ops.state.activity.filter((entry) => entry.kind === 'payment.confirm')).toHaveLength(1);
     expect(ops.order(first.id).status).toBe('paid');
-    expect(ops.order(first.id).payments[2].note).toBe('Confirmed by Sari from BCA 7781');
+    expect(ops.order(first.id).payments[2].note).toBe('Dikonfirmasi oleh Sari dari BCA 7781');
     expect(ops.state.activity[0].kind).toBe('payment.confirm');
   });
 });
@@ -307,7 +336,7 @@ describe('a party from the gate to the print', () => {
     const ticket = ops.issueTicket({ boothIds: ['k1'], name: 'Dina', phone: '', email: '', checkedIn: false });
     expect(ops.findTicket(ticket.number).id).toBe(ticket.id);
     expect(ops.findTicket(`https://booth.test/#checkin=${ticket.token}`).id).toBe(ticket.id);
-    expect(() => ops.findTicket('A999')).toThrow('A999 is not in the queue');
+    expect(() => ops.findTicket('A999')).toThrow('A999 tidak ada di antrean');
 
     // The gate scan checks the ticket in, then the camera's faces are filed under it.
     expect(ops.arrive(ticket.number).checkedIn).toBe(true);
@@ -317,15 +346,15 @@ describe('a party from the gate to the print', () => {
     await ops.addFace(photo, 'k1', ticket.id);
     await ops.addFace(photo, 'k1');
     expect(ops.facesForTicket(ticket.id)).toHaveLength(2);
-    expect(ops.state.activity[0].message).toBe('Kiosk 1 captured a face for AI presets.');
-    expect(ops.state.activity[1].message).toBe(`Kiosk 1 captured a face for ticket ${ticket.number}.`);
+    expect(ops.state.activity[0].message).toBe('Kiosk 1 mengambil foto wajah untuk preset AI.');
+    expect(ops.state.activity[1].message).toBe(`Kiosk 1 mengambil foto wajah untuk tiket ${ticket.number}.`);
     const [dina] = ops.facesForTicket(ticket.id);
     ops.tagFace(dina.id, '  Dina  ');
     expect(ops.facesForTicket(ticket.id)[0].name).toBe('Dina');
-    expect(ops.state.activity[0].message).toBe('Named a face Dina.');
+    expect(ops.state.activity[0].message).toBe('Memberi nama wajah Dina.');
     ops.tagFace(dina.id, '');
-    expect(ops.state.activity[0].message).toBe('Removed the name from a face.');
-    expect(() => ops.tagFace('gone', 'X')).toThrow('That face is gone.');
+    expect(ops.state.activity[0].message).toBe('Menghapus nama dari wajah.');
+    expect(() => ops.tagFace('gone', 'X')).toThrow('Wajah itu sudah tidak ada.');
     ops.tagFace(dina.id, 'Dina');
 
     // The booth calls them, and the preset flow finds the ticket it is serving.
@@ -341,7 +370,7 @@ describe('a party from the gate to the print', () => {
     expect(ops.order(order.id).status).toBe('paid');
 
     ops.savePresetPrice(0);
-    expect(ops.state.activity[0].message).toBe('AI presets are free.');
+    expect(ops.state.activity[0].message).toBe('Preset AI gratis.');
   });
 });
 
@@ -355,13 +384,13 @@ describe('team sign-in', () => {
     ops.accounts = accounts;
     ops.adoptSession(session.member);
     expect(ops.actor()).toMatchObject({ name: 'Rizky', email: 'rizky@dusunbambu.id', role: 'owner' });
-    expect(ops.state.activity[0].message).toBe('Rizky signed in.');
+    expect(ops.state.activity[0].message).toBe('Rizky masuk.');
     // Opening the app again on the same session is no new sign-in.
     ops.adoptSession(session.member);
     expect(ops.state.activity.filter((entry) => entry.kind === 'auth.signin')).toHaveLength(1);
 
     const id = await ops.saveStaff({ name: 'Sari', role: 'cashier', branchIds: [], email: 'Sari@DusunBambu.id', phone: '', onDuty: true, active: true }, '');
-    await expect(ops.saveStaff({ name: 'Dewi', role: 'cashier', branchIds: [], email: 'sari@dusunbambu.id', phone: '', onDuty: true, active: true }, '')).rejects.toThrow('belongs to someone else');
+    await expect(ops.saveStaff({ name: 'Dewi', role: 'cashier', branchIds: [], email: 'sari@dusunbambu.id', phone: '', onDuty: true, active: true }, '')).rejects.toThrow('sudah dipakai orang lain');
     const [first, again] = await Promise.all([ops.inviteMember(id, 'k'), ops.inviteMember(id, 'k')]);
     expect(again.code).toBe(first.code);
     expect(ops.member(id)?.status).toBe('invited');
@@ -376,14 +405,14 @@ describe('team sign-in', () => {
     await ops.saveStaff({ ...ops.state.staff.find((person) => person.id === id)!, active: false }, '');
     expect(ops.member(id)?.status).toBe('disabled');
     await accounts.signOut();
-    await expect(accounts.signIn('sari@dusunbambu.id', 'kopi2026')).rejects.toThrow('turned off');
+    await expect(accounts.signIn('sari@dusunbambu.id', 'kopi2026')).rejects.toThrow('dimatikan');
   });
 
   it('keeps a cashier away from other people\'s sign-in', async () => {
     const { ops } = setup();
     await ops.saveStaff({ name: 'Budi', role: 'cashier', branchIds: [], email: '', phone: '', onDuty: true, active: true }, '1357');
     await ops.switchActor(ops.state.staff.find((person) => person.name === 'Budi')!.id, '1357');
-    await expect(ops.resetMember(ops.state.staff[0].id)).rejects.toThrow('not allowed');
+    await expect(ops.resetMember(ops.state.staff[0].id)).rejects.toThrow('tidak punya izin');
   });
 });
 
@@ -398,14 +427,15 @@ describe('editable roles', () => {
     expect(can(budi, 'reports.view')).toBe(true);
     expect(ops.state.settings.rolePermissions.cashier).not.toContain('not.a.permission');
     expect(ops.state.activity[0].kind).toBe('role.save');
-    expect(() => ops.saveRole('owner', [])).toThrow('owner can always do everything');
+    expect(() => ops.saveRole('owner', [])).toThrow('Pemilik selalu punya semua izin');
 
     ops.saveRole('cashier', []);
     await ops.switchActor(budi.id, '1357');
-    expect(() => ops.createOrder({ lines: [{ kind: 'merch', refId: 'x', label: 'X', unitPrice: 1, qty: 1 }], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null })).toThrow('not allowed');
-    expect(() => ops.resetRole('cashier')).toThrow('not allowed');
+    expect(() => ops.createOrder({ lines: [{ kind: 'merch', refId: 'x', label: 'X', unitPrice: 1, qty: 1 }], presetId: null, voucherCode: '', channel: 'cashier', branchId: 'mall', boothId: null })).toThrow('tidak punya izin');
+    expect(() => ops.resetRole('cashier')).toThrow('tidak punya izin');
 
-    await ops.switchActor(ops.state.staff[0].id, '');
+    // The owner has no PIN, so they come back by signing in.
+    ops.adoptSession({ userId: ops.state.staff[0].id, accountId: account.id, name: 'Owner', email: '', status: 'active', createdAt: 0, lastSignInAt: 1, failedAttempts: 0, lockedUntil: 0, inviteExpiresAt: null });
     ops.resetRole('cashier');
     expect(permissionsOf('cashier')).toContain('pos.sell');
     expect(ops.state.settings.rolePermissions).toEqual({});

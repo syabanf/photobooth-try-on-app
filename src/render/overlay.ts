@@ -150,7 +150,7 @@ export function captureFrame(video: HTMLVideoElement, overlay: HTMLCanvasElement
 
 export function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/png', quality?: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not encode the image'))), type, quality);
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Gambar gagal disimpan.'))), type, quality);
   });
 }
 

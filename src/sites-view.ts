@@ -28,7 +28,7 @@ export interface SitesView {
 }
 
 function statusBadge(active: boolean): HTMLElement {
-  const badge = el('span', 'badge', active ? 'Active' : 'Paused');
+  const badge = el('span', 'badge', active ? 'Aktif' : 'Dijeda');
   badge.title = badge.textContent!;
   if (active) badge.dataset.kind = 'ok';
   return badge;
@@ -74,24 +74,24 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
   function editLocation(location?: Location): void {
     const points = location ? pointsIn(location) : [];
     formDialog({
-      title: location ? 'Edit location' : 'Add location',
-      description: location ? undefined : 'A store, mall or event venue. You add its points next.',
-      submitLabel: location ? 'Save' : 'Add location',
+      title: location ? 'Ubah lokasi' : 'Tambah lokasi',
+      description: location ? undefined : 'Toko, mal atau tempat acara. Booth-nya ditambahkan setelah ini.',
+      submitLabel: location ? 'Simpan' : 'Tambah lokasi',
       fields: [
-        { name: 'name', label: 'Name', value: location?.name ?? '', placeholder: 'Grand Indonesia' },
-        { name: 'city', label: 'City', value: location?.city ?? '', placeholder: 'Jakarta' },
-        { name: 'address', label: 'Address', value: location?.address ?? '', placeholder: 'Optional' },
+        { name: 'name', label: 'Nama', value: location?.name ?? '', placeholder: 'Contoh: Dusun Bambu Lembang' },
+        { name: 'city', label: 'Kota', value: location?.city ?? '', placeholder: 'Contoh: Bandung Barat' },
+        { name: 'address', label: 'Alamat', value: location?.address ?? '', placeholder: 'Opsional' },
       ],
       danger: location && {
-        label: 'Delete',
+        label: 'Hapus',
         run(close) {
           close();
           confirmDialog({
-            title: `Delete ${location.name}?`,
+            title: `Hapus ${location.name}?`,
             message: points.length
-              ? `Its ${points.length} ${points.length === 1 ? 'point goes' : 'points go'} with it. Captures already saved stay in the gallery.`
-              : 'It has no points yet.',
-            confirmLabel: 'Delete location',
+              ? `${points.length} booth di dalamnya ikut terhapus. Hasil foto yang sudah tersimpan tetap ada di galeri.`
+              : 'Lokasi ini belum punya booth.',
+            confirmLabel: 'Hapus lokasi',
             async run() {
               await backend.deleteLocation(location.id);
               await refresh();
@@ -123,28 +123,28 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
     const suggest = (id: string) => suggestPointCode(sites.locations.find((location) => location.id === id)?.name ?? '', takenCodes);
 
     const dialog = formDialog({
-      title: point ? 'Edit point' : 'Add point',
-      description: point ? undefined : 'One kiosk, mirror or booth that runs the try-on.',
-      submitLabel: point ? 'Save' : 'Add point',
+      title: point ? 'Ubah booth' : 'Tambah booth',
+      description: point ? undefined : 'Satu kiosk, cermin atau booth yang menjalankan aplikasi ini.',
+      submitLabel: point ? 'Simpan' : 'Tambah booth',
       fields: [
-        { name: 'name', label: 'Name', value: point?.name ?? '', placeholder: 'Kiosk 1' },
+        { name: 'name', label: 'Nama', value: point?.name ?? '', placeholder: 'Contoh: Booth Saung' },
         {
           name: 'locationId',
-          label: 'Location',
+          label: 'Lokasi',
           value: startLocation,
           options: sites.locations.map((location) => ({ value: location.id, label: `${location.name} · ${location.city}` })),
         },
-        { name: 'code', label: 'Code', value: point?.code ?? suggest(startLocation), hint: 'Printed on the unit, so staff can tell points apart.' },
-        { name: 'active', label: 'Active', value: point?.active ?? true, hint: 'Paused points stay listed but cannot be picked on a device.' },
+        { name: 'code', label: 'Kode', value: point?.code ?? suggest(startLocation), hint: 'Ditempel di unit agar staf bisa membedakan setiap booth.' },
+        { name: 'active', label: 'Aktif', value: point?.active ?? true, hint: 'Booth yang dijeda tetap tercantum tapi tidak bisa dipilih di perangkat.' },
       ],
       danger: point && {
-        label: 'Delete',
+        label: 'Hapus',
         run(close) {
           close();
           confirmDialog({
-            title: `Delete ${point.name}?`,
-            message: 'Captures already saved from it stay in the gallery.',
-            confirmLabel: 'Delete point',
+            title: `Hapus ${point.name}?`,
+            message: 'Hasil foto yang sudah tersimpan dari booth ini tetap ada di galeri.',
+            confirmLabel: 'Hapus booth',
             async run() {
               await backend.deletePoint(point.id);
               await refresh();
@@ -202,15 +202,15 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
       body.push(group);
     }
     if (body.length === 0) {
-      body.push(el('p', 'card-desc', 'No active points yet. Add a location and a point first.'));
+      body.push(el('p', 'card-desc', 'Belum ada booth aktif. Tambahkan lokasi dan booth dulu.'));
     }
 
-    const manage = actionButton('Manage locations', 'btn btn-outline');
+    const manage = actionButton('Kelola lokasi', 'btn btn-outline');
     manage.dataset.close = '';
     manage.addEventListener('click', handlers.onOpenSites);
     const footer: HTMLElement[] = [manage];
     if (devicePoint) {
-      const clear = actionButton('Unlink', 'btn btn-ghost btn-danger');
+      const clear = actionButton('Lepas', 'btn btn-ghost btn-danger');
       clear.addEventListener('click', () => {
         setDevicePoint(null);
         dialog.close();
@@ -218,8 +218,8 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
       footer.unshift(clear);
     }
     const dialog = openDialog({
-      title: 'Which point is this device?',
-      description: 'Snapshots and photobooth sheets taken here are counted for that point.',
+      title: 'Perangkat ini booth yang mana?',
+      description: 'Foto dan lembar photobooth dari perangkat ini dihitung untuk booth tersebut.',
       body,
       footer,
     });
@@ -231,7 +231,7 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
   function capAdd(button: HTMLButtonElement, kind: 'locations' | 'points'): void {
     const full = sites[kind].length >= TRIAL_LIMITS[kind];
     button.disabled = full;
-    button.title = full ? `The trial covers up to ${TRIAL_LIMITS[kind]} ${kind}.` : '';
+    button.title = full ? `Masa coba hanya untuk maksimal ${TRIAL_LIMITS[kind]} ${kind === 'locations' ? 'lokasi' : 'booth'}.` : '';
   }
 
   function renderStats(): void {
@@ -240,37 +240,37 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
     const activePoints = sites.points.filter((point) => point.active).length;
     const daysLeft = trialDaysLeft(account, Date.now());
     stats.replaceChildren(
-      stat('Locations', String(sites.locations.length), `of ${TRIAL_LIMITS.locations} in the trial`, 'pin', 'soft'),
-      stat('Points', String(sites.points.length), `of ${TRIAL_LIMITS.points} in the trial`, 'point', 'soft'),
-      stat('Active', String(activePoints), `${sites.points.length - activePoints} paused`, 'check', 'soft'),
-      stat('Trial', String(daysLeft), daysLeft === 1 ? 'day left' : 'days left', 'clock', daysLeft <= 3 ? 'accent' : 'ink'),
+      stat('Lokasi', String(sites.locations.length), `dari ${TRIAL_LIMITS.locations} di masa coba`, 'pin', 'soft'),
+      stat('Booth', String(sites.points.length), `dari ${TRIAL_LIMITS.points} di masa coba`, 'point', 'soft'),
+      stat('Aktif', String(activePoints), `${sites.points.length - activePoints} dijeda`, 'check', 'soft'),
+      stat('Masa coba', String(daysLeft), 'hari tersisa', 'clock', daysLeft <= 3 ? 'accent' : 'ink'),
     );
   }
 
   /** "This device" on the device's own point, a Use here button on other active points. */
   function deviceControl(point: Point): HTMLElement | null {
-    if (point.id === devicePoint) return el('span', 'this-device', 'This device');
+    if (point.id === devicePoint) return el('span', 'this-device', 'Perangkat ini');
     if (!point.active) return null;
-    const use = actionButton('Use here', 'btn btn-ghost btn-sm');
+    const use = actionButton('Pakai di sini', 'btn btn-ghost btn-sm');
     use.addEventListener('click', () => setDevicePoint(point.id));
     return use;
   }
 
   function addPointButton(location: Location): HTMLButtonElement {
-    const add = actionButton('Add point', 'btn btn-ghost btn-sm add-point', 'plus');
+    const add = actionButton('Tambah booth', 'btn btn-ghost btn-sm add-point', 'plus');
     capAdd(add, 'points');
     add.addEventListener('click', () => editPoint(undefined, location.id));
     return add;
   }
 
   function editLocationButton(location: Location): HTMLButtonElement {
-    const edit = iconButton('edit', `Edit ${location.name}`);
+    const edit = iconButton('edit', `Ubah ${location.name}`);
     edit.addEventListener('click', () => editLocation(location));
     return edit;
   }
 
   const locationMeta = (location: Location) => [location.city, location.address].filter(Boolean).join(' · ');
-  const noPoints = () => (search.value ? 'No point matches.' : 'No points yet.');
+  const noPoints = () => (search.value ? 'Tidak ada booth yang cocok.' : 'Belum ada booth.');
 
   // ---------- card view ----------
 
@@ -278,7 +278,7 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
     const row = el('div', 'point-row');
     const main = el('button', 'point-main');
     main.type = 'button';
-    main.title = `Edit ${point.name}`;
+    main.title = `Ubah ${point.name}`;
     const text = el('span', 'point-text');
     text.append(el('span', 'point-name', point.name), el('span', 'code', point.code));
     main.append(tile('point'), text, statusBadge(point.active));
@@ -305,9 +305,9 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
     const all = pointsIn(location);
     const split = el('footer', 'split-stats');
     for (const [label, value] of [
-      ['Points', all.length],
-      ['Active', all.filter((point) => point.active).length],
-      ['Captures', capturesIn(all)],
+      ['Booth', all.length],
+      ['Aktif', all.filter((point) => point.active).length],
+      ['Hasil foto', capturesIn(all)],
     ] as const) {
       const cell = el('div', 'split-cell');
       cell.append(el('span', 'split-label', label), el('strong', 'split-value', String(value)));
@@ -321,11 +321,11 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
 
   // Phones drop the code and captures columns; the code moves under the point name.
   const COLUMNS = [
-    ['Point', ''],
-    ['Code', 'col-wide'],
+    ['Booth', ''],
+    ['Kode', 'col-wide'],
     ['Status', ''],
-    ['Captures', 'num col-wide'],
-    ['Actions', 'actions'],
+    ['Hasil foto', 'num col-wide'],
+    ['Aksi', 'actions'],
   ] as const;
 
   function pointTable(groups: Group[]): HTMLElement {
@@ -348,7 +348,7 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
       const inner = el('div', 'group-cell');
       const text = el('div', 'group-text');
       const count = pointsIn(location).length;
-      text.append(el('span', 'group-name', location.name), el('span', 'card-desc', `${locationMeta(location)} · ${count} ${count === 1 ? 'point' : 'points'}`));
+      text.append(el('span', 'group-name', location.name), el('span', 'card-desc', `${locationMeta(location)} · ${count} booth`));
       inner.append(tile('pin', 'ink'), text, addPointButton(location), editLocationButton(location));
       cell.append(inner);
       groupRow.append(cell);
@@ -383,7 +383,7 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
         const actions = el('div', 'row-actions');
         const device = deviceControl(point);
         if (device) actions.append(device);
-        const edit = iconButton('edit', `Edit ${point.name}`);
+        const edit = iconButton('edit', `Ubah ${point.name}`);
         edit.addEventListener('click', () => editPoint(point));
         actions.append(edit);
         const actionCell = row.insertCell();
@@ -410,10 +410,10 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
     const matches = (...values: string[]) => values.some((value) => value.toLowerCase().includes(query));
 
     if (sites.locations.length === 0) {
-      const add = actionButton('Add location', 'btn btn-outline btn-sm', 'plus');
+      const add = actionButton('Tambah lokasi', 'btn btn-outline btn-sm', 'plus');
       add.addEventListener('click', () => editLocation());
       list.replaceChildren(
-        emptyState('Add your first location', 'Start with the store or venue, then add the kiosks, mirrors or booths inside it.', add),
+        emptyState('Tambahkan lokasi pertama', 'Mulai dari toko atau tempat acara, lalu tambahkan kiosk, cermin atau booth di dalamnya.', add),
       );
       return;
     }
@@ -425,7 +425,7 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
       return hits.length ? [{ location, points: hits }] : [];
     });
     if (groups.length === 0) {
-      list.replaceChildren(emptyState('Nothing matches', `No location or point matches “${search.value.trim()}”.`));
+      list.replaceChildren(emptyState('Tidak ada yang cocok', `Tidak ada lokasi atau booth yang cocok dengan “${search.value.trim()}”.`));
       return;
     }
     list.replaceChildren(...(layout === 'table' ? [pointTable(groups)] : groups.map(locationCard)));
@@ -434,9 +434,9 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
   function renderDeviceCard(): void {
     const point = sites.points.find((candidate) => candidate.id === devicePoint);
     const location = point && locationOf(point);
-    $('#deviceName').textContent = point?.name ?? 'No point set';
-    $('#deviceMeta').textContent = point && location ? `${location.name} · ${point.code}` : 'Captures are not linked to a point.';
-    $('#deviceChange').textContent = point ? 'Change' : 'Set point';
+    $('#deviceName').textContent = point?.name ?? 'Belum ada booth';
+    $('#deviceMeta').textContent = point && location ? `${location.name} · ${point.code}` : 'Hasil foto belum terhubung ke booth.';
+    $('#deviceChange').textContent = point ? 'Ganti' : 'Pilih booth';
   }
 
   function render(): void {

@@ -11,15 +11,15 @@ import { act, actionButton, badge, count, el, notice, page, qrCanvas, section } 
 export function renderQueue({ ops }: PageContext): HTMLElement {
   const { tickets } = ops.state;
   const booths = ops.visibleBooths().filter((point) => point.active);
-  const view = page('Queue', 'One ticket can wait for several booths. The first booth to free up calls it, and it leaves every other line.');
+  const view = page('Antrean', 'Satu tiket bisa menunggu di beberapa booth. Booth pertama yang kosong memanggilnya, lalu tiket keluar dari antrean lain.');
   view.actions.append(
-    act('Issue ticket', 'btn btn-primary', () => issueDialog(ops, booths.map((b) => ({ id: b.id, name: b.name }))), 'ticket'),
-    act('TV display', 'btn btn-outline', () => window.open(`${location.pathname}#display=queue&lock=1`, 'vto-queue-tv', 'popup,width=1280,height=720'), 'tv'),
-    act('Self-service kiosk', 'btn btn-outline', () => openKiosk(ops), 'ticket'),
+    act('Buat tiket', 'btn btn-primary', () => issueDialog(ops, booths.map((b) => ({ id: b.id, name: b.name }))), 'ticket'),
+    act('Layar TV', 'btn btn-outline', () => window.open(`${location.pathname}#display=queue&lock=1`, 'vto-queue-tv', 'popup,width=1280,height=720'), 'tv'),
+    act('Kiosk swalayan', 'btn btn-outline', () => openKiosk(ops), 'ticket'),
   );
 
   if (booths.length === 0) {
-    view.body.append(el('p', 'card-desc', 'Add active booths on the Locations page to run a queue.'));
+    view.body.append(el('p', 'card-desc', 'Tambah booth aktif di halaman Lokasi untuk menjalankan antrean.'));
     return view.root;
   }
 
@@ -29,19 +29,19 @@ export function renderQueue({ ops }: PageContext): HTMLElement {
     const card = el('section', 'queue-booth');
     const now = tickets.find((ticket) => ticket.status === 'called' && ticket.calledBoothId === booth.id);
     const waiting = queueFor(tickets, booth.id);
-    card.append(el('p', 'kicker', booth.name), el('p', 'queue-now', now ? now.number : '—'), el('p', 'card-desc', `${waiting.filter((t) => t.checkedIn).length} waiting · ${waiting.filter((t) => !t.checkedIn).length} not checked in`));
+    card.append(el('p', 'kicker', booth.name), el('p', 'queue-now', now ? now.number : '—'), el('p', 'card-desc', `${waiting.filter((t) => t.checkedIn).length} menunggu · ${waiting.filter((t) => !t.checkedIn).length} belum check-in`));
     const actions = el('div', 'queue-actions');
     if (now) {
       actions.append(
-        act('Re-call', 'btn btn-outline btn-sm', () => ops.recall(now.id), 'megaphone'),
-        act('Served', 'btn btn-secondary btn-sm', () => ops.completeTicket(now.id), 'check'),
-        act('No-show', 'btn btn-ghost btn-sm', () => ops.skipTicket(now.id)),
+        act('Panggil ulang', 'btn btn-outline btn-sm', () => ops.recall(now.id), 'megaphone'),
+        act('Sudah dilayani', 'btn btn-secondary btn-sm', () => ops.completeTicket(now.id), 'check'),
+        act('Tidak datang', 'btn btn-ghost btn-sm', () => ops.skipTicket(now.id)),
       );
     }
     actions.append(
-      act('Call next', 'btn btn-primary btn-sm', () => {
+      act('Panggil berikutnya', 'btn btn-primary btn-sm', () => {
         const called = ops.callNext(booth.id);
-        notice(called ? `${called.number} to ${booth.name}.` : 'Nobody checked in is waiting for this booth.', called ? 'ok' : 'warn');
+        notice(called ? `${called.number} ke ${booth.name}.` : 'Tidak ada pelanggan yang sudah check-in menunggu booth ini.', called ? 'ok' : 'warn');
       }),
     );
     card.append(actions);
@@ -49,7 +49,7 @@ export function renderQueue({ ops }: PageContext): HTMLElement {
   }
 
   // ---------- waiting line, drag to reorder ----------
-  const line = section('Waiting', 'Drag a ticket to move it. Unchecked tickets keep their place but are skipped until they check in.');
+  const line = section('Menunggu', 'Seret tiket untuk memindahkannya. Tiket yang belum check-in tetap di tempatnya tapi dilewati sampai check-in.');
   const list = el('ol', 'queue-line');
   const waiting = tickets.filter((ticket) => ticket.status === 'waiting' && ticket.boothIds.some((id) => booths.some((b) => b.id === id))).sort((a, b) => a.position - b.position);
   let dragged: string | null = null;
@@ -68,37 +68,37 @@ export function renderQueue({ ops }: PageContext): HTMLElement {
       if (dragged && dragged !== ticket.id) ops.moveTicket(dragged, ticket.id);
     });
     const grip = el('span', 'queue-grip');
-    grip.append(iconButton('grip', 'Drag to reorder'));
+    grip.append(iconButton('grip', 'Seret untuk mengubah urutan'));
     const text = el('div', 'rank-text');
     text.append(el('span', 'queue-number', ticket.number), el('span', 'rank-meta', [ticket.name, ticket.boothIds.map((id) => ops.boothName(id)).join(' / ')].filter(Boolean).join(' · ')));
-    const up = iconButton('arrowUp', `Move ${ticket.number} up`);
+    const up = iconButton('arrowUp', `Naikkan ${ticket.number}`);
     up.addEventListener('click', () => {
       const index = waiting.indexOf(ticket);
       if (index > 0) ops.moveTicket(ticket.id, waiting[index - 1].id);
     });
-    const show = iconButton('qr', `Show ${ticket.number}`);
+    const show = iconButton('qr', `Tampilkan ${ticket.number}`);
     show.addEventListener('click', () => ticketDialog(ticket));
     const faces = ops.facesForTicket(ticket.id).length;
-    item.append(grip, text, ticket.checkedIn ? badge('Checked in', 'ok') : badge('Not here yet', 'warn'), ...(faces ? [badge(count(faces, 'face'), 'info')] : []), up, show);
+    item.append(grip, text, ticket.checkedIn ? badge('Sudah check-in', 'ok') : badge('Belum datang', 'warn'), ...(faces ? [badge(count(faces, 'wajah'), 'info')] : []), up, show);
     list.append(item);
   }
   list.addEventListener('dragover', (event) => event.preventDefault());
   list.addEventListener('drop', (event) => {
     if ((event.target as Element) === list && dragged) ops.moveTicket(dragged, null);
   });
-  if (waiting.length === 0) list.append(el('li', 'card-desc', 'Nobody is waiting.'));
+  if (waiting.length === 0) list.append(el('li', 'card-desc', 'Tidak ada yang menunggu.'));
   line.body.append(list);
 
   // ---------- skipped: re-register ----------
-  const late = section('Missed their call', 'Put a late customer back, at the front or the back of the line.');
+  const late = section('Terlewat panggilan', 'Masukkan lagi pelanggan yang terlambat, di depan atau di belakang antrean.');
   const skipped = tickets.filter((ticket) => ticket.status === 'skipped').slice(-10).reverse();
   const lateList = el('div', 'queue-late');
   for (const ticket of skipped) {
     const row = el('div', 'cart-line');
-    row.append(el('span', 'queue-number', ticket.number), el('span', 'rank-meta', ticket.name || ''), act('Front', 'btn btn-outline btn-sm', () => ops.reRegister(ticket.id, 'front')), act('Back', 'btn btn-ghost btn-sm', () => ops.reRegister(ticket.id, 'back')));
+    row.append(el('span', 'queue-number', ticket.number), el('span', 'rank-meta', ticket.name || ''), act('Depan', 'btn btn-outline btn-sm', () => ops.reRegister(ticket.id, 'front')), act('Belakang', 'btn btn-ghost btn-sm', () => ops.reRegister(ticket.id, 'back')));
     lateList.append(row);
   }
-  if (skipped.length === 0) lateList.append(el('p', 'card-desc', 'No missed tickets.'));
+  if (skipped.length === 0) lateList.append(el('p', 'card-desc', 'Tidak ada tiket yang terlewat.'));
   late.body.append(lateList);
 
   view.body.append(desk, line.root, late.root);
@@ -107,15 +107,15 @@ export function renderQueue({ ops }: PageContext): HTMLElement {
 
 function issueDialog(ops: PageContext['ops'], booths: { id: string; name: string }[]): void {
   formDialog({
-    title: 'Issue ticket',
-    description: 'Tick every booth the customer would take. A WhatsApp number or email gets a message when they are called.',
-    submitLabel: 'Issue',
+    title: 'Buat tiket',
+    description: 'Centang setiap booth yang mau dipakai pelanggan. Nomor WhatsApp atau email menerima pesan saat dipanggil.',
+    submitLabel: 'Buat',
     fields: [
       { name: 'boothIds', label: 'Booths', value: booths.map((booth) => booth.id), options: booths.map((booth) => ({ value: booth.id, label: booth.name })) },
-      { name: 'name', label: 'Name', value: '', placeholder: 'Optional' },
+      { name: 'name', label: 'Nama', value: '', placeholder: 'Opsional' },
       { name: 'phone', label: 'WhatsApp', value: '', type: 'tel', placeholder: '+62…' },
       { name: 'email', label: 'Email', value: '', type: 'email' },
-      { name: 'checkedIn', label: 'Customer is here', value: true, hint: 'Off for a booking: they check in by scanning the ticket QR when they arrive.' },
+      { name: 'checkedIn', label: 'Pelanggan sudah di sini', value: true, hint: 'Matikan untuk booking: pelanggan check-in dengan memindai QR tiket saat datang.' },
     ],
     async submit(values) {
       const ticket = ops.issueTicket({
@@ -134,12 +134,12 @@ function issueDialog(ops: PageContext['ops'], booths: { id: string; name: string
 function ticketDialog(ticket: Ticket): void {
   const link = `${location.origin}${location.pathname}#checkin=${ticket.token}`;
   const body = el('div', 'ticket-card');
-  body.append(el('p', 'display-queue', ticket.number), qrCanvas(link, 200), el('p', 'card-desc', ticket.checkedIn ? 'Scan to see your place in line.' : 'Scan when you arrive to check in.'));
-  const open = actionButton('Open check-in page', 'btn btn-outline');
+  body.append(el('p', 'display-queue', ticket.number), qrCanvas(link, 200), el('p', 'card-desc', ticket.checkedIn ? 'Pindai untuk melihat posisi Anda di antrean.' : 'Pindai saat tiba untuk check-in.'));
+  const open = actionButton('Buka halaman check-in', 'btn btn-outline');
   open.addEventListener('click', () => window.open(link, '_blank'));
-  const done = actionButton('Done', 'btn btn-primary');
+  const done = actionButton('Selesai', 'btn btn-primary');
   done.dataset.close = '';
-  openDialog({ title: `Ticket ${ticket.number}`, body: [body], footer: [open, done] });
+  openDialog({ title: `Tiket ${ticket.number}`, body: [body], footer: [open, done] });
 }
 
 /**
@@ -147,15 +147,18 @@ function ticketDialog(ticket: Ticket): void {
  * kiosk can make AI prints; without one it prints the filled template.
  */
 function openKiosk(ops: PageContext['ops']): void {
-  const open = (boothId: string) => window.open(`${location.pathname}#display=kiosk&booth=${encodeURIComponent(boothId)}&lock=1`, 'vto-kiosk');
+  const open = (boothId: string) => {
+    window.open(`${location.pathname}#display=kiosk&booth=${encodeURIComponent(boothId)}&lock=1`, 'vto-kiosk');
+    ops.edit('queue.run', 'display.kiosk', `Membuka kiosk untuk ${ops.boothName(boothId)}.`, () => {});
+  };
   const booths = ops.visibleBooths().filter((point) => point.active);
   const here = ops.hooks.devicePointId();
   if (here && booths.some((booth) => booth.id === here)) return void open(here);
   if (booths.length === 1) return void open(booths[0].id);
   formDialog({
-    title: 'Self-service kiosk',
-    description: 'The kiosk sells AI preset prints for this booth and sends them to its printer.',
-    submitLabel: 'Open kiosk',
+    title: 'Kiosk swalayan',
+    description: 'Kiosk menjual cetakan preset AI untuk booth ini dan mengirimnya ke printer booth.',
+    submitLabel: 'Buka kiosk',
     fields: [{ name: 'booth', label: 'Booth', value: booths[0]?.id ?? '', options: booths.map((booth) => ({ value: booth.id, label: booth.name })) }],
     async submit(values) {
       open(String(values.booth));

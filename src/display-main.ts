@@ -31,7 +31,7 @@ export async function startDisplay(): Promise<boolean> {
   };
   const account = candidates.find((candidate) => holds(candidate.id, candidate.business)) ?? current ?? candidates[0];
   if (!account) {
-    document.body.textContent = 'Open the app and pick a workspace first.';
+    document.body.textContent = 'Buka aplikasi staf dan pilih workspace dulu.';
     return true;
   }
   // The kiosk sells and prints for a booth: the one in its link, or the one this device belongs to.

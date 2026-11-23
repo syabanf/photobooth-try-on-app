@@ -7,18 +7,18 @@ import { zonedTime } from './time';
 export type Area = 'sales' | 'payments' | 'shifts' | 'queue' | 'booths' | 'faces' | 'access' | 'devices' | 'content' | 'settings' | 'fleet' | 'other';
 
 export const AREA_LABELS: Record<Area, string> = {
-  sales: 'Sales',
-  payments: 'Payments',
-  shifts: 'Shifts',
-  queue: 'Queue and gate',
-  booths: 'Booth sessions',
-  faces: 'Faces',
-  access: 'Team and sign-in',
-  devices: 'Devices and alerts',
-  content: 'Frames, branding and ads',
-  settings: 'Prices and settings',
-  fleet: 'Fleet',
-  other: 'Other',
+  sales: 'Penjualan',
+  payments: 'Pembayaran',
+  shifts: 'Shift',
+  queue: 'Antrean dan gerbang',
+  booths: 'Sesi booth',
+  faces: 'Wajah',
+  access: 'Tim dan akses masuk',
+  devices: 'Perangkat dan peringatan',
+  content: 'Bingkai, merek dan iklan',
+  settings: 'Harga dan pengaturan',
+  fleet: 'Pembaruan',
+  other: 'Lainnya',
 };
 
 /** The first part of an entry's kind ("order" in "order.refund") names its area. */
@@ -31,6 +31,7 @@ const PREFIXES: Record<string, Area> = {
   payments: 'payments',
   shift: 'shifts',
   queue: 'queue',
+  display: 'queue',
   session: 'booths',
   print: 'booths',
   face: 'faces',

@@ -11,8 +11,8 @@ const view = { role: 'supervisor' as Role };
 
 export function renderRoles({ ops, redraw, nav }: PageContext): HTMLElement {
   const { state } = ops;
-  const root = page('Roles and permissions', 'A role decides which pages a person sees and what they may do. Changes apply on every device at once, including menus.');
-  root.actions.append(act('Users', 'btn btn-outline', () => nav('staff'), 'users'), act('Sign-in log', 'btn btn-outline', () => nav('signins'), 'key'));
+  const root = page('Peran dan izin', 'Peran menentukan halaman yang terlihat dan tindakan yang boleh dilakukan. Perubahan langsung berlaku di semua perangkat, termasuk menu.');
+  root.actions.append(act('Pengguna', 'btn btn-outline', () => nav('staff'), 'users'), act('Log masuk', 'btn btn-outline', () => nav('signins'), 'key'));
 
   const holders = (role: Role) => state.staff.filter((person) => person.active && person.role === role);
   const picker = pills(
@@ -27,13 +27,13 @@ export function renderRoles({ ops, redraw, nav }: PageContext): HTMLElement {
   // ---------- the chosen role ----------
   const role = view.role;
   const granted = new Set(permissionsOf(role));
-  const editor = section(ROLES[role].label, role === 'owner' ? 'The owner can always do everything, so someone can always fix the team.' : ROLES[role].detail);
+  const editor = section(ROLES[role].label, role === 'owner' ? 'Pemilik selalu bisa melakukan semuanya, jadi selalu ada yang bisa membereskan tim.' : ROLES[role].detail);
   if (roleChanged(role)) {
-    editor.actions.append(badge('Changed', 'info'), act('Back to standard', 'btn btn-ghost btn-sm', () => ops.resetRole(role)));
+    editor.actions.append(badge('Diubah', 'info'), act('Kembali ke standar', 'btn btn-ghost btn-sm', () => ops.resetRole(role)));
   }
   const people = el('div', 'role-people');
   const list = holders(role);
-  people.append(el('span', 'kicker', list.length ? `${list.length === 1 ? '1 person' : `${list.length} people`} with this role` : 'Nobody has this role yet'));
+  people.append(el('span', 'kicker', list.length ? `${list.length} orang dengan peran ini` : 'Belum ada yang memegang peran ini'));
   for (const person of list) people.append(el('span', 'chip', person.name));
   editor.body.append(people);
 
@@ -51,7 +51,7 @@ export function renderRoles({ ops, redraw, nav }: PageContext): HTMLElement {
         const next = box.checked ? [...granted, permission] : [...granted].filter((entry) => entry !== permission);
         try {
           ops.saveRole(role, next);
-          notice(`${ROLES[role].label}: ${box.checked ? 'may' : 'may no longer'} ${PERMISSION_LABELS[permission].toLowerCase()}.`, 'ok');
+          notice(`${ROLES[role].label}: ${box.checked ? 'boleh' : 'tidak lagi boleh'} ${PERMISSION_LABELS[permission].toLowerCase()}.`, 'ok');
         } catch (error) {
           box.checked = !box.checked;
           notice((error as Error).message, 'error');
@@ -64,11 +64,11 @@ export function renderRoles({ ops, redraw, nav }: PageContext): HTMLElement {
   }
 
   // ---------- compare ----------
-  const compare = section('Compare roles', 'Every permission, every role.');
+  const compare = section('Bandingkan peran', 'Semua izin untuk semua peran.');
   compare.body.append(
     table(
       [
-        { label: 'Permission', cell: (permission: Permission) => PERMISSION_LABELS[permission] },
+        { label: 'Izin', cell: (permission: Permission) => PERMISSION_LABELS[permission] },
         ...ROLE_ORDER.map((entry) => ({ label: ROLES[entry].label, className: 'num', cell: (permission: Permission) => (permissionsOf(entry).includes(permission) ? '✓' : '—') })),
       ],
       PERMISSIONS,

@@ -26,25 +26,25 @@ async function readFrame(file: File): Promise<{ width: number; height: number; s
 
 export function renderFrames({ ops, redraw }: PageContext): HTMLElement {
   const { state } = ops;
-  const root = page('Frames', 'Upload a PNG with transparent windows. Smart Frame finds each window and the shots fill them in order.');
+  const root = page('Bingkai', 'Unggah PNG dengan jendela transparan. Smart Frame menemukan setiap jendela dan foto mengisinya berurutan.');
   const upload = fileInput('image/png', async (file) => {
     try {
       const info = await readFrame(file);
-      if (info.slots.length === 0) throw new Error('No transparent window found. Export the frame as a PNG with see-through holes.');
+      if (info.slots.length === 0) throw new Error('Tidak ada jendela transparan. Ekspor bingkai sebagai PNG dengan lubang tembus pandang.');
       const image = await putBlob(file);
       const frame: Frame = { id: ops.store.id(), name: file.name.replace(/\.png$/i, ''), category: view.category || 'General', size: '4R', image, ...info, active: true };
-      ops.edit('frames.manage', 'frame.add', `Added frame ${frame.name} with ${info.slots.length} slots.`, (draft) => draft.frames.push(frame));
-      notice(`Found ${info.slots.length} photo ${info.slots.length === 1 ? 'slot' : 'slots'}.`, 'ok');
+      ops.edit('frames.manage', 'frame.add', `Bingkai ${frame.name} ditambahkan dengan ${info.slots.length} slot.`, (draft) => draft.frames.push(frame));
+      notice(`Ditemukan ${info.slots.length} slot foto.`, 'ok');
     } catch (error) {
       notice((error as Error).message, 'error');
     }
   });
-  root.actions.append(upload, act('Upload frame', 'btn btn-primary', () => upload.click(), 'upload'));
+  root.actions.append(upload, act('Unggah bingkai', 'btn btn-primary', () => upload.click(), 'upload'));
 
   const categories = [...new Set(state.frames.map((frame) => frame.category))].sort();
   if (categories.length > 1) {
     root.body.append(
-      pills([{ value: '', label: 'All' }, ...categories.map((category) => ({ value: category, label: category }))], view.category, (category) => {
+      pills([{ value: '', label: 'Semua' }, ...categories.map((category) => ({ value: category, label: category }))], view.category, (category) => {
         view.category = category;
         redraw();
       }),
@@ -58,7 +58,7 @@ export function renderFrames({ ops, redraw }: PageContext): HTMLElement {
 
   const grid = el('div', 'frame-grid');
   const frames = state.frames.filter((frame) => !view.category || frame.category === view.category).sort((a, b) => (sold.get(b.id) ?? 0) - (sold.get(a.id) ?? 0));
-  if (frames.length === 0) grid.append(el('p', 'card-desc', 'No frames yet. Sessions print on the plain strip until you add one.'));
+  if (frames.length === 0) grid.append(el('p', 'card-desc', 'Belum ada bingkai. Sesi dicetak di strip polos sampai ada bingkai.'));
   for (const frame of frames) {
     const card = el('article', 'frame-card');
     const preview = el('div', 'frame-preview');
@@ -74,13 +74,13 @@ export function renderFrames({ ops, redraw }: PageContext): HTMLElement {
     }
     const meta = el('div', 'frame-meta');
     const text = el('div', 'rank-text');
-    text.append(el('span', 'rank-name', frame.name), el('span', 'rank-meta', `${frame.category} · ${frame.size} · ${frame.slots.length} slots · ${sold.get(frame.id) ?? 0} sessions`));
-    const edit = iconButton('edit', `Edit ${frame.name}`);
+    text.append(el('span', 'rank-name', frame.name), el('span', 'rank-meta', `${frame.category} · ${frame.size} · ${frame.slots.length} slot · ${sold.get(frame.id) ?? 0} sesi`));
+    const edit = iconButton('edit', `Ubah ${frame.name}`);
     edit.addEventListener('click', () => editFrame(ops, frame));
     meta.append(text, edit);
     const tags = el('div', 'frame-tags');
-    if (!frame.active) tags.append(badge('Hidden', 'muted'));
-    if (locked.has(frame.id)) tags.append(badge('Voucher only', 'info'));
+    if (!frame.active) tags.append(badge('Disembunyikan', 'muted'));
+    if (locked.has(frame.id)) tags.append(badge('Khusus voucher', 'info'));
     card.append(preview, meta, tags);
     grid.append(card);
   }
@@ -90,18 +90,18 @@ export function renderFrames({ ops, redraw }: PageContext): HTMLElement {
 
 /** AI presets: the templates the face page fills, each with the prompt the AI redraws it from. */
 function presetsSection(ops: PageContext['ops']): HTMLElement {
-  const part = section('AI presets', 'Customers capture their face on the AI presets page and see it in every active template below, plus every active frame. The prompt tells the AI how to redraw the one they pick.');
-  part.actions.append(act('Add preset', 'btn btn-outline btn-sm', () => editPreset(ops), 'plus'));
+  const part = section('Preset AI', 'Pelanggan memotret wajahnya di halaman Preset AI dan melihatnya di setiap template aktif di bawah, ditambah setiap bingkai aktif. Prompt memberi tahu AI cara menggambar ulang pilihan mereka.');
+  part.actions.append(act('Tambah preset', 'btn btn-outline btn-sm', () => editPreset(ops), 'plus'));
   part.body.append(
     table(
       [
         { label: 'Preset', cell: (preset: Preset) => preset.name },
-        { label: 'Layout', cell: (preset) => (preset.layout === 'frame' ? `Frame · ${ops.state.frames.find((f) => f.id === preset.frameId)?.name ?? 'missing'}` : LAYOUT_LABELS[preset.layout]) },
-        { label: 'AI prompt', cell: (preset) => preset.prompt },
-        { label: 'Status', cell: (preset) => badge(preset.active ? 'On' : 'Off', preset.active ? 'ok' : 'muted') },
+        { label: 'Tata letak', cell: (preset) => (preset.layout === 'frame' ? `Bingkai · ${ops.state.frames.find((f) => f.id === preset.frameId)?.name ?? 'tidak ditemukan'}` : LAYOUT_LABELS[preset.layout]) },
+        { label: 'Prompt AI', cell: (preset) => preset.prompt },
+        { label: 'Status', cell: (preset) => badge(preset.active ? 'Aktif' : 'Mati', preset.active ? 'ok' : 'muted') },
       ],
       ops.state.aiPresets,
-      { empty: 'No presets.', onRow: (preset) => editPreset(ops, preset) },
+      { empty: 'Belum ada preset.', onRow: (preset) => editPreset(ops, preset) },
     ),
   );
   return part.root;
@@ -109,25 +109,25 @@ function presetsSection(ops: PageContext['ops']): HTMLElement {
 
 function editPreset(ops: PageContext['ops'], preset?: Preset): void {
   formDialog({
-    title: preset ? `Edit ${preset.name}` : 'Add AI preset',
-    description: 'Decart asks for 20 to 30 words: the look you want, the light, and what must stay.',
-    submitLabel: 'Save',
+    title: preset ? `Ubah ${preset.name}` : 'Tambah preset AI',
+    description: 'Decart butuh 20 sampai 30 kata: tampilan yang diinginkan, pencahayaan, dan apa yang harus tetap.',
+    submitLabel: 'Simpan',
     fields: [
-      { name: 'name', label: 'Name', value: preset?.name ?? '', placeholder: 'Graduation portrait' },
-      { name: 'layout', label: 'Layout', value: preset?.layout ?? 'cover', options: (Object.keys(LAYOUT_LABELS) as Preset['layout'][]).map((layout) => ({ value: layout, label: LAYOUT_LABELS[layout] })) },
-      { name: 'frameId', label: 'Frame (for the frame layout)', value: preset?.frameId ?? '', options: [{ value: '', label: 'None' }, ...ops.state.frames.map((frame) => ({ value: frame.id, label: frame.name }))] },
-      { name: 'prompt', label: 'AI prompt', value: preset?.prompt ?? '', type: 'textarea', placeholder: 'Restyle as a graduation portrait: navy studio backdrop, soft key light, gown and cap, proud smile kept as it is.' },
-      { name: 'active', label: 'Show on the AI presets page', value: preset?.active ?? true },
+      { name: 'name', label: 'Nama', value: preset?.name ?? '', placeholder: 'Contoh: Potret wisuda' },
+      { name: 'layout', label: 'Tata letak', value: preset?.layout ?? 'cover', options: (Object.keys(LAYOUT_LABELS) as Preset['layout'][]).map((layout) => ({ value: layout, label: LAYOUT_LABELS[layout] })) },
+      { name: 'frameId', label: 'Bingkai (untuk tata letak bingkai)', value: preset?.frameId ?? '', options: [{ value: '', label: 'Tidak ada' }, ...ops.state.frames.map((frame) => ({ value: frame.id, label: frame.name }))] },
+      { name: 'prompt', label: 'Prompt AI', value: preset?.prompt ?? '', type: 'textarea', placeholder: 'Restyle as a graduation portrait: navy studio backdrop, soft key light, gown and cap, proud smile kept as it is.' },
+      { name: 'active', label: 'Tampilkan di halaman Preset AI', value: preset?.active ?? true },
     ],
-    danger: preset && !preset.builtIn ? { label: 'Delete', run: (close) => { ops.edit('frames.manage', 'preset.delete', `Deleted AI preset ${preset.name}.`, (draft) => { draft.aiPresets = draft.aiPresets.filter((entry) => entry.id !== preset.id); }); close(); } } : undefined,
+    danger: preset && !preset.builtIn ? { label: 'Hapus', run: (close) => { ops.edit('frames.manage', 'preset.delete', `Preset AI ${preset.name} dihapus.`, (draft) => { draft.aiPresets = draft.aiPresets.filter((entry) => entry.id !== preset.id); }); close(); } } : undefined,
     async submit(values) {
       const name = String(values.name).trim();
       const prompt = String(values.prompt).trim();
       const layout = values.layout as Preset['layout'];
-      if (!name) throw new Error('Enter a name.');
-      if (prompt.split(/\s+/).length < 8) throw new Error('Write a fuller prompt: the look, the light, and what must stay.');
-      if (layout === 'frame' && !values.frameId) throw new Error('Pick the frame for this layout.');
-      ops.edit('frames.manage', 'preset.save', `Saved AI preset ${name}.`, (draft) => {
+      if (!name) throw new Error('Isi nama.');
+      if (prompt.split(/\s+/).length < 8) throw new Error('Tulis prompt yang lebih lengkap: tampilan, pencahayaan, dan apa yang harus tetap.');
+      if (layout === 'frame' && !values.frameId) throw new Error('Pilih bingkai untuk tata letak ini.');
+      ops.edit('frames.manage', 'preset.save', `Preset AI ${name} disimpan.`, (draft) => {
         const fields = { name, layout, prompt, frameId: layout === 'frame' ? String(values.frameId) : null, active: values.active as boolean };
         const existing = draft.aiPresets.find((entry) => entry.id === preset?.id);
         if (existing) Object.assign(existing, fields);
@@ -139,25 +139,25 @@ function editPreset(ops: PageContext['ops'], preset?: Preset): void {
 
 function editFrame(ops: PageContext['ops'], frame: Frame): void {
   formDialog({
-    title: `Edit ${frame.name}`,
-    submitLabel: 'Save',
+    title: `Ubah ${frame.name}`,
+    submitLabel: 'Simpan',
     fields: [
-      { name: 'name', label: 'Name', value: frame.name },
-      { name: 'category', label: 'Category', value: frame.category, placeholder: 'Wedding, Birthday, Brand' },
-      { name: 'size', label: 'Print size', value: frame.size, options: PAPER_SIZES.map((size) => ({ value: size, label: PAPER[size].label })) },
-      { name: 'active', label: 'Show at the booth', value: frame.active },
+      { name: 'name', label: 'Nama', value: frame.name },
+      { name: 'category', label: 'Kategori', value: frame.category, placeholder: 'Contoh: Pernikahan, Ulang tahun, Merek' },
+      { name: 'size', label: 'Ukuran cetak', value: frame.size, options: PAPER_SIZES.map((size) => ({ value: size, label: PAPER[size].label })) },
+      { name: 'active', label: 'Tampilkan di booth', value: frame.active },
     ],
     danger: {
-      label: 'Delete',
+      label: 'Hapus',
       run: (close) => {
         close();
         confirmDialog({
-          title: `Delete ${frame.name}?`,
-          message: 'Sessions printed with it keep their record.',
-          confirmLabel: 'Delete frame',
+          title: `Hapus ${frame.name}?`,
+          message: 'Sesi yang dicetak dengan bingkai ini tetap tercatat.',
+          confirmLabel: 'Hapus bingkai',
           async run() {
             await deleteBlob(frame.image);
-            ops.edit('frames.manage', 'frame.delete', `Deleted frame ${frame.name}.`, (draft) => {
+            ops.edit('frames.manage', 'frame.delete', `Bingkai ${frame.name} dihapus.`, (draft) => {
               draft.frames = draft.frames.filter((entry) => entry.id !== frame.id);
               for (const voucher of draft.vouchers) voucher.frameIds = voucher.frameIds.filter((id) => id !== frame.id);
             });
@@ -167,8 +167,8 @@ function editFrame(ops: PageContext['ops'], frame: Frame): void {
     },
     async submit(values) {
       const name = String(values.name).trim();
-      if (!name) throw new Error('Enter a name.');
-      ops.edit('frames.manage', 'frame.save', `Updated frame ${name}.`, (draft) => {
+      if (!name) throw new Error('Isi nama.');
+      ops.edit('frames.manage', 'frame.save', `Bingkai ${name} diperbarui.`, (draft) => {
         Object.assign(draft.frames.find((entry) => entry.id === frame.id)!, { name, category: String(values.category).trim() || 'General', size: values.size as PaperSize, active: values.active as boolean });
       });
     },

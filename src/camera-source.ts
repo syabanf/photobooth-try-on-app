@@ -40,10 +40,10 @@ export function guessFormat(url: string): 'mjpeg' | 'video' {
 }
 
 export function describeSource(source: CameraSource): string {
-  if (source.kind === 'device') return source.label || 'Camera';
-  if (source.kind === 'ip') return `IP camera · ${new URL(source.url).host}`;
+  if (source.kind === 'device') return source.label || 'Kamera';
+  if (source.kind === 'ip') return `Kamera IP · ${new URL(source.url).host}`;
   if (source.kind === 'dslr') return `${source.model || 'DSLR'} · ${source.link.host}`;
-  return 'Default camera';
+  return 'Kamera bawaan';
 }
 
 export function checkIpUrl(url: string): string {
@@ -51,12 +51,12 @@ export function checkIpUrl(url: string): string {
   try {
     parsed = new URL(url.trim());
   } catch {
-    throw new Error('Paste the full link, starting with http:// or https://.');
+    throw new Error('Tempel link lengkap, diawali http:// atau https://.');
   }
   if (parsed.protocol === 'rtsp:' || parsed.protocol === 'rtsps:') {
-    throw new Error('Browsers cannot open RTSP. Run go2rtc or MediaMTX next to the camera and paste the MJPEG or HLS link it gives.');
+    throw new Error('Browser tidak bisa membuka RTSP. Jalankan go2rtc atau MediaMTX di samping kamera, lalu tempel link MJPEG atau HLS darinya.');
   }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('Use an http:// or https:// link.');
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('Pakai link http:// atau https://.');
   return parsed.toString();
 }
 
@@ -88,14 +88,14 @@ async function openIp(url: string, format: 'mjpeg' | 'video'): Promise<OpenedSou
   document.body.append(media);
 
   await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`No picture from ${new URL(url).host} after 10 seconds.`)), 10_000);
+    const timer = setTimeout(() => reject(new Error(`Tidak ada gambar dari ${new URL(url).host} setelah 10 detik.`)), 10_000);
     const ok = () => {
       clearTimeout(timer);
       resolve();
     };
     const fail = () => {
       clearTimeout(timer);
-      reject(new Error(`Could not load ${new URL(url).host}. Check the link, and that the camera sends CORS headers.`));
+      reject(new Error(`${new URL(url).host} gagal dimuat. Periksa link-nya, dan pastikan kamera mengirim header CORS.`));
     };
     if (media instanceof HTMLVideoElement) {
       media.addEventListener('loadeddata', ok, { once: true });
@@ -123,7 +123,7 @@ async function openIp(url: string, format: 'mjpeg' | 'video'): Promise<OpenedSou
     ctx.getImageData(0, 0, 1, 1);
   } catch {
     media.remove();
-    throw new Error(`${new URL(url).host} does not allow this page to read its picture. Turn on CORS on the camera or the bridge (go2rtc: api origin "*").`);
+    throw new Error(`${new URL(url).host} tidak mengizinkan halaman ini membaca gambarnya. Nyalakan CORS di kamera atau bridge (go2rtc: api origin "*").`);
   }
 
   // A timer, not requestAnimationFrame: the pump must keep going while the tab is in the background.

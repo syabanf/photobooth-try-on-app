@@ -29,11 +29,11 @@ describe('register and sign in', () => {
 
   it('refuses a weak password, a bad email and an email already in use', async () => {
     const { backend } = setup();
-    await expect(backend.register({ business: 'A', ...owner(), password: 'short1' }, 'a')).rejects.toThrow('at least 8 characters');
-    await expect(backend.register({ business: 'A', ...owner(), password: 'onlyletters' }, 'b')).rejects.toThrow('a letter and a number');
-    await expect(backend.register({ business: 'A', ...owner('nope') }, 'c')).rejects.toThrow('name@example.com');
+    await expect(backend.register({ business: 'A', ...owner(), password: 'short1' }, 'a')).rejects.toThrow('minimal 8 karakter');
+    await expect(backend.register({ business: 'A', ...owner(), password: 'onlyletters' }, 'b')).rejects.toThrow('berisi huruf dan angka');
+    await expect(backend.register({ business: 'A', ...owner('nope') }, 'c')).rejects.toThrow('nama@contoh.com');
     await register(backend, 'Dusun Bambu', 'rizky@example.com');
-    await expect(backend.register({ business: 'B', ...owner('RIZKY@example.com') }, 'd')).rejects.toThrow('already has an account');
+    await expect(backend.register({ business: 'B', ...owner('RIZKY@example.com') }, 'd')).rejects.toThrow('sudah punya akun');
   });
 
   it('creates one workspace for a double submit or a retry with the same key', async () => {
@@ -50,7 +50,7 @@ describe('register and sign in', () => {
     const { account } = await register(backend);
     await backend.signOut();
     expect(await backend.session()).toBeNull();
-    await expect(backend.signIn('nobody@example.com', 'bambu2026')).rejects.toThrow('Email or password is wrong.');
+    await expect(backend.signIn('nobody@example.com', 'bambu2026')).rejects.toThrow('Email atau kata sandi salah.');
     const session = await backend.signIn(' DUSUNBAMBU@example.com', 'bambu2026');
     expect(session.account.id).toBe(account.id);
     expect(session.member.lastSignInAt).not.toBeNull();
@@ -60,16 +60,16 @@ describe('register and sign in', () => {
     const { backend, clock } = setup();
     await register(backend);
     await backend.signOut();
-    for (let i = 1; i < MAX_TRIES; i++) await expect(backend.signIn('dusunbambu@example.com', 'wrong1234')).rejects.toThrow(`${MAX_TRIES - i} ${MAX_TRIES - i === 1 ? 'try' : 'tries'} left`);
-    await expect(backend.signIn('dusunbambu@example.com', 'wrong1234')).rejects.toThrow('locked for 15 minutes');
-    await expect(backend.signIn('dusunbambu@example.com', 'bambu2026')).rejects.toThrow('Try again in 15 minutes');
+    for (let i = 1; i < MAX_TRIES; i++) await expect(backend.signIn('dusunbambu@example.com', 'wrong1234')).rejects.toThrow(`Sisa ${MAX_TRIES - i} kali percobaan`);
+    await expect(backend.signIn('dusunbambu@example.com', 'wrong1234')).rejects.toThrow('dikunci selama 15 menit');
+    await expect(backend.signIn('dusunbambu@example.com', 'bambu2026')).rejects.toThrow('Coba lagi dalam 15 menit');
     clock.now += LOCK_MS;
     await expect(backend.signIn('dusunbambu@example.com', 'bambu2026')).resolves.toBeTruthy();
   });
 
   it('says no account exists at this address when the browser holds none', async () => {
     const { backend } = setup();
-    await expect(backend.signIn('rizky@example.com', 'bambu2026')).rejects.toThrow('No account exists at');
+    await expect(backend.signIn('rizky@example.com', 'bambu2026')).rejects.toThrow('Belum ada akun di');
   });
 
   it('confirms a team member for a locked screen without changing the session', async () => {
@@ -82,21 +82,21 @@ describe('register and sign in', () => {
     expect(member.userId).toBe(`owner-${account.id}`);
     expect((await backend.session())?.account.id).toBe(account.id);
     // Another workspace's owner cannot unlock this one's screens.
-    await expect(backend.confirmMember(account.id, 'othervenue@example.com', 'bambu2026')).rejects.toThrow('not on this workspace');
+    await expect(backend.confirmMember(account.id, 'othervenue@example.com', 'bambu2026')).rejects.toThrow('tidak ada di tim usaha ini');
     // Wrong passwords count toward the same lock as sign-in.
-    for (let i = 1; i < MAX_TRIES; i++) await expect(backend.confirmMember(account.id, 'dusunbambu@example.com', 'wrong1234')).rejects.toThrow('left');
-    await expect(backend.confirmMember(account.id, 'dusunbambu@example.com', 'wrong1234')).rejects.toThrow('locked for 15 minutes');
-    await expect(backend.signIn('dusunbambu@example.com', 'bambu2026')).rejects.toThrow('Try again');
+    for (let i = 1; i < MAX_TRIES; i++) await expect(backend.confirmMember(account.id, 'dusunbambu@example.com', 'wrong1234')).rejects.toThrow('Sisa');
+    await expect(backend.confirmMember(account.id, 'dusunbambu@example.com', 'wrong1234')).rejects.toThrow('dikunci selama 15 menit');
+    await expect(backend.signIn('dusunbambu@example.com', 'bambu2026')).rejects.toThrow('Coba lagi');
     expect((await backend.signInLog()).map((event) => event.kind)).toContain('screen');
   });
 
   it('changes the password and keeps the old one out', async () => {
     const { backend } = setup();
     await register(backend);
-    await expect(backend.changePassword('wrong', 'bambu2027')).rejects.toThrow('current password is wrong');
+    await expect(backend.changePassword('wrong', 'bambu2027')).rejects.toThrow('Kata sandi sekarang salah');
     await backend.changePassword('bambu2026', 'bambu2027');
     await backend.signOut();
-    await expect(backend.signIn('dusunbambu@example.com', 'bambu2026')).rejects.toThrow('wrong');
+    await expect(backend.signIn('dusunbambu@example.com', 'bambu2026')).rejects.toThrow('salah');
     await expect(backend.signIn('dusunbambu@example.com', 'bambu2027')).resolves.toBeTruthy();
   });
 });
@@ -111,23 +111,23 @@ describe('team access', () => {
     // Pressing Invite again, with a new key, hands out the same waiting code.
     expect((await backend.invite(person, 'i2')).code).toBe(invite.code);
     expect((await backend.members()).map((m) => [m.name, m.status])).toEqual([['Rizky', 'active'], ['Sari', 'invited']]);
-    await expect(backend.signIn('sari@example.com', 'whatever1')).rejects.toThrow('invite waiting');
+    await expect(backend.signIn('sari@example.com', 'whatever1')).rejects.toThrow('undangan yang belum dipakai');
 
     await backend.signOut();
     expect((await backend.inviteFor(invite.code.toLowerCase().replace('-', ' '))).member.name).toBe('Sari');
     const session = await backend.acceptInvite(invite.code, 'kopi2026', 'a1');
     expect(session.member).toMatchObject({ userId: 'staff-1', status: 'active' });
     expect((await backend.acceptInvite(invite.code, 'kopi2026', 'a1')).member.userId).toBe('staff-1');
-    await expect(backend.acceptInvite(invite.code, 'kopi2026', 'a2')).rejects.toThrow('not valid');
+    await expect(backend.acceptInvite(invite.code, 'kopi2026', 'a2')).rejects.toThrow('tidak valid');
   });
 
   it('expires codes, refuses an email someone else uses, and resets a password with a new code', async () => {
     const { backend, clock } = setup();
     await register(backend);
     const old = await backend.invite({ userId: 'staff-1', name: 'Sari', email: 'sari@example.com' }, 'i1');
-    await expect(backend.invite({ userId: 'staff-2', name: 'Dewi', email: 'sari@example.com' }, 'i2')).rejects.toThrow('already signs in as Sari');
+    await expect(backend.invite({ userId: 'staff-2', name: 'Dewi', email: 'sari@example.com' }, 'i2')).rejects.toThrow('sudah dipakai oleh Sari');
     clock.now += INVITE_MS;
-    await expect(backend.inviteFor(old.code)).rejects.toThrow('expired');
+    await expect(backend.inviteFor(old.code)).rejects.toThrow('kedaluwarsa');
     const fresh = await backend.invite({ userId: 'staff-1', name: 'Sari', email: 'sari@example.com' }, 'i3');
     expect(fresh.code).not.toBe(old.code);
     const owner = await backend.session();
@@ -137,14 +137,14 @@ describe('team access', () => {
     const reset = await backend.resetAccess('staff-1');
     expect(reset.code).not.toBe(fresh.code);
     await backend.signOut();
-    await expect(backend.signIn('sari@example.com', 'kopi2026')).rejects.toThrow('invite waiting');
+    await expect(backend.signIn('sari@example.com', 'kopi2026')).rejects.toThrow('undangan yang belum dipakai');
   });
 
   it('turns sign-in off and on, but never for yourself', async () => {
     const { backend } = setup();
     const { member } = await register(backend);
     const invite = await backend.invite({ userId: 'staff-1', name: 'Sari', email: 'sari@example.com' }, 'i1');
-    await expect(backend.setAccess(member.userId, false)).rejects.toThrow('your own sign-in');
+    await expect(backend.setAccess(member.userId, false)).rejects.toThrow('akses masuk Anda sendiri');
     await expect(backend.setAccess('staff-1', true)).resolves.toMatchObject({ status: 'invited' });
     await backend.signOut();
     await backend.acceptInvite(invite.code, 'kopi2026', 'a1');
@@ -152,7 +152,7 @@ describe('team access', () => {
     await backend.signIn(member.email, 'bambu2026');
     expect((await backend.setAccess('staff-1', false)).status).toBe('disabled');
     await backend.signOut();
-    await expect(backend.signIn('sari@example.com', 'kopi2026')).rejects.toThrow('turned off');
+    await expect(backend.signIn('sari@example.com', 'kopi2026')).rejects.toThrow('dimatikan');
   });
 
   it('gives a workspace from the quick access build its owner, once', async () => {
@@ -165,7 +165,7 @@ describe('team access', () => {
     const session = await backend.claim('old', owner(), 'c1');
     expect(session.account).toEqual(account);
     expect(await backend.unclaimed()).toEqual([]);
-    await expect(backend.claim('old', owner('other@example.com'), 'c2')).rejects.toThrow('already has an owner');
+    await expect(backend.claim('old', owner('other@example.com'), 'c2')).rejects.toThrow('sudah punya pemilik');
   });
 });
 
@@ -213,11 +213,11 @@ describe('locations and points', () => {
     for (let i = 0; i < TRIAL_LIMITS.locations; i++) {
       ids.push((await backend.saveLocation({ name: `Store ${i}`, city: 'Bandung', address: '' })).id);
     }
-    await expect(backend.saveLocation({ name: 'One more', city: 'Bandung', address: '' })).rejects.toThrow('up to 3 locations');
+    await expect(backend.saveLocation({ name: 'One more', city: 'Bandung', address: '' })).rejects.toThrow('maksimal 3 lokasi');
     for (let i = 0; i < TRIAL_LIMITS.points; i++) {
       await backend.savePoint({ locationId: ids[i % ids.length], name: `Kiosk ${i}`, code: `K-${i}`, active: true });
     }
-    await expect(backend.savePoint({ locationId: ids[0], name: 'Extra', code: 'K-99', active: true })).rejects.toThrow('up to 10 points');
+    await expect(backend.savePoint({ locationId: ids[0], name: 'Extra', code: 'K-99', active: true })).rejects.toThrow('maksimal 10 booth');
   });
 
   it('locks changes once the trial ends but still reads them', async () => {
@@ -225,7 +225,7 @@ describe('locations and points', () => {
     await register(backend, 'Studio Rupa');
     await backend.saveLocation({ name: 'Grand Indonesia', city: 'Jakarta', address: '' });
     clock.now += 15 * DAY;
-    await expect(backend.saveLocation({ name: 'Later', city: 'Jakarta', address: '' })).rejects.toThrow('trial has ended');
+    await expect(backend.saveLocation({ name: 'Later', city: 'Jakarta', address: '' })).rejects.toThrow('Masa coba sudah berakhir');
     expect((await backend.sites()).locations).toHaveLength(1);
   });
 
@@ -275,9 +275,9 @@ describe('sign-in log', () => {
   });
 
   it('names the browser and system of the device', () => {
-    expect(deviceLabel('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36')).toBe('Chrome on macOS');
-    expect(deviceLabel('Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1')).toBe('Safari on iOS');
-    expect(deviceLabel('')).toBe('Unknown device');
+    expect(deviceLabel('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36')).toBe('Chrome di macOS');
+    expect(deviceLabel('Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1')).toBe('Safari di iOS');
+    expect(deviceLabel('')).toBe('Perangkat tidak dikenal');
   });
 });
 

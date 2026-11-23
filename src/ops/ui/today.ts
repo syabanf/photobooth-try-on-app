@@ -30,22 +30,22 @@ export function renderToday(ops: Ops, nav: (view: View) => void): HTMLElement {
   const card = el('section', 'card today-card');
   const head = el('header', 'card-head');
   const title = el('div');
-  title.append(el('h2', 'card-title', 'Today'), el('p', 'card-desc', `Sales and booths for ${new Date().toLocaleDateString(undefined, { dateStyle: 'full' })}.`));
+  title.append(el('h2', 'card-title', 'Hari ini'), el('p', 'card-desc', `Penjualan dan booth untuk ${new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}.`));
   head.append(title);
   const body = el('div', 'card-body');
   body.append(
     statRow([
-      { label: 'Revenue', value: money(gross - refunded), hint: refunded ? `${money(refunded)} refunded` : `${orders.length} orders` },
-      { label: 'Booths online', value: `${online} / ${booths.length}` },
-      { label: 'Open alerts', value: String(openAlerts.length), hint: openAlerts[0]?.message ?? 'All clear' },
-      { label: 'Waiting in queue', value: String(state.tickets.filter((ticket) => ticket.status === 'waiting').length), hint: `${ops.outbox.pending().length} items waiting to sync` },
+      { label: 'Pendapatan', value: money(gross - refunded), hint: refunded ? `${money(refunded)} di-refund` : `${orders.length} pesanan` },
+      { label: 'Booth online', value: `${online} / ${booths.length}` },
+      { label: 'Peringatan terbuka', value: String(openAlerts.length), hint: openAlerts[0]?.message ?? 'Semua aman' },
+      { label: 'Menunggu di antrean', value: String(state.tickets.filter((ticket) => ticket.status === 'waiting').length), hint: `${ops.outbox.pending().length} data belum terkirim` },
     ]),
   );
 
   const grid = el('div', 'today-grid');
   const byBranch = el('div', 'rank-list');
-  byBranch.append(el('p', 'kicker', 'By branch'));
-  if (ops.visibleBranches().length === 0) byBranch.append(el('p', 'card-desc', 'No branches yet.'));
+  byBranch.append(el('p', 'kicker', 'Per cabang'));
+  if (ops.visibleBranches().length === 0) byBranch.append(el('p', 'card-desc', 'Belum ada cabang.'));
   for (const branch of ops.visibleBranches()) {
     const total = net((order) => order.branchId === branch.id);
     const row = el('div', 'today-row');
@@ -53,22 +53,22 @@ export function renderToday(ops: Ops, nav: (view: View) => void): HTMLElement {
     byBranch.append(row);
   }
   const byBooth = el('div', 'rank-list');
-  byBooth.append(el('p', 'kicker', 'By booth'));
+  byBooth.append(el('p', 'kicker', 'Per booth'));
   for (const point of booths) {
     const health = state.health.find((entry) => entry.boothId === point.id);
     // Booth revenue is what the booth itself took by QRIS; cashier sales count under their branch.
     const total = net((order) => order.boothId === point.id);
     const row = el('div', 'today-row');
     const name = el('span', 'rank-name', point.name);
-    row.append(name, health ? (isOnline(health, Date.now()) ? badge('Online', 'ok') : badge('Offline', 'error')) : badge('No signal', 'muted'), el('span', 'rank-value', money(total)));
+    row.append(name, health ? (isOnline(health, Date.now()) ? badge('Online', 'ok') : badge('Offline', 'error')) : badge('Tidak ada sinyal', 'muted'), el('span', 'rank-value', money(total)));
     byBooth.append(row);
   }
-  if (booths.length === 0) byBooth.append(el('p', 'card-desc', 'No booths yet.'));
+  if (booths.length === 0) byBooth.append(el('p', 'card-desc', 'Belum ada booth.'));
   grid.append(byBranch, byBooth);
   body.append(grid);
 
   const links = el('div', 'page-actions');
-  for (const [label, view] of [['Point of sale', 'pos'], ['Transactions', 'sales'], ['Payments', 'payments'], ['Devices', 'devices']] as const) {
+  for (const [label, view] of [['Kasir', 'pos'], ['Transaksi', 'sales'], ['Pembayaran', 'payments'], ['Perangkat', 'devices']] as const) {
     const button = el('button', 'btn btn-outline btn-sm', label);
     button.type = 'button';
     button.addEventListener('click', () => nav(view));

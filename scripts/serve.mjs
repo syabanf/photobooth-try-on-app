@@ -16,7 +16,8 @@ const host = process.env.HOST || '0.0.0.0';
 const dist = resolve('dist');
 const data = resolve(process.env.PHOTO_DATA_DIR || '.photo-delivery');
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.webm': 'video/webm', '.mp4': 'video/mp4', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.task': 'application/octet-stream', '.tflite': 'application/octet-stream' };
-const tokenPattern = /^[a-f0-9]{16,32}$/;
+/** The booth makes every gallery token from a UUID: 32 hex characters, 128 random bits. */
+const tokenPattern = /^[a-f0-9]{32}$/;
 const filePattern = /^[a-zA-Z0-9-]{1,80}$/;
 const maxUpload = 100 * 1024 * 1024;
 const dayMs = 86_400_000;
@@ -31,6 +32,23 @@ const publicOrigin = (process.env.PHOTO_PUBLIC_ORIGIN || `http://${localAddress(
 const handleQris = qrisHandler(join(data, 'qris.json'), publicOrigin);
 /** Sent with every response: no sniffing, no framing by other sites, and photo links stay out of Referer headers. */
 const SECURITY = {
+  // Scripts only from this server, so injected markup cannot run code. Camera streams, Decart and
+  // LiveKit live on other hosts, so pictures, media and connections may go out over the network.
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "script-src 'self' 'wasm-unsafe-eval'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: http: https:",
+    "media-src 'self' data: blob: http: https:",
+    "connect-src 'self' http: https: ws: wss:",
+    "worker-src 'self' blob:",
+    "font-src 'self' data:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'",
+  ].join('; '),
+  'Cross-Origin-Opener-Policy': 'same-origin',
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'SAMEORIGIN',
   'Referrer-Policy': 'no-referrer',
@@ -57,7 +75,7 @@ async function serve(req, res) {
   const url = new URL(req.url || '/', 'http://localhost');
   if (url.pathname === '/connection-test' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end('<!doctype html><html lang="en"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Booth connection</title><body style="font:18px system-ui;max-width:32rem;margin:12vh auto;padding:1.5rem"><h1>Phone connected</h1><p>This phone can reach the booth photo server. Return to the booth to start a session.</p></body></html>');
+    res.end('<!doctype html><html lang="id"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Koneksi booth</title><body style="font:18px system-ui;max-width:32rem;margin:12vh auto;padding:1.5rem"><h1>Ponsel terhubung</h1><p>Ponsel ini bisa menjangkau server foto booth. Kembali ke booth untuk memulai sesi.</p></body></html>');
     return;
   }
   if (url.pathname === '/api/delivery-config' && req.method === 'GET') {
@@ -70,13 +88,13 @@ async function serve(req, res) {
     const folder = join(data, token);
     if (req.method === 'PUT' || req.method === 'POST') {
       if (!fromBoothComputer(req)) return send(res, 403, { error: 'Uploads must come from the booth computer.' });
-      await mkdir(folder, { recursive: true });
+      await mkdir(folder, { recursive: true, mode: 0o700 });
       if (req.method === 'PUT' && fileId) {
         const type = String(req.headers['content-type'] || '');
         if (!/^(image\/(png|jpeg|gif)|video\/(webm|mp4))$/.test(type)) return send(res, 415, { error: 'Unsupported file type.' });
         const body = await bytes(req, maxUpload);
-        await writeFile(join(folder, fileId), body);
-        await writeFile(join(folder, `${fileId}.type`), type);
+        await writeFile(join(folder, fileId), body, { mode: 0o600 });
+        await writeFile(join(folder, `${fileId}.type`), type, { mode: 0o600 });
         return send(res, 201, { ok: true });
       }
       if (req.method === 'POST' && !fileId) {
@@ -88,7 +106,7 @@ async function serve(req, res) {
         const retentionDays = Number(manifest.retentionDays);
         if (!Number.isSafeInteger(retentionDays) || retentionDays < 0 || retentionDays > 3650) return send(res, 400, { error: 'Invalid retention period.' });
         const safe = { brand: String(manifest.brand || '').slice(0, 100), files: manifest.files.map(({ id, kind }) => ({ id, kind })), createdAt: Date.now(), expiresAt: retentionDays ? Date.now() + retentionDays * dayMs : null };
-        await writeFile(join(folder, 'manifest.json'), JSON.stringify(safe));
+        await writeFile(join(folder, 'manifest.json'), JSON.stringify(safe), { mode: 0o600 });
         return send(res, 201, { ok: true });
       }
     }

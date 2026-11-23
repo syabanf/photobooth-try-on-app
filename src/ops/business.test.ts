@@ -28,7 +28,7 @@ describe('access', () => {
     expect(await checkPin(sup, '2468')).toBe(true);
     expect(await checkPin(sup, '1357')).toBe(false);
     expect((await findApprover([cashier, sup], '2468'))?.id).toBe('s');
-    await expect(hashPin('12')).rejects.toThrow('4 to 8 digits');
+    await expect(hashPin('12')).rejects.toThrow('4 sampai 8 angka');
   });
 });
 
@@ -131,6 +131,6 @@ describe('reports', () => {
   });
 
   it('refuses a file without the columns it needs', () => {
-    expect(() => parseGatewayCsv('a,b\n1,2')).toThrow('reference and an amount');
+    expect(() => parseGatewayCsv('a,b\n1,2')).toThrow('kolom referensi dan jumlah');
   });
 });

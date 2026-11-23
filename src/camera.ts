@@ -33,9 +33,9 @@ export function classifyCameraError(e: unknown): CameraError {
 }
 
 export const CAMERA_MESSAGES: Record<CameraError, string> = {
-  insecure: 'The camera needs HTTPS or localhost.',
-  denied: 'Camera permission denied. Allow it in the address bar and reload.',
-  'not-found': 'No camera found on this device.',
-  'in-use': 'The camera is in use by another app.',
-  unknown: 'Could not start the camera.',
+  insecure: 'Kamera butuh HTTPS atau localhost.',
+  denied: 'Izin kamera ditolak. Izinkan lewat bilah alamat, lalu muat ulang.',
+  'not-found': 'Tidak ada kamera di perangkat ini.',
+  'in-use': 'Kamera sedang dipakai aplikasi lain.',
+  unknown: 'Kamera gagal dinyalakan.',
 };

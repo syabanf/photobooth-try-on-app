@@ -7,7 +7,7 @@ import { zonedTime } from './time';
 
 export type GroupBy = 'day' | 'branch' | 'booth' | 'shift' | 'product' | 'frame' | 'mode';
 
-export const PRODUCT_LABELS: Record<LineKind, string> = { session: 'Photo sessions', preset: 'AI presets', print: 'Extra prints', reprint: 'Reprints', merch: 'Merchandise' };
+export const PRODUCT_LABELS: Record<LineKind, string> = { session: 'Sesi foto', preset: 'Preset AI', print: 'Cetak tambahan', reprint: 'Cetak ulang', merch: 'Merchandise' };
 
 export interface ReportRow {
   key: string;
@@ -98,7 +98,9 @@ export function revenueReport(input: ReportInput, groupBy: GroupBy): ReportRow[]
 
 export function toCsv(headers: readonly string[], rows: readonly (readonly (string | number)[])[]): string {
   const cell = (value: string | number) => {
-    const text = String(value);
+    // A text cell starting with = + - @ runs as a formula in Excel or Sheets. Notification texts
+    // and names come from outside, so they open with a quote mark instead.
+    const text = typeof value === 'string' && /^[=+\-@\t\r]/.test(value) ? `'${value}` : String(value);
     return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
   };
   return [headers, ...rows].map((line) => line.map(cell).join(',')).join('\r\n');
@@ -138,7 +140,7 @@ export function parseGatewayCsv(text: string): GatewayRow[] {
   const amount = column('amount', 'gross_amount', 'paid_amount');
   const status = column('status', 'transaction_status');
   const fee = column('fee', 'mdr', 'fee_amount');
-  if (ref < 0 || amount < 0) throw new Error('The file needs a reference and an amount column.');
+  if (ref < 0 || amount < 0) throw new Error('File harus punya kolom referensi dan jumlah.');
   return lines.slice(1).map((line) => {
     const cells = split(line);
     return {

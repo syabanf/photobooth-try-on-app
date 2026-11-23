@@ -11,10 +11,10 @@ import { showDevicesTab } from './devices';
 import { showPaymentsTab } from './payments';
 
 const STAGES: { title: string; detail: string; steps: SetupStepId[] }[] = [
-  { title: 'Venue', detail: 'Where you run and which device stands where.', steps: ['locations', 'device'] },
-  { title: 'Selling', detail: 'What things cost and how customers pay.', steps: ['prices', 'payments'] },
-  { title: 'Hardware', detail: 'The camera and printer at every booth.', steps: ['camera', 'printer'] },
-  { title: 'Look and team', detail: 'Your brand on every screen, and the people who run it.', steps: ['branding', 'frames', 'team'] },
+  { title: 'Tempat', detail: 'Lokasi usaha dan perangkat mana yang berdiri di mana.', steps: ['locations', 'device', 'kiosk'] },
+  { title: 'Penjualan', detail: 'Harga dan cara pelanggan membayar.', steps: ['prices', 'payments'] },
+  { title: 'Perangkat keras', detail: 'Kamera dan printer di setiap booth.', steps: ['camera', 'printer'] },
+  { title: 'Tampilan dan tim', detail: 'Merek Anda di setiap layar, dan orang yang menjalankannya.', steps: ['branding', 'frames', 'team'] },
 ];
 
 /** Opens a page and, when it has one, the section the step lives in. */
@@ -26,11 +26,12 @@ function openAt(nav: (view: View) => void, view: View, anchor?: string): void {
 export function renderSetup({ ops, nav, redraw }: PageContext): HTMLElement {
   const steps = setupSteps(ops.state, ops.sites, ops.hooks.devicePointId());
   const progress = setupProgress(steps);
-  const root = page('Setup guide', 'Everything the venue needs before customers arrive, in order. Each step opens the form it needs and ticks itself off once filled in.');
+  const root = page('Panduan setup', 'Semua yang perlu disiapkan sebelum pelanggan datang, berurutan. Setiap langkah membuka formulirnya sendiri dan tercentang otomatis setelah diisi.');
 
   const actions: Record<SetupStepId, () => void> = {
     locations: () => nav('sites'),
     device: () => document.dispatchEvent(new Event('vto:pick-device')),
+    kiosk: () => nav('queue'),
     prices: () => openAt(nav, 'settings', 'settings-booths'),
     camera: () => {
       // Straight to the camera setup of the first booth still without one.
@@ -53,16 +54,16 @@ export function renderSetup({ ops, nav, redraw }: PageContext): HTMLElement {
     frames: () => nav('frames'),
     team: () => nav('staff'),
   };
-  const labels: Record<SetupStepId, string> = { locations: 'Add locations', device: 'Link device', prices: 'Set prices', camera: 'Set up camera', printer: 'Add printer', payments: 'Set up payments', branding: 'Open branding', frames: 'Upload frames', team: 'Invite team' };
+  const labels: Record<SetupStepId, string> = { locations: 'Tambah lokasi', device: 'Hubungkan perangkat', kiosk: 'Buka antrean', prices: 'Atur harga', camera: 'Atur kamera', printer: 'Tambah printer', payments: 'Atur pembayaran', branding: 'Buka merek', frames: 'Unggah bingkai', team: 'Undang tim' };
 
   // ---------- progress ----------
   const next = steps.find((step) => !step.done && !step.optional) ?? steps.find((step) => !step.done);
   const hero = el('section', 'setup-hero');
   const text = el('div', 'setup-hero-text');
   text.append(
-    el('p', 'setup-kicker', progress.ready ? 'Ready to open' : 'Getting ready'),
-    el('p', 'setup-count', `${progress.done} of ${progress.total} done`),
-    el('p', 'setup-hero-desc', progress.ready ? 'Every required step is done. Open the kiosk and the TV from Queue, and the booths from their own devices.' : `Next: ${next?.title ?? ''}. Optional steps never hold up opening.`),
+    el('p', 'setup-kicker', progress.ready ? 'Siap buka' : 'Sedang disiapkan'),
+    el('p', 'setup-count', `${progress.done} dari ${progress.total} selesai`),
+    el('p', 'setup-hero-desc', progress.ready ? 'Semua langkah wajib sudah selesai. Buka kiosk dan TV dari halaman Antrean, dan buka booth dari perangkatnya masing-masing.' : `Berikutnya: ${next?.title ?? ''}. Langkah opsional tidak menahan pembukaan.`),
   );
   const bar = el('div', 'setup-bar');
   bar.setAttribute('role', 'progressbar');
@@ -74,7 +75,7 @@ export function renderSetup({ ops, nav, redraw }: PageContext): HTMLElement {
   bar.append(fill);
   text.append(bar);
   hero.append(text);
-  if (progress.ready) hero.append(act('Open Queue', 'btn btn-primary', () => nav('queue'), 'queue'));
+  if (progress.ready) hero.append(act('Buka antrean', 'btn btn-primary', () => nav('queue'), 'queue'));
   else if (next) hero.append(act(labels[next.id], 'btn btn-primary', actions[next.id], 'chevron'));
   root.body.append(hero);
 
@@ -100,9 +101,15 @@ export function renderSetup({ ops, nav, redraw }: PageContext): HTMLElement {
     else mark.textContent = String(index);
     const body = el('div', 'setup-step-text');
     const title = el('p', 'setup-step-title', step.title);
-    if (step.optional) title.append(el('span', 'setup-optional', 'Optional'));
+    if (step.optional) title.append(el('span', 'setup-optional', 'Opsional'));
     body.append(title, el('p', 'card-desc', step.done ? step.detail : `${step.missing}. ${step.detail}`));
-    item.append(mark, body, act(step.done ? 'Review' : labels[step.id], step.done ? 'btn btn-ghost btn-sm' : 'btn btn-outline btn-sm', actions[step.id]));
+    const button = act(step.done ? 'Tinjau' : labels[step.id], step.done ? 'btn btn-ghost btn-sm' : 'btn btn-outline btn-sm', actions[step.id]);
+    // A step that needs a booth waits for one, so nobody lands on an empty form.
+    if (step.blocked) {
+      button.disabled = true;
+      button.title = 'Tambah booth dulu';
+    }
+    item.append(mark, body, button);
     return item;
   }
 
@@ -116,7 +123,7 @@ export function setupBanner(ops: PageContext['ops'], nav: (view: View) => void):
   if (progress.ready) return null;
   const card = el('div', 'setup-banner');
   const text = el('div');
-  text.append(el('p', 'setup-step-title', `Finish setting up · ${progress.done} of ${progress.total} done`), el('p', 'card-desc', 'Booths, prices, the camera, the printer and payments need to be in place before customers arrive.'));
-  card.append(text, act('Open setup guide', 'btn btn-primary btn-sm', () => nav('setup'), 'chevron'));
+  text.append(el('p', 'setup-step-title', `Selesaikan setup · ${progress.done} dari ${progress.total} selesai`), el('p', 'card-desc', 'Booth, harga, kamera, printer dan pembayaran harus siap sebelum pelanggan datang.'));
+  card.append(text, act('Buka panduan setup', 'btn btn-primary btn-sm', () => nav('setup'), 'chevron'));
   return card;
 }

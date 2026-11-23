@@ -31,7 +31,7 @@ export interface DslrClient {
 }
 
 export const DEFAULT_PORTS: Record<DslrProtocol, number> = { ccapi: 8080, digicam: 5513 };
-export const PROTOCOL_LABELS: Record<DslrProtocol, string> = { ccapi: 'Canon over Wi-Fi or LAN (CCAPI)', digicam: 'DSLR over USB via digiCamControl' };
+export const PROTOCOL_LABELS: Record<DslrProtocol, string> = { ccapi: 'Canon lewat Wi-Fi atau LAN (CCAPI)', digicam: 'DSLR lewat USB dengan digiCamControl' };
 
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
@@ -39,11 +39,11 @@ const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 export function checkLink(host: string, port: number): DslrLink['host'] {
   const trimmed = host.trim();
   const parts = IPV4.exec(trimmed)?.slice(1).map(Number);
-  if (!parts || parts.some((part) => part > 255)) throw new Error('Type the camera’s IP address, like 192.168.1.20.');
+  if (!parts || parts.some((part) => part > 255)) throw new Error('Ketik alamat IP kamera, misalnya 192.168.1.20.');
   const [a, b] = parts;
   const local = a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
-  if (!local) throw new Error('The camera must be on this network: an address starting 192.168, 10, 172.16 to 172.31 or 169.254.');
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error('The port is a number from 1 to 65535.');
+  if (!local) throw new Error('Kamera harus ada di jaringan ini: alamat yang diawali 192.168, 10, 172.16 sampai 172.31 atau 169.254.');
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error('Port berupa angka 1 sampai 65535.');
   return trimmed;
 }
 
@@ -54,14 +54,14 @@ async function call(link: DslrLink, path: string, init: RequestInit = {}, timeou
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`/api/camera/${link.host}:${link.port}${path}`, { ...init, signal: controller.signal, cache: 'no-store' });
-    if (response.status === 502 || response.status === 504) throw new Error(`No answer from ${link.host}:${link.port}. Check that the camera is on and on this network.`);
-    if (response.status === 404 && !response.headers.get('content-type')?.includes('json') && path.startsWith('/ccapi')) throw new Error('This camera does not answer CCAPI. Activate CCAPI with Canon’s tool, then turn on Wi-Fi remote control.');
-    if (!response.ok) throw new Error(`${link.host} answered ${response.status} to ${path.split('?')[0]}.`);
+    if (response.status === 502 || response.status === 504) throw new Error(`Tidak ada jawaban dari ${link.host}:${link.port}. Pastikan kamera menyala dan ada di jaringan ini.`);
+    if (response.status === 404 && !response.headers.get('content-type')?.includes('json') && path.startsWith('/ccapi')) throw new Error('Kamera ini tidak menjawab CCAPI. Aktifkan CCAPI dengan aplikasi Canon, lalu nyalakan kendali jarak jauh Wi-Fi.');
+    if (!response.ok) throw new Error(`${link.host} menjawab ${response.status} untuk ${path.split('?')[0]}.`);
     return response;
   } catch (error) {
-    if ((error as Error).name === 'AbortError') throw new Error(`${link.host}:${link.port} did not answer in ${timeoutMs / 1000} seconds.`);
+    if ((error as Error).name === 'AbortError') throw new Error(`${link.host}:${link.port} tidak menjawab dalam ${timeoutMs / 1000} detik.`);
     // fetch fails outright when the booth server has no camera proxy, as on a static host.
-    if (error instanceof TypeError) throw new Error('This page cannot reach the camera. Open the app from the booth server (pnpm serve or pnpm dev).');
+    if (error instanceof TypeError) throw new Error('Halaman ini tidak bisa menjangkau kamera. Buka aplikasi dari server booth (pnpm serve atau pnpm dev).');
     throw error;
   } finally {
     clearTimeout(timer);
@@ -95,7 +95,7 @@ export function ccapiClient(link: DslrLink): DslrClient {
     async info() {
       const device = (await (await call(link, `${CCAPI}/deviceinformation`)).json()) as { productname?: string; manufacturer?: string };
       return {
-        model: [device.manufacturer, device.productname].filter(Boolean).join(' ') || 'Canon camera',
+        model: [device.manufacturer, device.productname].filter(Boolean).join(' ') || 'Kamera Canon',
         battery: await battery().catch(() => null),
         supports: ['liveView', 'capture', 'settings', 'autofocus', 'battery'],
       };
@@ -116,7 +116,7 @@ export function ccapiClient(link: DslrLink): DslrClient {
         if (added) return (await call(link, `${added.replace(/^\/ccapi\/ver\d+/, CCAPI)}?kind=main`, {}, 20_000)).blob();
         await wait(500);
       }
-      throw new Error('The camera took the shot but sent no JPEG. Set it to save JPEG, or JPEG with RAW.');
+      throw new Error('Kamera sudah memotret tapi tidak mengirim JPEG. Atur kamera agar menyimpan JPEG, atau JPEG dengan RAW.');
     },
     async apply(settings) {
       const values: [string, string][] = [
@@ -147,7 +147,7 @@ export function digicamClient(link: DslrLink): DslrClient {
     async info() {
       const session = (await (await call(link, '/session.json')).json().catch(() => ({}))) as { CameraName?: string; SelectedCameraDevice?: { DisplayName?: string } };
       return {
-        model: session.SelectedCameraDevice?.DisplayName || session.CameraName || 'Camera on digiCamControl',
+        model: session.SelectedCameraDevice?.DisplayName || session.CameraName || 'Kamera di digiCamControl',
         battery: null,
         // digiCamControl's web server does not report the battery.
         supports: ['liveView', 'capture', 'settings', 'autofocus'],
@@ -168,7 +168,7 @@ export function digicamClient(link: DslrLink): DslrClient {
         // digiCamControl answers "-" while it still downloads the file from the camera.
         if (last && last !== before && last !== '-') return (await call(link, `/image/${encodeURIComponent(last)}`, {}, 20_000)).blob();
       }
-      throw new Error('digiCamControl did not report the new photo. Check its session folder and that the camera saves JPEG.');
+      throw new Error('digiCamControl tidak melaporkan foto baru. Periksa folder sesinya dan pastikan kamera menyimpan JPEG.');
     },
     async apply(settings) {
       const values: [string, string][] = [

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FaceRecord, Order, OrderLine, Refund, Ticket } from './model';
-import { floorReport, PRODUCT_LABELS, revenueReport } from './reports';
+import { floorReport, PRODUCT_LABELS, revenueReport, toCsv } from './reports';
 
 const ZONE = 'Asia/Jakarta';
 const at = (hour: number, minute = 0) => Date.UTC(2026, 10, 13, hour - 7, minute);
@@ -19,9 +19,9 @@ describe('revenue by product', () => {
     const refunds = [{ id: 'r1', orderId: 'o1', lineId: 'l2', amount: 15_000 } as Refund];
     const rows = revenueReport({ orders, refunds, sessions: [], timeZone: ZONE, label: (_group, key) => PRODUCT_LABELS[key as OrderLine['kind']] }, 'product');
     const byKey = Object.fromEntries(rows.map((row) => [row.key, row]));
-    expect(byKey.session).toMatchObject({ label: 'Photo sessions', orders: 1, sessions: 1, gross: 35_000, net: 35_000 });
+    expect(byKey.session).toMatchObject({ label: 'Sesi foto', orders: 1, sessions: 1, gross: 35_000, net: 35_000 });
     expect(byKey.print).toMatchObject({ orders: 1, gross: 30_000, refunds: 15_000, net: 15_000 });
-    expect(byKey.preset).toMatchObject({ label: 'AI presets', orders: 1, gross: 25_000 });
+    expect(byKey.preset).toMatchObject({ label: 'Preset AI', orders: 1, gross: 25_000 });
   });
 });
 
@@ -38,5 +38,11 @@ describe('floorReport', () => {
 
   it('has no average wait before anyone is called', () => {
     expect(floorReport({ tickets: [], faces: [], orders: [], timeZone: ZONE }).averageWait).toBeNull();
+  });
+});
+
+describe('toCsv', () => {
+  it('keeps outside text from running as a spreadsheet formula', () => {
+    expect(toCsv(['Text', 'Amount'], [['=HYPERLINK("http://x")', -5000], ['@SUM(A1)', 1], ['Dana masuk', 2]])).toBe('Text,Amount\r\n"\'=HYPERLINK(""http://x"")",-5000\r\n\'@SUM(A1),1\r\nDana masuk,2');
   });
 });

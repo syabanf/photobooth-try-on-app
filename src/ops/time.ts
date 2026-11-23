@@ -59,4 +59,5 @@ export function localTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Jakarta';
 }
 
-export const WEEKDAY_NAMES = WEEKDAYS;
+/** Day names people read, Sunday first like `zonedTime().weekday`. */
+export const WEEKDAY_NAMES = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];

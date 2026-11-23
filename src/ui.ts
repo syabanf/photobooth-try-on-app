@@ -57,42 +57,42 @@ export function segmented(container: HTMLElement, onPick: (button: HTMLButtonEle
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as Category[];
 
 const VIEWS: Record<View, { kicker: string; title: string; capture: string }> = {
-  dashboard: { kicker: 'Overview', title: 'Dashboard', capture: 'Open camera' },
-  tryon: { kicker: 'Virtual try-on', title: 'Try on', capture: 'Take snapshot' },
-  photobooth: { kicker: 'Timed shots', title: 'Photobooth', capture: 'Start photobooth' },
-  gallery: { kicker: 'Saved on this device', title: 'Gallery', capture: 'Open camera' },
-  sites: { kicker: 'Where you run', title: 'Locations and booths', capture: 'Open camera' },
-  session: { kicker: 'Customer session', title: 'Booth', capture: 'Open camera' },
-  presets: { kicker: 'Your face in every template', title: 'AI presets', capture: 'Open camera' },
-  gate: { kicker: 'Scan tickets, photograph the party', title: 'Gate', capture: 'Open camera' },
-  faces: { kicker: 'Who is who', title: 'Faces', capture: 'Open camera' },
-  pos: { kicker: 'Cashier', title: 'Point of sale', capture: 'Open camera' },
-  queue: { kicker: 'Customers waiting', title: 'Queue', capture: 'Open camera' },
-  sales: { kicker: 'Every rupiah', title: 'Transactions', capture: 'Open camera' },
-  payments: { kicker: 'Methods, fees and the gateway', title: 'Payments', capture: 'Open camera' },
-  reports: { kicker: 'Sales, products, payments, cash and the floor', title: 'Reports', capture: 'Open camera' },
-  vouchers: { kicker: 'Codes and events', title: 'Vouchers', capture: 'Open camera' },
-  frames: { kicker: 'Print templates', title: 'Frames', capture: 'Open camera' },
-  branding: { kicker: 'Booth screens and gallery', title: 'Branding', capture: 'Open camera' },
-  devices: { kicker: 'Cameras, printers and alerts', title: 'Devices', capture: 'Open camera' },
-  staff: { kicker: 'Access · who signs in', title: 'Users', capture: 'Open camera' },
-  roles: { kicker: 'Access · what each role may do', title: 'Roles', capture: 'Open camera' },
-  signins: { kicker: 'Access · who came in, and when', title: 'Sign-in log', capture: 'Open camera' },
-  history: { kicker: 'Everything that changed', title: 'Activity history', capture: 'Open camera' },
-  fleet: { kicker: 'Updates, support and sync', title: 'Fleet', capture: 'Open camera' },
-  settings: { kicker: 'What things cost, and the rules', title: 'Prices and rules', capture: 'Open camera' },
-  setup: { kicker: 'Before customers arrive', title: 'Setup guide', capture: 'Open camera' },
+  dashboard: { kicker: 'Ringkasan', title: 'Beranda', capture: 'Buka kamera' },
+  tryon: { kicker: 'Coba pakai virtual', title: 'Coba pakai', capture: 'Ambil foto' },
+  photobooth: { kicker: 'Foto dengan timer', title: 'Photobooth', capture: 'Mulai photobooth' },
+  gallery: { kicker: 'Tersimpan di perangkat ini', title: 'Galeri', capture: 'Buka kamera' },
+  sites: { kicker: 'Tempat usaha berjalan', title: 'Lokasi dan booth', capture: 'Buka kamera' },
+  session: { kicker: 'Sesi pelanggan', title: 'Booth', capture: 'Buka kamera' },
+  presets: { kicker: 'Wajah pelanggan di setiap template', title: 'Preset AI', capture: 'Buka kamera' },
+  gate: { kicker: 'Pindai tiket, foto rombongan', title: 'Gerbang', capture: 'Buka kamera' },
+  faces: { kicker: 'Siapa saja yang datang', title: 'Wajah', capture: 'Buka kamera' },
+  pos: { kicker: 'Penjualan', title: 'Kasir', capture: 'Buka kamera' },
+  queue: { kicker: 'Pelanggan menunggu', title: 'Antrean', capture: 'Buka kamera' },
+  sales: { kicker: 'Setiap rupiah', title: 'Transaksi', capture: 'Buka kamera' },
+  payments: { kicker: 'Metode, biaya dan gateway', title: 'Pembayaran', capture: 'Buka kamera' },
+  reports: { kicker: 'Penjualan, produk, pembayaran, kas dan lantai', title: 'Laporan', capture: 'Buka kamera' },
+  vouchers: { kicker: 'Kode dan acara', title: 'Voucher', capture: 'Buka kamera' },
+  frames: { kicker: 'Template cetak', title: 'Bingkai', capture: 'Buka kamera' },
+  branding: { kicker: 'Layar booth dan galeri', title: 'Merek', capture: 'Buka kamera' },
+  devices: { kicker: 'Kamera, printer dan peringatan', title: 'Perangkat', capture: 'Buka kamera' },
+  staff: { kicker: 'Akses · siapa yang bisa masuk', title: 'Pengguna', capture: 'Buka kamera' },
+  roles: { kicker: 'Akses · apa yang boleh tiap peran', title: 'Peran', capture: 'Buka kamera' },
+  signins: { kicker: 'Akses · siapa yang masuk dan kapan', title: 'Log masuk', capture: 'Buka kamera' },
+  history: { kicker: 'Semua perubahan', title: 'Riwayat aktivitas', capture: 'Buka kamera' },
+  fleet: { kicker: 'Pembaruan, bantuan dan sinkron', title: 'Pembaruan dan bantuan', capture: 'Buka kamera' },
+  settings: { kicker: 'Harga dan aturan main', title: 'Harga dan aturan', capture: 'Buka kamera' },
+  setup: { kicker: 'Sebelum pelanggan datang', title: 'Panduan setup', capture: 'Buka kamera' },
 };
 
 /** Every page in the More sheet, grouped, with the icon its row shows. */
 const MENU: { group: string; items: [View, string, IconName][] }[] = [
   // Ordered the way a venue works: serve customers, run the studio, count the money, set things up.
-  { group: 'Serve customers', items: [['session', 'Booth', 'booth'], ['presets', 'AI presets', 'sparkles'], ['gate', 'Gate', 'qr'], ['queue', 'Queue', 'queue'], ['pos', 'Point of sale', 'cart']] },
-  { group: 'Studio', items: [['tryon', 'Try on', 'shirt'], ['photobooth', 'Photobooth', 'aperture'], ['gallery', 'Gallery', 'images'], ['faces', 'Faces', 'users']] },
-  { group: 'Sales and reports', items: [['reports', 'Reports', 'chart'], ['sales', 'Transactions', 'receipt'], ['history', 'Activity history', 'clock'], ['vouchers', 'Vouchers', 'ticket']] },
-  { group: 'Setup', items: [['setup', 'Setup guide', 'check'], ['sites', 'Locations and booths', 'pin'], ['devices', 'Cameras, printers and alerts', 'printer'], ['payments', 'Payments', 'wallet'], ['settings', 'Prices and rules', 'settings'], ['frames', 'Frames', 'frame'], ['branding', 'Branding', 'palette']] },
-  { group: 'Team and access', items: [['staff', 'Users', 'users'], ['roles', 'Roles and permissions', 'shield'], ['signins', 'Sign-in log', 'key']] },
-  { group: 'System', items: [['fleet', 'Fleet and support', 'rocket']] },
+  { group: 'Layani pelanggan', items: [['session', 'Booth', 'booth'], ['presets', 'Preset AI', 'sparkles'], ['gate', 'Gerbang', 'qr'], ['queue', 'Antrean', 'queue'], ['pos', 'Kasir', 'cart']] },
+  { group: 'Studio', items: [['tryon', 'Coba pakai', 'shirt'], ['photobooth', 'Photobooth', 'aperture'], ['gallery', 'Galeri', 'images'], ['faces', 'Wajah', 'users']] },
+  { group: 'Penjualan dan laporan', items: [['reports', 'Laporan', 'chart'], ['sales', 'Transaksi', 'receipt'], ['history', 'Riwayat aktivitas', 'clock'], ['vouchers', 'Voucher', 'ticket']] },
+  { group: 'Pengaturan', items: [['setup', 'Panduan setup', 'check'], ['sites', 'Lokasi dan booth', 'pin'], ['devices', 'Kamera, printer dan peringatan', 'printer'], ['payments', 'Pembayaran', 'wallet'], ['settings', 'Harga dan aturan', 'settings'], ['frames', 'Bingkai', 'frame'], ['branding', 'Merek', 'palette']] },
+  { group: 'Tim dan akses', items: [['staff', 'Pengguna', 'users'], ['roles', 'Peran dan izin', 'shield'], ['signins', 'Log masuk', 'key']] },
+  { group: 'Sistem', items: [['fleet', 'Pembaruan dan bantuan', 'rocket']] },
 ];
 
 /** Items shown before "Show all", so the grid stays short on a phone. */
@@ -145,7 +145,7 @@ function buildRail(nav: HTMLElement): void {
     }
     return button;
   };
-  nav.append(item('dashboard', 'Dashboard', 'dashboard'));
+  nav.append(item('dashboard', 'Beranda', 'dashboard'));
   for (const { group, items } of MENU) {
     const section = document.createElement('div');
     section.className = 'rail-group';
@@ -257,7 +257,7 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
       }),
     );
     stripMore.hidden = stripItems.length <= STRIP_PAGE;
-    stripMore.textContent = expanded ? 'Show fewer' : `Show all ${stripItems.length}`;
+    stripMore.textContent = expanded ? 'Tampilkan lebih sedikit' : `Tampilkan semua ${stripItems.length}`;
   }
 
   stripMore.addEventListener('click', () => {
@@ -322,14 +322,14 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
       return [section];
     });
     // data-close on each row shuts the sheet after the view switches.
-    openDialog({ title: 'More', body, footer: [] });
+    openDialog({ title: 'Lainnya', body, footer: [] });
   };
   for (const button of moreButtons) button.addEventListener('click', openMore);
-  const onMore = (view: View) => !navButtons.some((button) => button.dataset.view === view && button.offsetParent !== null);
+  const onMore = (view: View) => !navButtons.some((button) => button.dataset.view === view && button.getClientRects().length > 0);
 
   const setRailExpanded = (expanded: boolean) => {
     rail.classList.toggle('is-expanded', expanded);
-    railToggle.setAttribute('aria-label', expanded ? 'Collapse menu' : 'Expand menu');
+    railToggle.setAttribute('aria-label', expanded ? 'Ciutkan menu' : 'Bentangkan menu');
     writeStored(RAIL_KEY, expanded ? '1' : '0');
   };
   // Expanded until someone collapses it: with every page in the rail, labels and headings matter.
@@ -391,6 +391,9 @@ export function mountUi(root: HTMLElement, handlers: UiHandlers): UiApi {
       $<HTMLElement>('#viewTitle').textContent = VIEWS[view].title;
       const camera = CAMERA_VIEWS.includes(view);
       $<HTMLElement>('#stageView').hidden = !camera;
+      // Camera status, hand control and the render mode mean nothing on a page without the camera.
+      $<HTMLElement>('.status-row').hidden = !camera;
+      $<HTMLElement>('#handToggle').hidden = !camera;
       $<HTMLElement>('#galleryView').hidden = view !== 'gallery';
       $<HTMLElement>('#sitesView').hidden = view !== 'sites';
       $<HTMLElement>('#dashboardView').hidden = view !== 'dashboard';

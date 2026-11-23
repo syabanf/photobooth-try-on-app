@@ -70,10 +70,10 @@ export interface BoothFrame {
 }
 
 export const FRAMES: readonly BoothFrame[] = [
-  { id: 'paper', label: 'Paper', paper: '--card', ink: '--ink' },
-  { id: 'ink', label: 'Ink', paper: '--ink', ink: '--on-ink' },
-  { id: 'accent', label: 'Coral', paper: '--accent', ink: '--on-ink' },
-  { id: 'canvas', label: 'Canvas', paper: '--surface', ink: '--ink' },
+  { id: 'paper', label: 'Kertas', paper: '--card', ink: '--ink' },
+  { id: 'ink', label: 'Gelap', paper: '--ink', ink: '--on-ink' },
+  { id: 'accent', label: 'Koral', paper: '--accent', ink: '--on-ink' },
+  { id: 'canvas', label: 'Kanvas', paper: '--surface', ink: '--ink' },
 ];
 
 /** Draws the shots onto one sheet with a caption and the date, ready to save or print. */
@@ -130,7 +130,7 @@ export async function composeBooth(
   ctx.globalAlpha = 0.55;
   ctx.fillStyle = ink;
   ctx.fillText(
-    date.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }),
+    date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
     centreX,
     titleY + titleSize * 0.95,
   );

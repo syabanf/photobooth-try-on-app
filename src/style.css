@@ -118,7 +118,9 @@ p {
   gap: 16px;
   height: 100dvh;
   padding: 12px;
-  overflow: hidden;
+  /* clip, not hidden: a hidden box still scrolls when a page calls scrollIntoView, which slid the
+     whole menu off the left edge. */
+  overflow: clip;
 }
 
 .ambient {
@@ -1918,6 +1920,10 @@ p {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+}
+
+/* An iPad in landscape (1024) has room for the labelled menu. */
+@media (min-width: 1024px) {
   .rail.is-expanded {
     align-items: stretch;
     width: 240px;
@@ -2718,12 +2724,6 @@ p {
 }
 
 
-
-.auth-note {
-  font-size: 12px;
-  color: var(--muted);
-  text-align: center;
-}
 
 @media (min-width: 1024px) {
   .auth {
@@ -3529,10 +3529,12 @@ p {
   accent-color: var(--accent);
 }
 
+/* At the top, so it never covers the buttons a cashier reaches for at the bottom. */
 .ops-notice {
   position: fixed;
   left: 50%;
-  bottom: calc(96px + env(safe-area-inset-bottom));
+  top: calc(16px + env(safe-area-inset-top));
+  cursor: pointer;
   z-index: 80;
   max-width: min(520px, calc(100vw - 32px));
   padding: 12px 18px;
@@ -3548,12 +3550,6 @@ p {
 .ops-notice[data-kind='error'] { background: var(--accent); }
 .ops-notice[data-kind='warn'] { background: var(--warning); }
 .ops-notice[data-kind='ok'] { background: var(--success); }
-
-@media (min-width: 768px) {
-  .ops-notice {
-    bottom: 24px;
-  }
-}
 
 /* ---------- point of sale ---------- */
 
@@ -3630,6 +3626,13 @@ p {
 
 .pos-tile-title {
   font-weight: 700;
+}
+
+.pos-tile > .icon {
+  width: 20px;
+  height: 20px;
+  margin-bottom: 4px;
+  color: var(--accent);
 }
 
 .pos-tile-meta {
@@ -6731,3 +6734,90 @@ body.display-mode {
   }
 }
 
+
+/* ---------- till: before the shift, and the change after a sale ---------- */
+
+.pos-start {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+  margin: 24px auto;
+  text-align: center;
+}
+
+.pos-start-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.pos-start .pay-quick {
+  justify-content: center;
+}
+
+.receipt-change {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--success-soft, #e7f6ec);
+  text-align: center;
+}
+
+.receipt-change-amount {
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- phone bottom bar labels ---------- */
+
+.bar-item,
+.bar-action {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bar-item {
+  width: 56px;
+  height: 52px;
+}
+
+.bar-label {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* ---------- big numbers fit a phone-width tile ---------- */
+
+.stat-value {
+  font-size: clamp(22px, 6.5vw, 28px);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- phone bottom bar: the camera button is the one accent ---------- */
+
+.bar-item[data-active='true'] {
+  background: rgb(255 255 255 / 0.12);
+  box-shadow: none;
+}
+
+/* ---------- touch screens: every control at least 44 px ---------- */
+
+@media (pointer: coarse) {
+  .btn-sm,
+  .btn-icon,
+  .pill-tab,
+  .step {
+    min-height: 44px;
+  }
+
+  .btn-icon {
+    min-width: 44px;
+  }
+}

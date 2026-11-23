@@ -25,10 +25,10 @@ export function renderSales(context: PageContext): HTMLElement {
   const query = view.search.trim().toLowerCase();
   const matches = (...texts: string[]) => !query || texts.some((text) => text.toLowerCase().includes(query));
 
-  const root = page('Transactions', 'Sales, sessions, refunds, shifts and the activity log. Staff only see the branches they work at.');
+  const root = page('Transaksi', 'Penjualan, sesi, refund, shift dan log aktivitas. Staf hanya melihat cabang tempat mereka bekerja.');
   const filters = el('div', 'ops-filters');
   const branch = el('select', 'input select');
-  branch.add(new Option('All branches', ''));
+  branch.add(new Option('Semua cabang', ''));
   for (const location of ops.visibleBranches()) branch.add(new Option(location.name, location.id, false, location.id === view.branchId));
   branch.addEventListener('change', () => {
     view.branchId = branch.value;
@@ -36,7 +36,7 @@ export function renderSales(context: PageContext): HTMLElement {
   });
   const search = el('input', 'input');
   search.type = 'search';
-  search.placeholder = 'Search number, item, code, reason';
+  search.placeholder = 'Cari nomor, item, kode, alasan';
   search.value = view.search;
   search.addEventListener('change', () => {
     view.search = search.value;
@@ -45,11 +45,11 @@ export function renderSales(context: PageContext): HTMLElement {
   filters.append(
     pills(
       [
-        { value: 'orders', label: 'Orders' },
-        { value: 'sessions', label: 'Sessions' },
-        { value: 'refunds', label: 'Refunds' },
-        { value: 'shifts', label: 'Shifts' },
-        { value: 'activity', label: 'Activity log' },
+        { value: 'orders', label: 'Pesanan' },
+        { value: 'sessions', label: 'Sesi' },
+        { value: 'refunds', label: 'Refund' },
+        { value: 'shifts', label: 'Shift' },
+        { value: 'activity', label: 'Log aktivitas' },
       ] as const,
       view.tab,
       (tab) => {
@@ -67,16 +67,16 @@ export function renderSales(context: PageContext): HTMLElement {
     root.body.append(
       table(
         [
-          { label: 'Order', cell: (order) => order.number },
-          { label: 'When', cell: (order) => dateTime(order.paidAt ?? order.createdAt) },
-          { label: 'Where', cell: (order) => (order.channel === 'booth' ? ops.boothName(order.boothId) : `Till · ${ops.branchName(order.branchId)}`) },
-          { label: 'Items', cell: (order) => order.lines.map((line) => `${line.qty}× ${line.label}`).join(', ') },
-          { label: 'Paid by', cell: (order) => order.payments.filter((p) => p.status === 'paid').map((p) => PAYMENT_LABELS[p.method]).join(' + ') || '—' },
+          { label: 'Pesanan', cell: (order) => order.number },
+          { label: 'Waktu', cell: (order) => dateTime(order.paidAt ?? order.createdAt) },
+          { label: 'Tempat', cell: (order) => (order.channel === 'booth' ? ops.boothName(order.boothId) : `Kasir · ${ops.branchName(order.branchId)}`) },
+          { label: 'Item', cell: (order) => order.lines.map((line) => `${line.qty}× ${line.label}`).join(', ') },
+          { label: 'Dibayar dengan', cell: (order) => order.payments.filter((p) => p.status === 'paid').map((p) => PAYMENT_LABELS[p.method]).join(' + ') || '—' },
           { label: 'Total', className: 'num', cell: (order) => money(order.total) },
           { label: 'Status', cell: (order) => statusBadge(order) },
         ],
         orders.slice(0, 300),
-        { empty: 'No orders yet.', onRow: (order) => orderDialog(ops, order.id) },
+        { empty: 'Belum ada pesanan.', onRow: (order) => orderDialog(ops, order.id) },
       ),
     );
   } else if (view.tab === 'sessions') {
@@ -84,19 +84,19 @@ export function renderSales(context: PageContext): HTMLElement {
     root.body.append(
       table(
         [
-          { label: 'Started', cell: (session) => dateTime(session.startedAt) },
+          { label: 'Mulai', cell: (session) => dateTime(session.startedAt) },
           { label: 'Booth', cell: (session) => ops.boothName(session.boothId) },
           { label: 'Mode', cell: (session) => SESSION_MODES[session.mode].label },
-          { label: 'Frame', cell: (session) => state.frames.find((frame) => frame.id === session.frameId)?.name ?? '—' },
-          { label: 'Paid with', cell: (session) => session.voucherCode ?? (session.orderId ? state.orders.find((o) => o.id === session.orderId)?.number ?? '—' : session.price === 0 ? 'Free event' : '—') },
-          { label: 'Price', className: 'num', cell: (session) => money(session.price) },
-          { label: 'Files', className: 'num', cell: (session) => (session.purgedAt ? badge('Purged', 'muted') : String(session.shotIds.length)) },
-          { label: 'Phone link', cell: (session) => badge(session.deliveryUrl ? 'Ready' : session.endedAt && session.shotIds.length && !session.purgedAt ? 'Needs retry' : '—', session.deliveryUrl ? 'ok' : 'muted') },
-          { label: 'Prints', className: 'num', cell: (session) => String(session.prints) },
-          { label: 'Sharing', cell: (session) => badge(session.consent ? 'Allowed' : 'Private', session.consent ? 'ok' : 'muted') },
+          { label: 'Bingkai', cell: (session) => state.frames.find((frame) => frame.id === session.frameId)?.name ?? '—' },
+          { label: 'Dibayar dengan', cell: (session) => session.voucherCode ?? (session.orderId ? state.orders.find((o) => o.id === session.orderId)?.number ?? '—' : session.price === 0 ? 'Acara gratis' : '—') },
+          { label: 'Harga', className: 'num', cell: (session) => money(session.price) },
+          { label: 'File', className: 'num', cell: (session) => (session.purgedAt ? badge('Sudah dihapus', 'muted') : String(session.shotIds.length)) },
+          { label: 'Tautan ponsel', cell: (session) => badge(session.deliveryUrl ? 'Siap' : session.endedAt && session.shotIds.length && !session.purgedAt ? 'Perlu dicoba lagi' : '—', session.deliveryUrl ? 'ok' : 'muted') },
+          { label: 'Cetakan', className: 'num', cell: (session) => String(session.prints) },
+          { label: 'Berbagi', cell: (session) => badge(session.consent ? 'Diizinkan' : 'Privat', session.consent ? 'ok' : 'muted') },
         ],
         sessions.slice(0, 300),
-        { empty: 'No booth sessions yet.', onRow: (session) => sessionDialog(ops, session.id, redraw) },
+        { empty: 'Belum ada sesi booth.', onRow: (session) => sessionDialog(ops, session.id, redraw) },
       ),
     );
   } else if (view.tab === 'refunds') {
@@ -107,17 +107,17 @@ export function renderSales(context: PageContext): HTMLElement {
     root.body.append(
       table(
         [
-          { label: 'When', cell: (refund) => dateTime(refund.at) },
-          { label: 'Order', cell: (refund) => state.orders.find((order) => order.id === refund.orderId)?.number ?? '—' },
+          { label: 'Waktu', cell: (refund) => dateTime(refund.at) },
+          { label: 'Pesanan', cell: (refund) => state.orders.find((order) => order.id === refund.orderId)?.number ?? '—' },
           { label: 'Item', cell: (refund) => state.orders.find((order) => order.id === refund.orderId)?.lines.find((line) => line.id === refund.lineId)?.label ?? '—' },
-          { label: 'Reason', cell: (refund) => refund.reason },
-          { label: 'By', cell: (refund) => state.staff.find((person) => person.id === refund.staffId)?.name ?? '—' },
-          { label: 'Approved by', cell: (refund) => state.staff.find((person) => person.id === refund.supervisorId)?.name ?? '—' },
-          { label: 'Back via', cell: (refund) => PAYMENT_LABELS[refund.method] },
-          { label: 'Amount', className: 'num', cell: (refund) => `−${money(refund.amount)}` },
+          { label: 'Alasan', cell: (refund) => refund.reason },
+          { label: 'Oleh', cell: (refund) => state.staff.find((person) => person.id === refund.staffId)?.name ?? '—' },
+          { label: 'Disetujui oleh', cell: (refund) => state.staff.find((person) => person.id === refund.supervisorId)?.name ?? '—' },
+          { label: 'Dikembalikan lewat', cell: (refund) => PAYMENT_LABELS[refund.method] },
+          { label: 'Jumlah', className: 'num', cell: (refund) => `−${money(refund.amount)}` },
         ],
         refunds,
-        { empty: 'No refunds.' },
+        { empty: 'Belum ada refund.' },
       ),
     );
   } else if (view.tab === 'shifts') {
@@ -125,22 +125,22 @@ export function renderSales(context: PageContext): HTMLElement {
     root.body.append(
       table(
         [
-          { label: 'Branch', cell: (shift) => ops.branchName(shift.branchId) },
-          { label: 'Opened', cell: (shift) => dateTime(shift.openedAt) },
-          { label: 'Closed', cell: (shift) => (shift.closedAt ? dateTime(shift.closedAt) : badge('Open', 'ok')) },
-          { label: 'By', cell: (shift) => state.staff.find((person) => person.id === shift.staffId)?.name ?? '—' },
-          { label: 'Net', className: 'num', cell: (shift) => money(shiftSlip(shift, state.orders, state.refunds).net) },
+          { label: 'Cabang', cell: (shift) => ops.branchName(shift.branchId) },
+          { label: 'Dibuka', cell: (shift) => dateTime(shift.openedAt) },
+          { label: 'Ditutup', cell: (shift) => (shift.closedAt ? dateTime(shift.closedAt) : badge('Buka', 'ok')) },
+          { label: 'Oleh', cell: (shift) => state.staff.find((person) => person.id === shift.staffId)?.name ?? '—' },
+          { label: 'Bersih', className: 'num', cell: (shift) => money(shiftSlip(shift, state.orders, state.refunds).net) },
           {
-            label: 'Drawer',
+            label: 'Laci',
             className: 'num',
             cell: (shift) => {
               const variance = shiftSlip(shift, state.orders, state.refunds).variance;
-              return variance === null ? '—' : badge(variance === 0 ? 'Matches' : `${variance > 0 ? '+' : ''}${money(variance)}`, variance === 0 ? 'ok' : 'warn');
+              return variance === null ? '—' : badge(variance === 0 ? 'Cocok' : `${variance > 0 ? '+' : ''}${money(variance)}`, variance === 0 ? 'ok' : 'warn');
             },
           },
         ],
         shifts,
-        { empty: 'No shifts yet.', onRow: (shift) => showSlip(ops, shiftSlip(shift, state.orders, state.refunds), shift.id) },
+        { empty: 'Belum ada shift.', onRow: (shift) => showSlip(ops, shiftSlip(shift, state.orders, state.refunds), shift.id) },
       ),
     );
   } else {
@@ -148,13 +148,13 @@ export function renderSales(context: PageContext): HTMLElement {
     root.body.append(
       table(
         [
-          { label: 'When', cell: (entry) => dateTime(entry.at) },
-          { label: 'Who', cell: (entry) => state.staff.find((person) => person.id === entry.staffId)?.name ?? 'System' },
-          { label: 'What', cell: (entry) => entry.message },
-          { label: 'Amount', className: 'num', cell: (entry) => (entry.amount === undefined ? '' : money(entry.amount)) },
+          { label: 'Waktu', cell: (entry) => dateTime(entry.at) },
+          { label: 'Siapa', cell: (entry) => state.staff.find((person) => person.id === entry.staffId)?.name ?? 'Sistem' },
+          { label: 'Apa', cell: (entry) => entry.message },
+          { label: 'Jumlah', className: 'num', cell: (entry) => (entry.amount === undefined ? '' : money(entry.amount)) },
         ],
         entries.slice(0, 500),
-        { empty: 'Nothing logged yet.' },
+        { empty: 'Belum ada catatan.' },
       ),
     );
   }
@@ -162,12 +162,12 @@ export function renderSales(context: PageContext): HTMLElement {
 }
 
 function statusBadge(order: Order): HTMLElement {
-  if (order.status === 'void') return badge('Void', 'muted');
-  if (order.status === 'open') return badge('Waiting payment', 'warn');
+  if (order.status === 'void') return badge('Batal', 'muted');
+  if (order.status === 'open') return badge('Menunggu pembayaran', 'warn');
   const refunded = order.lines.filter((line) => line.refunded).length;
-  if (refunded === order.lines.length) return badge('Refunded', 'error');
-  if (refunded) return badge('Part refunded', 'warn');
-  return badge('Paid', 'ok');
+  if (refunded === order.lines.length) return badge('Sudah refund', 'error');
+  if (refunded) return badge('Refund sebagian', 'warn');
+  return badge('Lunas', 'ok');
 }
 
 /** One order: lines with per-item refund, payments, codes, receipt. */
@@ -177,20 +177,20 @@ function orderDialog(ops: Ops, orderId: string): void {
   for (const line of order.lines) {
     const row = el('div', 'cart-line');
     const text = el('div', 'cart-text');
-    text.append(el('span', 'rank-name', `${line.qty}× ${line.label}`), el('span', 'rank-meta', line.discount ? `${money(lineGross(line))} − ${money(line.discount)} discount` : money(lineGross(line))));
+    text.append(el('span', 'rank-name', `${line.qty}× ${line.label}`), el('span', 'rank-meta', line.discount ? `${money(lineGross(line))} − diskon ${money(line.discount)}` : money(lineGross(line))));
     row.append(text);
-    if (line.refunded) row.append(badge('Refunded', 'error'));
+    if (line.refunded) row.append(badge('Sudah refund', 'error'));
     else if (order.status === 'paid' && ops.can('pos.sell')) {
       const refund = actionButton(`Refund ${money(lineNet(line))}`, 'btn btn-ghost btn-sm btn-danger');
       refund.addEventListener('click', () => {
         dialog.close();
         formDialog({
           title: `Refund ${line.label}`,
-          description: `${money(lineNet(line))} goes back to the customer. A supervisor types their PIN to approve.`,
+          description: `${money(lineNet(line))} dikembalikan ke pelanggan. Supervisor mengetik PIN untuk menyetujui.`,
           submitLabel: 'Refund',
           fields: [
-            { name: 'reason', label: 'Reason', value: '', placeholder: 'Print came out dark' },
-            { name: 'pin', label: 'Supervisor PIN', value: '', type: 'password' },
+            { name: 'reason', label: 'Alasan', value: '', placeholder: 'Contoh: Cetakan terlalu gelap' },
+            { name: 'pin', label: 'PIN supervisor', value: '', type: 'password' },
           ],
           async submit(values) {
             await ops.refund(orderId, line.id, String(values.reason), String(values.pin));
@@ -203,19 +203,19 @@ function orderDialog(ops: Ops, orderId: string): void {
   }
   const facts = el('dl', 'facts');
   const rows: [string, string][] = [
-    ['When', dateTime(order.paidAt ?? order.createdAt)],
-    ['Where', order.channel === 'booth' ? ops.boothName(order.boothId) : `Till · ${ops.branchName(order.branchId)}`],
-    ['Cashier', ops.state.staff.find((person) => person.id === order.staffId)?.name ?? '—'],
+    ['Waktu', dateTime(order.paidAt ?? order.createdAt)],
+    ['Tempat', order.channel === 'booth' ? ops.boothName(order.boothId) : `Kasir · ${ops.branchName(order.branchId)}`],
+    ['Kasir', ops.state.staff.find((person) => person.id === order.staffId)?.name ?? '—'],
     ['Subtotal', money(order.subtotal)],
-    ['Discount', order.discount ? `−${money(order.discount)}${order.voucherCode ? ` (${order.voucherCode})` : ''}` : '—'],
+    ['Diskon', order.discount ? `−${money(order.discount)}${order.voucherCode ? ` (${order.voucherCode})` : ''}` : '—'],
     ['Total', money(order.total)],
-    ['Paid', `${money(paidAmount(order.payments))} by ${order.payments.filter((p) => p.status === 'paid').map((p) => `${PAYMENT_LABELS[p.method]}${p.reference ? ` ${p.reference}` : ''}`).join(', ') || '—'}`],
-    ['Queue', order.ticketNumbers.join(', ') || '—'],
-    ['Session codes', order.sessionVouchers.join(', ') || '—'],
+    ['Lunas', `${money(paidAmount(order.payments))} dengan ${order.payments.filter((p) => p.status === 'paid').map((p) => `${PAYMENT_LABELS[p.method]}${p.reference ? ` ${p.reference}` : ''}`).join(', ') || '—'}`],
+    ['Antrean', order.ticketNumbers.join(', ') || '—'],
+    ['Kode sesi', order.sessionVouchers.join(', ') || '—'],
   ];
   for (const [label, value] of rows) facts.append(el('dt', '', label), el('dd', '', value));
-  const print = act('Print receipt', 'btn btn-outline', () => printReceipt(ops, order), 'printer');
-  const close = actionButton('Done', 'btn btn-primary');
+  const print = act('Cetak struk', 'btn btn-outline', () => printReceipt(ops, order), 'printer');
+  const close = actionButton('Selesai', 'btn btn-primary');
   close.dataset.close = '';
   const dialog = openDialog({ title: order.number, body: [lines, facts], footer: [print, close] });
 }
@@ -228,34 +228,34 @@ function sessionDialog(ops: Ops, sessionId: string, redraw: () => void): void {
   const status = el('p', 'field-hint');
   status.setAttribute('role', 'status');
   details.append(status);
-  const close = actionButton('Done', 'btn btn-primary');
+  const close = actionButton('Selesai', 'btn btn-primary');
   close.dataset.close = '';
   let retry: HTMLButtonElement | null = null;
   if (session.deliveryUrl) {
-    status.textContent = 'Connect the customer’s phone to the venue Wi-Fi before scanning.';
+    status.textContent = 'Hubungkan ponsel pelanggan ke Wi-Fi lokasi sebelum memindai.';
     details.append(qrCanvas(session.deliveryUrl, 200));
   } else if (session.endedAt && session.shotIds.length && !session.purgedAt && !session.failureReason) {
-    status.textContent = 'The files are on this booth. Retry publishing them to restore the phone QR.';
-    retry = act('Restore phone link', 'btn btn-outline', async () => {
+    status.textContent = 'File masih ada di booth ini. Coba unggah lagi untuk memulihkan QR ponsel.';
+    retry = act('Pulihkan tautan ponsel', 'btn btn-outline', async () => {
       retry!.disabled = true;
-      status.textContent = 'Checking saved files and uploading…';
+      status.textContent = 'Memeriksa file tersimpan dan mengunggah…';
       try {
         const shots = await getShots(session.shotIds);
-        if (shots.length !== session.shotIds.length) throw new Error('Some saved files are missing from this device.');
+        if (shots.length !== session.shotIds.length) throw new Error('Sebagian file tersimpan tidak ada di perangkat ini.');
         const files = shots.filter((shot) => shot.kind !== 'bts').map(({ id, kind, blob }) => ({ id, kind, blob }));
-        if (!files.length) throw new Error('No customer files are available.');
+        if (!files.length) throw new Error('Tidak ada file pelanggan yang tersedia.');
         const url = await publishGallery(session.token, ops.state.branding.brandName || ops.account.business, files, ops.state.settings.retentionDays);
-        if (!url) throw new Error('Photo server unavailable. Check the booth network and try again.');
+        if (!url) throw new Error('Server foto tidak tersedia. Periksa jaringan booth lalu coba lagi.');
         ops.setSessionDelivery(session.id, url);
-        status.textContent = 'Phone link restored. Scan the QR on a phone connected to the venue Wi-Fi.';
+        status.textContent = 'Tautan ponsel dipulihkan. Pindai QR dengan ponsel yang terhubung ke Wi-Fi lokasi.';
         details.append(qrCanvas(url, 200));
         retry!.remove();
         redraw();
       } catch (error) {
-        status.textContent = error instanceof Error ? error.message : 'Could not restore the phone link.';
+        status.textContent = error instanceof Error ? error.message : 'Tautan ponsel gagal dipulihkan.';
         retry!.disabled = false;
       }
     });
-  } else status.textContent = session.purgedAt ? 'The saved files have expired.' : session.failureReason ? 'Capture failed in this session.' : 'No finished files are available.';
-  openDialog({ title: 'Booth session', body: [details], footer: retry ? [retry, close] : [close] });
+  } else status.textContent = session.purgedAt ? 'File tersimpan sudah kedaluwarsa.' : session.failureReason ? 'Pengambilan foto gagal di sesi ini.' : 'Tidak ada file selesai yang tersedia.';
+  openDialog({ title: 'Sesi booth', body: [details], footer: retry ? [retry, close] : [close] });
 }

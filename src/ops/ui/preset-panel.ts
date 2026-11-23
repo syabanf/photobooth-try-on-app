@@ -11,7 +11,7 @@ import type { FaceRecord, Ticket, Voucher } from '../model';
 import type { Ops } from '../ops';
 import { methodAllowed } from '../payments';
 import { PRESET_SIZE, suggestPreset } from '../presets';
-import { act, actionButton, badge, count, el, money, notice, qrCanvas } from './kit';
+import { act, actionButton, badge, el, money, notice, qrCanvas } from './kit';
 import { nameButton } from './face-tag';
 import { qrClock, qrExact } from './pages/pos';
 import { faceBitmaps, fillTemplates, presetTemplates, type Render } from './preset-render';
@@ -102,7 +102,7 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
 
   // ---------- 1. start ----------
   async function capture(): Promise<void> {
-    busy = 'Look at the camera…';
+    busy = 'Lihat ke kamera…';
     draw();
     try {
       for (let s = 3; s > 0; s--) {
@@ -138,14 +138,14 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
     const serving = ops.servingAt(booth());
     if (serving) {
       const faces = ops.facesForTicket(serving.id).length;
-      content.push(act(`Continue as ${serving.number}${faces ? ` · ${count(faces, 'face')}` : ''}`, 'btn btn-primary btn-block', () => useTicket(serving), 'ticket'));
+      content.push(act(`Lanjut sebagai ${serving.number}${faces ? ` · ${faces} wajah` : ''}`, 'btn btn-primary btn-block', () => useTicket(serving), 'ticket'));
     }
     const form = el('form', 'field-row');
     const input = el('input', 'input');
-    input.placeholder = 'Ticket number or QR';
+    input.placeholder = 'Nomor tiket atau QR';
     input.autocomplete = 'off';
-    input.setAttribute('aria-label', 'Ticket number or QR');
-    const find = el('button', 'btn btn-outline', 'Find');
+    input.setAttribute('aria-label', 'Nomor tiket atau QR');
+    const find = el('button', 'btn btn-outline', 'Cari');
     find.type = 'submit';
     form.append(input, find);
     form.addEventListener('submit', (event) => {
@@ -157,15 +157,15 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
       }
     });
     content.push(form);
-    const start = actionButton(busy || 'Capture my face', `btn ${serving ? 'btn-outline' : 'btn-primary'} btn-block`);
+    const start = actionButton(busy || 'Foto wajah saya', `btn ${serving ? 'btn-outline' : 'btn-primary'} btn-block`);
     start.disabled = !!busy;
     start.addEventListener('click', () => void capture());
     content.push(start);
-    const saved = actionButton(`Choose from ${ops.state.faces.length} saved faces`, 'btn btn-ghost btn-block');
+    const saved = actionButton(`Pilih dari ${ops.state.faces.length} wajah tersimpan`, 'btn btn-ghost btn-block');
     saved.hidden = ops.state.settings.faceLibrary !== 'all' || ops.state.faces.length === 0;
     saved.addEventListener('click', () => go('faces'));
     content.push(saved);
-    return card('AI presets', 'Scan your ticket to find the photos taken at the entrance, or capture your face here. Pick a template and the AI makes it real.', ...content);
+    return card('Preset AI', 'Scan tiket Anda untuk mencari foto yang diambil di gerbang, atau foto wajah Anda di sini. Pilih template, lalu AI membuatnya tampak nyata.', ...content);
   }
 
   // ---------- 2. faces ----------
@@ -174,10 +174,10 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
     tile.type = 'button';
     tile.setAttribute('aria-pressed', String(selected.has(face.id)));
     const img = el('img');
-    img.alt = face.name || 'Captured face';
+    img.alt = face.name || 'Wajah yang dipotret';
     void blobUrl(face.image).then((url) => (img.src = url));
     tile.append(img);
-    if (visit.has(face.id)) tile.append(badge('New', 'ok'));
+    if (visit.has(face.id)) tile.append(badge('Baru', 'ok'));
     tile.addEventListener('click', () => {
       if (selected.has(face.id)) selected.delete(face.id);
       else selected.add(face.id);
@@ -203,36 +203,36 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
 
     const content: (HTMLElement | string)[] = [];
     if (ticket) {
-      content.push(el('p', 'kicker', `Your party · ${ticket.number}`), faceGrid(group, 'The entrance camera has no photo for this ticket. Capture a face here instead.'));
-      if (others.length) content.push(el('p', 'kicker', 'Everyone else'), faceGrid(others, ''));
+      content.push(el('p', 'kicker', `Rombongan Anda · ${ticket.number}`), faceGrid(group, 'Kamera gerbang belum punya foto untuk tiket ini. Foto wajah di sini saja.'));
+      if (others.length) content.push(el('p', 'kicker', 'Yang lain'), faceGrid(others, ''));
     } else {
-      content.push(faceGrid(others, 'No faces yet. Capture one first.'));
+      content.push(faceGrid(others, 'Belum ada wajah. Foto satu dulu.'));
     }
 
     const tools = el('div', 'field-row');
     tools.append(
-      act('Select all', 'btn btn-ghost btn-sm', () => {
+      act('Pilih semua', 'btn btn-ghost btn-sm', () => {
         for (const face of shown) selected.add(face.id);
         draw();
       }),
-      act('Clear', 'btn btn-ghost btn-sm', () => {
+      act('Kosongkan', 'btn btn-ghost btn-sm', () => {
         selected.clear();
         draw();
       }),
-      act('Capture another', 'btn btn-outline btn-sm', () => void capture(), 'camera'),
+      act('Foto lagi', 'btn btn-outline btn-sm', () => void capture(), 'camera'),
     );
-    const next = actionButton(selected.size ? `Use ${count(selected.size, 'face')}` : 'Pick a face', 'btn btn-primary btn-block');
+    const next = actionButton(selected.size ? `Pakai ${selected.size} wajah` : 'Pilih wajah', 'btn btn-primary btn-block');
     next.disabled = selected.size === 0;
     next.addEventListener('click', () => {
       go('templates');
       void renderAll();
     });
     const scope = ticket
-      ? 'Tap everyone who is in the picture, and drop anyone who is not.'
+      ? 'Ketuk semua yang ikut di foto, dan lepas yang tidak ikut.'
       : ops.state.settings.faceLibrary === 'all'
-        ? `Every face captured here in the last ${ops.state.settings.retentionDays || '∞'} days. Tap to pick one or several.`
-        : 'Faces from this visit only. Tap to pick one or several.';
-    return card('Faces', scope, tools, ...content, next);
+        ? `Semua wajah yang dipotret di sini dalam ${ops.state.settings.retentionDays || '∞'} hari terakhir. Ketuk untuk memilih satu atau beberapa.`
+        : 'Hanya wajah dari kunjungan ini. Ketuk untuk memilih satu atau beberapa.';
+    return card('Wajah', scope, tools, ...content, next);
   }
 
   // ---------- 3. templates ----------
@@ -259,7 +259,7 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
       img.src = render.url;
       img.alt = render.preset.name;
       tile.append(img, el('span', 'rank-name', render.preset.name));
-      if (render.preset.id === suggested?.id) tile.append(badge('Suggested', 'info'));
+      if (render.preset.id === suggested?.id) tile.append(badge('Disarankan', 'info'));
       tile.addEventListener('click', () => {
         chosen = render;
         clearAi();
@@ -267,10 +267,10 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
       });
       grid.append(tile);
     }
-    if (renders.length < templates().length) grid.append(el('p', 'card-desc', 'Filling templates…'));
-    const back = act('Change faces', 'btn btn-ghost btn-block', () => go('faces'));
-    const intro = priced() && !paid ? `Each one already has your faces. Tap the one you like: a print costs ${money(price())}.` : 'Each one already has your faces. Tap the one you like.';
-    return card('Templates with you in them', intro, grid, back);
+    if (renders.length < templates().length) grid.append(el('p', 'card-desc', 'Mengisi template…'));
+    const back = act('Ganti wajah', 'btn btn-ghost btn-block', () => go('faces'));
+    const intro = priced() && !paid ? `Semua template sudah berisi wajah Anda. Ketuk yang Anda suka: satu cetakan ${money(price())}.` : 'Semua template sudah berisi wajah Anda. Ketuk yang Anda suka.';
+    return card('Template dengan wajah Anda', intro, grid, back);
   }
 
   // ---------- 4. pay ----------
@@ -283,9 +283,9 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
     picked.append(thumb, el('span', 'rank-name', chosen!.preset.name));
 
     const voucherInput = el('input', 'input');
-    voucherInput.placeholder = 'Voucher or receipt code';
+    voucherInput.placeholder = 'Kode voucher atau struk';
     const voucherRow = el('div', 'field-row');
-    voucherRow.append(voucherInput, act('Apply', 'btn btn-outline', () => {
+    voucherRow.append(voucherInput, act('Pakai', 'btn btn-outline', () => {
       const redeemed = ops.redeemAtBooth(voucherInput.value, id, price());
       voucher = redeemed.voucher;
       discount = redeemed.discount;
@@ -294,13 +294,13 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
 
     const total = due();
     const summary = el('dl', 'cart-totals');
-    summary.append(el('dt', '', `AI preset · ${chosen!.preset.name}`), el('dd', '', money(price())));
+    summary.append(el('dt', '', `Preset AI · ${chosen!.preset.name}`), el('dd', '', money(price())));
     if (discount) summary.append(el('dt', '', voucher!.code), el('dd', '', `−${money(discount)}`));
-    summary.append(el('dt', 'cart-total-label', 'To pay'), el('dd', 'cart-total', money(total)));
+    summary.append(el('dt', 'cart-total-label', 'Total bayar'), el('dd', 'cart-total', money(total)));
 
     const qrArea = el('div', 'pay-qris');
     if (qr) {
-      qrArea.append(qrCanvas(qr, 260), el('p', 'card-desc', `Scan with any bank or e-wallet app · ${ops.gateway.label}`));
+      qrArea.append(qrCanvas(qr, 260), el('p', 'card-desc', `Scan dengan aplikasi bank atau e-wallet apa saja · ${ops.gateway.label}`));
       const payment = ops.order(orderId!).payments.find((entry) => entry.reference === reference);
       if (payment) {
         qrArea.append(
@@ -309,15 +309,15 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
             if (status === 'paid') return;
             qr = '';
             reference = '';
-            notice(status === 'expired' ? 'The QR ran out. Tap Pay for a new one.' : 'The cashier cancelled that QR. Tap Pay for a new one.', 'warn');
+            notice(status === 'expired' ? 'Waktu QR habis. Ketuk Bayar untuk QR baru.' : 'Kasir membatalkan QR itu. Ketuk Bayar untuk QR baru.', 'warn');
             draw();
           }),
         );
       }
       if (ops.gateway.simulated) {
-        const simulate = actionButton('Simulate payment', 'btn btn-outline btn-sm');
+        const simulate = actionButton('Simulasi bayar', 'btn btn-outline btn-sm');
         simulate.addEventListener('click', () => ops.gateway.simulatePaid!(reference));
-        qrArea.append(badge('Simulator: no money moves', 'warn'), simulate);
+        qrArea.append(badge('Simulator: tidak ada uang yang berpindah', 'warn'), simulate);
       }
     }
 
@@ -325,7 +325,7 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
       // A retry after an expired QR reuses the open order.
       if (orderId) return ops.order(orderId);
       const created = ops.createOrder({
-        lines: [{ kind: 'preset', refId: chosen!.preset.id, label: `AI preset · ${chosen!.preset.name}`, unitPrice: price(), qty: 1 }],
+        lines: [{ kind: 'preset', refId: chosen!.preset.id, label: `Preset AI · ${chosen!.preset.name}`, unitPrice: price(), qty: 1 }],
         presetId: null,
         voucherCode: voucher?.code ?? '',
         channel: 'booth',
@@ -342,13 +342,13 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
       go('result');
     };
     const next = total === 0
-      ? act('Continue', 'btn btn-primary btn-block', () => {
+      ? act('Lanjut', 'btn btn-primary btn-block', () => {
         order();
         settle();
       })
       : !methodAllowed(ops.payments, 'qris', 'booth')
-        ? el('p', 'callout', 'Pay at the cashier and type the code from your receipt here.')
-        : act(qr ? 'Waiting for payment…' : `Pay ${money(total)} with QRIS`, 'btn btn-primary btn-block', async () => {
+        ? el('p', 'callout', 'Bayar di kasir, lalu ketik kode dari struk di sini.')
+        : act(qr ? 'Menunggu pembayaran…' : `Bayar ${money(total)} dengan QRIS`, 'btn btn-primary btn-block', async () => {
           if (qr) return;
           if (order().status === 'paid') return settle();
           const payment = await ops.chargeQris(orderId!);
@@ -358,13 +358,13 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
           // The gateway callback marks the order paid; that unlocks the print.
           unsubscribe = ops.store.subscribe(() => {
             if (orderId && amountDue(ops.order(orderId)) === 0 && step === 'pay') {
-              notice('Paid. The AI gets to work.', 'ok');
+              notice('Lunas. AI mulai bekerja.', 'ok');
               settle();
             }
           });
           draw();
         });
-    const back = act('Other templates', 'btn btn-ghost btn-block', () => {
+    const back = act('Template lain', 'btn btn-ghost btn-block', () => {
       if (orderId && ops.order(orderId).status === 'open') ops.cancelOrder(orderId);
       orderId = null;
       qr = '';
@@ -373,7 +373,7 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
       unsubscribe = null;
       go('templates');
     });
-    return card('Pay', 'Pay with QRIS, or type a voucher or the code on your cashier receipt.', picked, voucherRow, summary, qrArea, next, back);
+    return card('Bayar', 'Bayar dengan QRIS, atau ketik voucher atau kode di struk kasir.', picked, voucherRow, summary, qrArea, next, back);
   }
 
   // ---------- 5. result ----------
@@ -386,8 +386,8 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
 
   async function makeAi(): Promise<void> {
     const key = readStoredKey();
-    if (!key) throw new Error('Paste a Decart API key first.');
-    busy = 'The AI is redrawing your template…';
+    if (!key) throw new Error('Tempel API key Decart dulu.');
+    busy = 'AI sedang menggambar ulang template Anda…';
     draw();
     try {
       const template = await canvasToBlob(chosen!.canvas, 'image/jpeg', 0.92);
@@ -416,14 +416,14 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
       const keyRow = el('div', 'field-row');
       const key = el('input', 'input');
       key.type = 'password';
-      key.placeholder = 'Decart API key, to make it with AI';
+      key.placeholder = 'API key Decart, untuk dibuat dengan AI';
       key.autocomplete = 'off';
-      keyRow.append(key, act('Save key', 'btn btn-outline', () => {
-        if (!key.value.trim()) throw new Error('Paste the key.');
+      keyRow.append(key, act('Simpan key', 'btn btn-outline', () => {
+        if (!key.value.trim()) throw new Error('Tempel key-nya.');
         storeKey(key.value.trim());
         draw();
       }));
-      ai.append(keyRow, el('p', 'field-hint', 'The key stays in this tab and is dropped when it closes. Each AI image is billed by Decart.'));
+      ai.append(keyRow, el('p', 'field-hint', 'Key hanya tersimpan di tab ini dan hilang saat tab ditutup. Setiap gambar AI ditagih oleh Decart.'));
     } else if (aiBlob) {
       const toggle = el('div', 'pill-tabs pill-tabs--full');
       for (const [value, label] of [[true, 'AI'], [false, 'Template']] as const) {
@@ -437,7 +437,7 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
       }
       ai.append(toggle);
     } else {
-      const make = actionButton(busy || 'Make it with AI', 'btn btn-primary btn-block');
+      const make = actionButton(busy || 'Buat dengan AI', 'btn btn-primary btn-block');
       make.disabled = !!busy;
       make.addEventListener('click', () => makeAi().catch((error) => notice(`AI: ${(error as { message?: string })?.message ?? error}`, 'error')));
       ai.append(make);
@@ -447,24 +447,24 @@ export function mountPresetPanel(ops: Ops, hooks: PresetHooks) {
     const id = booth();
     if (id) {
       actions.append(
-        act('Print', 'btn btn-secondary', async () => {
+        act('Cetak', 'btn btn-secondary', async () => {
           const printer = await ops.print(id, await current(), ops.printSizeFor(id), 1);
-          notice(`Printing on ${printer}.`, 'ok');
+          notice(`Mencetak di ${printer}.`, 'ok');
         }, 'printer'),
       );
     }
     actions.append(
-      act('Save', id ? 'btn btn-outline' : 'btn btn-secondary', async () => {
+      act('Simpan', id ? 'btn btn-outline' : 'btn btn-secondary', async () => {
         await saveShot(await current(), 'preset', id);
         hooks.onSaved();
-        notice('Saved to the gallery.', 'ok');
+        notice('Tersimpan di galeri.', 'ok');
       }, 'download'),
-      act('Share', 'btn btn-outline', async () => hooks.share(await current(), `${chosen!.preset.id}-${Date.now()}`), 'share'),
+      act('Bagikan', 'btn btn-outline', async () => hooks.share(await current(), `${chosen!.preset.id}-${Date.now()}`), 'share'),
     );
     const nav = el('div', 'field-row');
-    nav.append(act('Other templates', 'btn btn-ghost', () => go('templates')), act('Done', 'btn btn-ghost', reset));
-    const paidNote = paid && orderId ? ` Paid, order ${ops.order(orderId).number}.` : '';
-    return card(chosen!.preset.name, (showAi ? 'Made by AI from your template.' : 'Your template. Make it with AI for a real photo look.') + paidNote, preview, ai, actions, nav);
+    nav.append(act('Template lain', 'btn btn-ghost', () => go('templates')), act('Selesai', 'btn btn-ghost', reset));
+    const paidNote = paid && orderId ? ` Lunas, pesanan ${ops.order(orderId).number}.` : '';
+    return card(chosen!.preset.name, (showAi ? 'Dibuat AI dari template Anda.' : 'Template Anda. Buat dengan AI agar terlihat seperti foto asli.') + paidNote, preview, ai, actions, nav);
   }
 
   function draw(): void {

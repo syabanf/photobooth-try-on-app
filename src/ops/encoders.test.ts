@@ -52,8 +52,8 @@ describe('static QRIS', () => {
 
   it('reads the merchant and refuses a damaged code', () => {
     expect(readQris(` ${shop} `)).toEqual({ merchantName: 'STUDIO RUPA', merchantCity: 'BANDUNG', hasAmount: false });
-    expect(() => readQris(shop.slice(0, -1) + (shop.endsWith('0') ? '1' : '0'))).toThrow('checksum');
-    expect(() => readQris('hello')).toThrow('not a QRIS');
+    expect(() => readQris(shop.slice(0, -1) + (shop.endsWith('0') ? '1' : '0'))).toThrow('Checksum');
+    expect(() => readQris('hello')).toThrow('bukan kode QRIS');
   });
 
   it('locks an amount in without touching the other fields', () => {

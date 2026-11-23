@@ -31,11 +31,11 @@ export function wantedAlerts(printers: readonly Printer[], health: readonly Boot
         kind: 'low-paper',
         subject: `paper:${printer.id}`,
         ...where,
-        message: state === 'empty' ? `${printer.name} is out of paper.` : `${printer.name} has ${printer.paperLeft} sheets left.`,
+        message: state === 'empty' ? `Kertas ${printer.name} habis.` : `Kertas ${printer.name} tinggal ${printer.paperLeft} lembar.`,
       });
     }
     if (printer.status === 'error') {
-      wanted.push({ kind: 'printer-error', subject: `printer:${printer.id}`, ...where, message: `${printer.name}: ${printer.error || 'error'}.` });
+      wanted.push({ kind: 'printer-error', subject: `printer:${printer.id}`, ...where, message: `${printer.name}: ${printer.error || 'bermasalah'}.` });
     }
   }
 
@@ -45,13 +45,13 @@ export function wantedAlerts(printers: readonly Printer[], health: readonly Boot
     if (!state) continue;
     const where = { branchId: booth.branchId, boothId: booth.id };
     if (!isOnline(state, now)) {
-      wanted.push({ kind: 'booth-offline', subject: `offline:${booth.id}`, ...where, message: `${booth.name} stopped reporting.` });
+      wanted.push({ kind: 'booth-offline', subject: `offline:${booth.id}`, ...where, message: `${booth.name} berhenti mengirim laporan.` });
       continue;
     }
     if (!state.cameraConnected) {
-      wanted.push({ kind: 'camera-disconnected', subject: `camera:${booth.id}`, ...where, message: `${booth.name}: the camera is disconnected.` });
+      wanted.push({ kind: 'camera-disconnected', subject: `camera:${booth.id}`, ...where, message: `${booth.name}: kamera terputus.` });
     } else if (state.cameraBattery !== null && state.cameraBattery <= LOW_BATTERY) {
-      wanted.push({ kind: 'camera-battery', subject: `battery:${booth.id}`, ...where, message: `${booth.name}: camera battery at ${state.cameraBattery}%.` });
+      wanted.push({ kind: 'camera-battery', subject: `battery:${booth.id}`, ...where, message: `${booth.name}: baterai kamera tinggal ${state.cameraBattery}%.` });
     }
   }
   return wanted;
@@ -114,7 +114,7 @@ export function routeAlert(alert: Pick<Alert, 'kind' | 'branchId'>, rules: reado
     );
     for (const channel of rule.channels) {
       if (channel === 'popup') {
-        deliveries.set('popup', { channel, to: '', name: 'Booth screen' });
+        deliveries.set('popup', { channel, to: '', name: 'Layar booth' });
         continue;
       }
       for (const person of people) {

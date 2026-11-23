@@ -52,10 +52,10 @@ export interface BoothPanel {
 type Step = 0 | 1 | 2 | 3 | 'result';
 
 const STEPS = [
-  { hint: 'Pick how the shots sit on the sheet.' },
-  { hint: 'Swap the room behind you, or have AI blend you into the scene.' },
-  { hint: 'Add stickers, then drag them into place on the camera.' },
-  { hint: 'Choose the frame, timer and caption, then start.' },
+  { hint: 'Pilih susunan foto di lembar cetak.' },
+  { hint: 'Ganti latar di belakang, atau biarkan AI memadukan pelanggan ke dalam adegan.' },
+  { hint: 'Tambah stiker, lalu seret ke posisinya di kamera.' },
+  { hint: 'Pilih bingkai, timer dan keterangan, lalu mulai.' },
 ] as const;
 const LAST_STEP = 3;
 
@@ -103,8 +103,8 @@ export function mountBoothPanel(handlers: BoothPanelHandlers): BoothPanel {
       button.classList.toggle('is-active', i === index);
       button.classList.toggle('is-done', i < index);
     });
-    hint.textContent = target === 'result' ? 'Saved to the gallery on this device.' : STEPS[target].hint;
-    count.textContent = target === 'result' ? 'Done' : `${target + 1} / ${STEPS.length}`;
+    hint.textContent = target === 'result' ? 'Tersimpan di galeri perangkat ini.' : STEPS[target].hint;
+    count.textContent = target === 'result' ? 'Selesai' : `${target + 1} / ${STEPS.length}`;
     nav.hidden = target === 'result';
     stepper.hidden = target === 'result';
     resultActions.hidden = target !== 'result';
@@ -117,8 +117,8 @@ export function mountBoothPanel(handlers: BoothPanelHandlers): BoothPanel {
   function describeRun(): void {
     const shots = shotsFor(settings.layout);
     const seconds = Math.round(shots * (settings.seconds + 0.7));
-    const blend = settings.blend === 'ai' ? ' plus the AI blend' : '';
-    meta.textContent = `${shots} ${shots === 1 ? 'shot' : 'shots'} · about ${seconds} s${blend} · or hold up ✌️ to start hands-free`;
+    const blend = settings.blend === 'ai' ? ' ditambah paduan AI' : '';
+    meta.textContent = `${shots} foto · sekitar ${seconds} dtk${blend} · atau angkat ✌️ untuk mulai tanpa sentuh`;
   }
 
   function changed(): void {
@@ -134,7 +134,7 @@ export function mountBoothPanel(handlers: BoothPanelHandlers): BoothPanel {
       button.classList.toggle('is-active', i === 0);
       button.dataset.frame = frame.id;
       button.style.background = `var(${frame.paper})`;
-      button.setAttribute('aria-label', `${frame.label} frame`);
+      button.setAttribute('aria-label', `Bingkai ${frame.label}`);
       button.title = frame.label;
       return button;
     }),
@@ -197,7 +197,7 @@ export function mountBoothPanel(handlers: BoothPanelHandlers): BoothPanel {
       // A run can start from the rail or a ✌️ on any step; show the Print step so Cancel is at hand.
       if (isRunning) goTo(LAST_STEP);
       const label = document.createElement('span');
-      label.textContent = isRunning ? 'Cancel' : 'Start photobooth';
+      label.textContent = isRunning ? 'Batal' : 'Mulai photobooth';
       start.replaceChildren(icon(isRunning ? 'close' : 'aperture'), label);
       start.classList.toggle('btn-primary', !isRunning);
       start.classList.toggle('btn-secondary', isRunning);
@@ -210,7 +210,7 @@ export function mountBoothPanel(handlers: BoothPanelHandlers): BoothPanel {
       latest = { blob, url: URL.createObjectURL(blob) };
       const img = document.createElement('img');
       img.src = latest.url;
-      img.alt = 'Latest photobooth sheet';
+      img.alt = 'Lembar photobooth terbaru';
       result.replaceChildren(img);
       goTo('result');
       resultActions.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -224,7 +224,7 @@ export function mountBoothPanel(handlers: BoothPanelHandlers): BoothPanel {
     },
     progress(done, total) {
       hud.hidden = false;
-      shotLabel.textContent = done >= total ? 'Printing…' : `Shot ${done + 1} of ${total}`;
+      shotLabel.textContent = done >= total ? 'Mencetak…' : `Foto ${done + 1} dari ${total}`;
       dots.replaceChildren(
         ...Array.from({ length: total }, (_, i) => {
           const dot = document.createElement('span');
@@ -338,7 +338,7 @@ function mountScene(handlers: BoothPanelHandlers): void {
   const uploadPreview = document.createElement('span');
   uploadPreview.className = 'bg-preview bg-preview--upload';
   uploadPreview.append(icon('upload'));
-  const uploadTile = shell('Upload', uploadPreview);
+  const uploadTile = shell('Unggah', uploadPreview);
   uploadTile.addEventListener('click', () => upload.click());
   studio.append(uploadTile);
 
@@ -370,7 +370,7 @@ function mountScene(handlers: BoothPanelHandlers): void {
       button.type = 'button';
       button.className = `sticker-pick${sticker.kind === 'badge' ? ' sticker-pick--badge' : ''}`;
       button.textContent = sticker.text;
-      button.setAttribute('aria-label', `Add ${sticker.id} sticker`);
+      button.setAttribute('aria-label', `Tambah stiker ${sticker.id}`);
       button.addEventListener('click', () => handlers.onSticker(sticker));
       return button;
     }),

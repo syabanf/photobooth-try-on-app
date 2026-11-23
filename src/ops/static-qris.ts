@@ -35,15 +35,15 @@ export class StaticQrisGateway implements PaymentGateway {
 
   async createQris(amount: number, reference: string, expiresInMs: number): Promise<QrisCharge> {
     const { staticQris, uniqueCode, lockAmount } = this.settings();
-    if (!staticQris) throw new Error('Paste the shop QRIS under Payments, Gateway first.');
+    if (!staticQris) throw new Error('Tempel QRIS toko di Pembayaran, bagian Gateway, terlebih dulu.');
     const reply = await fetch('/api/qris/charges', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: `${this.device}:${reference}`, amount, expiresInMs, uniqueCode }),
     }).catch(() => null);
-    if (!reply) throw new Error('The booth computer did not answer. Check the network and try again.');
+    if (!reply) throw new Error('Komputer booth tidak menjawab. Periksa jaringan lalu coba lagi.');
     const charge = (await reply.json().catch(() => ({}))) as { code?: number; total?: number; error?: string };
-    if (!reply.ok || charge.total === undefined) throw new Error(charge.error ?? 'QRIS statis needs the app opened from the booth computer (pnpm serve).');
+    if (!reply.ok || charge.total === undefined) throw new Error(charge.error ?? 'QRIS statis harus dibuka dari komputer booth (pnpm serve).');
     return { reference, amount, uniqueCode: charge.code ?? 0, qrString: lockAmount ? lockQrisAmount(staticQris, charge.total) : staticQris.trim() };
   }
 

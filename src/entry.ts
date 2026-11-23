@@ -14,4 +14,9 @@ async function boot(): Promise<void> {
   await import('./main');
 }
 
+// A screen link pasted into a tab that already shows another screen, or the staff app, opens it.
+window.addEventListener('hashchange', (event) => {
+  if (displayRoute(new URL(event.oldURL).hash) || displayRoute(location.hash)) location.reload();
+});
+
 void boot();

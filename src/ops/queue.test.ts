@@ -53,7 +53,7 @@ describe('multi-booth queue', () => {
     const recalled = recallTicket(tickets, called!.id, 20);
     expect(recalled.find((t) => t.id === called!.id)).toMatchObject({ recalls: 1, calledAt: 20 });
     expect(completeTicket(recalled, called!.id).find((t) => t.id === called!.id)?.status).toBe('done');
-    expect(() => recallTicket(seed(), 't2', 1)).toThrow('Only a called ticket');
+    expect(() => recallTicket(seed(), 't2', 1)).toThrow('Hanya tiket yang sudah dipanggil');
   });
 
   it('puts a late customer back at the front or the back', () => {
@@ -76,9 +76,9 @@ describe('multi-booth queue', () => {
   });
 
   it('refuses to check in twice or a ticket that is gone', () => {
-    expect(() => checkIn(seed(), 'zzz')).toThrow('not in the queue');
+    expect(() => checkIn(seed(), 'zzz')).toThrow('tidak ada di antrean');
     const called = callNext(seed(), 'A', 1).tickets;
-    expect(() => checkIn(called, 't1')).toThrow('already called');
+    expect(() => checkIn(called, 't1')).toThrow('sudah dipanggil');
   });
 
   it('numbers tickets and wraps after 999', () => {
@@ -91,7 +91,7 @@ describe('multi-booth queue', () => {
     expect(findTicket(tickets, 'q001').token).toBe('t5');
     expect(findTicket(tickets, 't2').number).toBe('Q002');
     expect(findTicket(tickets, 'https://booth.test/#checkin=t3').number).toBe('Q003');
-    expect(() => findTicket(tickets, 'Q999')).toThrow('Q999 is not in the queue');
+    expect(() => findTicket(tickets, 'Q999')).toThrow('Q999 tidak ada di antrean');
   });
 
   it('lists who checked in since the last look, not tickets born checked in', () => {

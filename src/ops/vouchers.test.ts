@@ -30,12 +30,12 @@ describe('voucherProblem', () => {
   });
 
   it('names the reason a code fails', () => {
-    expect(checkVoucher([base], 'NOPE', jakarta)).toEqual({ ok: false, reason: 'No voucher matches NOPE.' });
-    expect(voucherProblem({ ...base, active: false }, jakarta)).toBe('This voucher is switched off.');
-    expect(voucherProblem({ ...base, boothIds: ['b2'] }, jakarta)).toBe('This voucher is not valid at this booth.');
-    expect(voucherProblem({ ...base, validTo: '2026-10-18' }, jakarta)).toBe('Expired on 2026-10-18.');
-    expect(voucherProblem({ ...base, validFrom: '2026-10-20' }, jakarta)).toBe('Valid from 2026-10-20.');
-    expect(voucherProblem({ ...base, scope: 'single', maxUses: 1, uses: 1 }, jakarta)).toBe('This voucher was already used.');
+    expect(checkVoucher([base], 'NOPE', jakarta)).toEqual({ ok: false, reason: 'Tidak ada voucher dengan kode NOPE.' });
+    expect(voucherProblem({ ...base, active: false }, jakarta)).toBe('Voucher ini dimatikan.');
+    expect(voucherProblem({ ...base, boothIds: ['b2'] }, jakarta)).toBe('Voucher ini tidak berlaku di booth ini.');
+    expect(voucherProblem({ ...base, validTo: '2026-10-18' }, jakarta)).toBe('Kedaluwarsa sejak 2026-10-18.');
+    expect(voucherProblem({ ...base, validFrom: '2026-10-20' }, jakarta)).toBe('Berlaku mulai 2026-10-20.');
+    expect(voucherProblem({ ...base, scope: 'single', maxUses: 1, uses: 1 }, jakarta)).toBe('Voucher ini sudah dipakai.');
   });
 
   it('lets the cashier check a booth-locked code', () => {
@@ -46,13 +46,13 @@ describe('voucherProblem', () => {
     const happy = { ...base, happyHour: { days: [1, 2, 3, 4, 5], start: '14:00', end: '17:00' } };
     expect(voucherProblem(happy, jakarta)).toBeNull();
     // Same instant in Sydney is 17:30, after the window closes.
-    expect(voucherProblem(happy, { ...jakarta, timeZone: 'Australia/Sydney' })).toBe('Valid Mon, Tue, Wed, Thu, Fri 14:00–17:00 only.');
+    expect(voucherProblem(happy, { ...jakarta, timeZone: 'Australia/Sydney' })).toBe('Hanya berlaku Sen, Sel, Rab, Kam, Jum 14:00–17:00.');
   });
 
   it('rolls the date over at the booth’s midnight', () => {
     // 23:30 UTC on 31 Oct is already 1 Nov in Jakarta.
     const late = Date.UTC(2026, 9, 31, 23, 30);
-    expect(voucherProblem(base, { ...jakarta, now: late })).toBe('Expired on 2026-10-31.');
+    expect(voucherProblem(base, { ...jakarta, now: late })).toBe('Kedaluwarsa sejak 2026-10-31.');
     expect(voucherProblem(base, { ...jakarta, now: late, timeZone: 'UTC' })).toBeNull();
   });
 });

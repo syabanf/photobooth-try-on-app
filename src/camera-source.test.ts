@@ -10,8 +10,8 @@ describe('IP camera links', () => {
   });
 
   it('refuses RTSP with the bridge to use instead, and anything that is not a link', () => {
-    expect(() => checkIpUrl('rtsp://admin:pw@192.168.1.20:554/stream1')).toThrow('go2rtc or MediaMTX');
-    expect(() => checkIpUrl('192.168.1.20')).toThrow('full link');
+    expect(() => checkIpUrl('rtsp://admin:pw@192.168.1.20:554/stream1')).toThrow('go2rtc atau MediaMTX');
+    expect(() => checkIpUrl('192.168.1.20')).toThrow('link lengkap');
     expect(() => checkIpUrl('ftp://cam/a')).toThrow('http');
     expect(checkIpUrl(' http://192.168.1.20:8080/video ')).toBe('http://192.168.1.20:8080/video');
   });

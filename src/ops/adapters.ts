@@ -172,7 +172,7 @@ export class SimulatedEdsdk implements CameraDriver {
   }
 
   async apply(profile: 'preview' | 'capture', settings: CameraSettings): Promise<void> {
-    if (!this.connected) throw new Error('The camera is off.');
+    if (!this.connected) throw new Error('Kamera mati.');
     this.applied = { profile, settings };
     if (profile === 'capture') this.battery = Math.max(0, this.battery - 1);
     this.emit();

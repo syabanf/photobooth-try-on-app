@@ -28,6 +28,13 @@ describe('QrisDesk', () => {
     expect(d.charge('d:1', 20_000, 15 * MINUTES, true)).toMatchObject({ code: 1, total: 20_001 });
   });
 
+  it('keeps one device from taking every waiting slot', () => {
+    const { desk: d } = desk();
+    for (let n = 0; n < 30; n += 1) d.charge(`a:${n}`, 10_000, 15 * MINUTES, false, '192.168.1.20');
+    expect(() => d.charge('a:30', 10_000, 15 * MINUTES, false, '192.168.1.20')).toThrow('too many payments waiting');
+    expect(d.charge('b:1', 10_000, 15 * MINUTES, false, '192.168.1.21').total).toBe(10_030);
+  });
+
   it('returns the same charge when asked twice', () => {
     const { desk: d } = desk();
     const first = d.charge('a:1', 35_000, 15 * MINUTES, true);

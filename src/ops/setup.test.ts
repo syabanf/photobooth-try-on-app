@@ -20,7 +20,16 @@ describe('setupSteps', () => {
   it('starts with nothing done on a new workspace', () => {
     const steps = setupSteps(fresh(), { locations: [], points: [] }, null);
     expect(setupProgress(steps)).toMatchObject({ done: 0, ready: false });
-    expect(step(steps, 'camera').missing).toBe('Add a booth first');
+    expect(step(steps, 'camera').missing).toBe('Tambah booth dulu');
+    // Steps that need a booth wait for one; the first step and the optional extras do not.
+    expect(steps.filter((entry) => entry.blocked).map((entry) => entry.id)).toEqual(['device', 'kiosk', 'prices', 'camera', 'printer']);
+  });
+
+  it('ticks the kiosk step once a kiosk was opened', () => {
+    const state = fresh();
+    expect(step(setupSteps(state, sites, null), 'kiosk')).toMatchObject({ done: false, blocked: false });
+    state.activity.unshift({ id: 'a1', at: 0, kind: 'display.kiosk', message: 'Membuka kiosk untuk Booth 1.', staffId: null, branchId: null });
+    expect(step(setupSteps(state, sites, null), 'kiosk').done).toBe(true);
   });
 
   it('names the booths each step still needs, and ignores retired ones', () => {
@@ -30,9 +39,9 @@ describe('setupSteps', () => {
     const steps = setupSteps(state, sites, 'b1');
     expect(step(steps, 'locations').done).toBe(true);
     expect(step(steps, 'device').done).toBe(true);
-    expect(step(steps, 'prices')).toMatchObject({ done: false, missing: 'Not confirmed yet: Booth 2' });
-    expect(step(steps, 'camera')).toMatchObject({ done: false, missing: 'Not set up: Booth 2' });
-    expect(step(steps, 'printer').missing).toBe('No printer: Booth 1, Booth 2');
+    expect(step(steps, 'prices')).toMatchObject({ done: false, missing: 'Belum dikonfirmasi: Booth 2' });
+    expect(step(steps, 'camera')).toMatchObject({ done: false, missing: 'Belum diatur: Booth 2' });
+    expect(step(steps, 'printer').missing).toBe('Belum ada printer: Booth 1, Booth 2');
   });
 
   it('is ready once every required step is done, with optional ones left', () => {

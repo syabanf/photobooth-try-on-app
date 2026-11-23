@@ -50,7 +50,7 @@ export function mountShareDialog(): ShareDialog {
     preview.getContext('2d')!.drawImage(composed, 0, 0);
     fillField.hidden = format === 'original';
     const size = `${composed.width} × ${composed.height} · ${exportType(format).extension.toUpperCase()}`;
-    const safe = format === 'story' ? ` · top ${FRAMES.story.inset.top} px and bottom ${FRAMES.story.inset.bottom} px stay clear of Instagram's bars` : '';
+    const safe = format === 'story' ? ` · ${FRAMES.story.inset.top} px atas dan ${FRAMES.story.inset.bottom} px bawah dibiarkan kosong untuk bilah Instagram` : '';
     meta.textContent = size + safe;
   }
 
@@ -91,12 +91,12 @@ export function mountShareDialog(): ShareDialog {
       // The clipboard only takes PNG images.
       const png = await canvasToBlob(composed!, 'image/png');
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
-      copyLabel.textContent = 'Copied';
+      copyLabel.textContent = 'Tersalin';
     } catch (e) {
       console.warn('Clipboard refused the image', e);
-      copyLabel.textContent = 'Copy blocked';
+      copyLabel.textContent = 'Gagal menyalin';
     }
-    setTimeout(() => (copyLabel.textContent = 'Copy'), 1800);
+    setTimeout(() => (copyLabel.textContent = 'Salin'), 1800);
   });
   for (const closer of root.querySelectorAll('[data-close]')) closer.addEventListener('click', close);
   document.addEventListener('keydown', (event) => {

@@ -181,9 +181,9 @@ export class StickerLayer {
       return button;
     };
     controls.append(
-      control('Smaller', '−', () => this.scale(sticker, 1 / 1.2)),
-      control('Bigger', '+', () => this.scale(sticker, 1.2)),
-      control('Remove', '×', () => this.remove(sticker.key)),
+      control('Perkecil', '−', () => this.scale(sticker, 1 / 1.2)),
+      control('Perbesar', '+', () => this.scale(sticker, 1.2)),
+      control('Hapus', '×', () => this.remove(sticker.key)),
     );
     node.append(face, controls);
 

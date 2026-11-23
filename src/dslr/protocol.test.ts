@@ -30,10 +30,10 @@ describe('checkLink', () => {
   });
 
   it('refuses names, public addresses and bad ports', () => {
-    expect(() => checkLink('camera.local', 8080)).toThrow('IP address');
-    expect(() => checkLink('8.8.8.8', 8080)).toThrow('on this network');
-    expect(() => checkLink('192.168.1.300', 8080)).toThrow('IP address');
-    expect(() => checkLink('192.168.1.2', 70_000)).toThrow('port');
+    expect(() => checkLink('camera.local', 8080)).toThrow('alamat IP');
+    expect(() => checkLink('8.8.8.8', 8080)).toThrow('di jaringan ini');
+    expect(() => checkLink('192.168.1.300', 8080)).toThrow('alamat IP');
+    expect(() => checkLink('192.168.1.2', 70_000)).toThrow('Port');
   });
 });
 
@@ -76,7 +76,7 @@ describe('Canon CCAPI', () => {
 
   it('says plainly when the camera does not answer', async () => {
     camera({ 'GET /ccapi/ver100/deviceinformation': () => new Response('{}', { status: 502 }) });
-    await expect(dslrClient(link).info()).rejects.toThrow('No answer from 192.168.1.20:8080');
+    await expect(dslrClient(link).info()).rejects.toThrow('Tidak ada jawaban dari 192.168.1.20:8080');
   });
 
   it('writes exposure compensation in thirds', () => {

@@ -55,13 +55,13 @@ export async function renderDisplay(ops: Ops, route: DisplayRoute): Promise<void
   else if (route.kind === 'gallery') {
     const token = route.id;
     const session = ops.state.sessions.find((entry) => entry.token === token);
-    await galleryScreen(ops, content, session ? [session] : [], session ? null : 'This link has no photos on this device.');
+    await galleryScreen(ops, content, session ? [session] : [], session ? null : 'Tautan ini tidak punya foto di perangkat ini.');
   } else if (route.kind === 'event') {
     const eventId = route.id;
     const event = ops.state.events.find((entry) => entry.id === eventId);
     const sessions = ops.state.sessions.filter((session) => session.eventId === eventId && session.consent && !session.purgedAt);
-    content.append(el('h1', 'display-title', event?.name ?? 'Event gallery'));
-    await galleryScreen(ops, content, sessions, event ? null : 'This event is not on this device.');
+    content.append(el('h1', 'display-title', event?.name ?? 'Galeri acara'));
+    await galleryScreen(ops, content, sessions, event ? null : 'Acara ini tidak ada di perangkat ini.');
   }
   // The lock sits at the end of the top bar, after the clock or the step pills.
   if (route.kind === 'customer' || route.kind === 'queue' || route.kind === 'kiosk') mountLockControl(ops, head);
@@ -73,7 +73,7 @@ function customerScreen(ops: Ops, content: HTMLElement): void {
     if (message.type === 'cart') {
       const lines = message.lines as { label: string; qty: number; amount: number }[];
       if (lines.length === 0) {
-        content.append(el('p', 'display-hero', ops.state.branding.welcome || 'Welcome'));
+        content.append(el('p', 'display-hero', ops.state.branding.welcome || 'Selamat datang'));
         return;
       }
       const list = el('div', 'display-cart');
@@ -84,18 +84,18 @@ function customerScreen(ops: Ops, content: HTMLElement): void {
       }
       if (message.discount) {
         const row = el('div', 'display-line');
-        row.append(el('span', '', 'Discount'), el('strong', '', `−${money(message.discount as number)}`));
+        row.append(el('span', '', 'Diskon'), el('strong', '', `−${money(message.discount as number)}`));
         list.append(row);
       }
       content.append(list, el('p', 'display-total', money(message.total as number)));
     } else if (message.type === 'qris') {
-      content.append(el('p', 'display-label', 'Scan to pay'), qrCanvas(message.qr as string, 420), el('p', 'display-total', money(message.amount as number)));
+      content.append(el('p', 'display-label', 'Scan untuk bayar'), qrCanvas(message.qr as string, 420), el('p', 'display-total', money(message.amount as number)));
     } else if (message.type === 'paid') {
       const tickets = message.tickets as string[];
-      content.append(el('p', 'display-label', 'Thank you'), el('p', 'display-total', money(message.total as number)));
-      if (tickets.length) content.append(el('p', 'display-label', 'Your queue number'), el('p', 'display-queue', tickets.join(', ')));
+      content.append(el('p', 'display-label', 'Terima kasih'), el('p', 'display-total', money(message.total as number)));
+      if (tickets.length) content.append(el('p', 'display-label', 'Nomor antrean Anda'), el('p', 'display-queue', tickets.join(', ')));
     } else {
-      content.append(el('p', 'display-hero', ops.state.branding.welcome || 'Welcome'));
+      content.append(el('p', 'display-hero', ops.state.branding.welcome || 'Selamat datang'));
     }
   };
   show({ type: 'idle' });
@@ -186,17 +186,17 @@ function queueScreen(ops: Ops, content: HTMLElement, head: HTMLElement): void {
 function checkInScreen(ops: Ops, content: HTMLElement, token: string): void {
   const ticket = ops.state.tickets.find((entry) => entry.token === token);
   if (!ticket) {
-    content.append(el('p', 'display-hero', 'Ticket not found'), el('p', 'display-label', 'Ask the cashier for help.'));
+    content.append(el('p', 'display-hero', 'Tiket tidak ditemukan'), el('p', 'display-label', 'Minta bantuan kasir.'));
     return;
   }
   const draw = () => {
     const current = ops.state.tickets.find((entry) => entry.token === token)!;
-    content.replaceChildren(el('p', 'display-label', 'Your ticket'), el('p', 'display-queue', current.number));
-    if (current.status === 'called') content.append(el('p', 'display-hero', `Go to ${ops.boothName(current.calledBoothId)}`));
-    else if (current.status !== 'waiting') content.append(el('p', 'display-label', `This ticket is ${current.status}.`));
-    else if (current.checkedIn) content.append(el('p', 'display-label', `Checked in. ${aheadOf(ops.state.tickets, current.id)} ahead of you.`));
+    content.replaceChildren(el('p', 'display-label', 'Tiket Anda'), el('p', 'display-queue', current.number));
+    if (current.status === 'called') content.append(el('p', 'display-hero', `Silakan ke ${ops.boothName(current.calledBoothId)}`));
+    else if (current.status !== 'waiting') content.append(el('p', 'display-label', current.status === 'done' ? 'Tiket ini sudah selesai.' : 'Tiket ini dilewati.'));
+    else if (current.checkedIn) content.append(el('p', 'display-label', `Sudah check-in. ${aheadOf(ops.state.tickets, current.id)} antrean di depan Anda.`));
     else {
-      const button = el('button', 'btn btn-primary btn-lg', "I'm here, check me in");
+      const button = el('button', 'btn btn-primary btn-lg', 'Saya sudah di sini, check-in');
       button.type = 'button';
       button.addEventListener('click', () => ops.checkIn(token));
       content.append(button);
@@ -209,14 +209,14 @@ function checkInScreen(ops: Ops, content: HTMLElement, token: string): void {
 async function galleryScreen(ops: Ops, content: HTMLElement, sessions: BoothSession[], missing: string | null): Promise<void> {
   if (missing || sessions.length === 0) {
     content.append(
-      el('p', 'display-hero', missing ?? 'No photos yet'),
-      el('p', 'display-label', 'In this build the photos stay on the booth that took them. With the cloud backend, this page loads them from any phone.'),
+      el('p', 'display-hero', missing ?? 'Belum ada foto'),
+      el('p', 'display-label', 'Di versi ini, foto tersimpan di booth yang memotretnya. Dengan penyimpanan cloud, halaman ini bisa membuka foto dari ponsel mana pun.'),
     );
     return;
   }
   const purged = sessions.every((session) => session.purgedAt);
   if (purged) {
-    content.append(el('p', 'display-hero', 'These photos were deleted'), el('p', 'display-label', `Photos are kept for ${ops.state.settings.retentionDays} days.`));
+    content.append(el('p', 'display-hero', 'Foto ini sudah dihapus'), el('p', 'display-label', `Foto disimpan selama ${ops.state.settings.retentionDays} hari.`));
     return;
   }
   const shots: Shot[] = (await Promise.all(sessions.map((session) => getShots(session.shotIds)))).flat();
@@ -232,7 +232,7 @@ async function galleryScreen(ops: Ops, content: HTMLElement, sessions: BoothSess
     agreed = box.checked;
     for (const button of content.querySelectorAll<HTMLButtonElement>('[data-share]')) button.disabled = !agreed;
   });
-  gate.append(box, ' I agree to share these photos publicly');
+  gate.append(box, ' Saya setuju foto ini dibagikan ke publik');
 
   const grid = el('div', 'gallery-public');
   for (const shot of shots) {
@@ -240,10 +240,10 @@ async function galleryScreen(ops: Ops, content: HTMLElement, sessions: BoothSess
     const url = URL.createObjectURL(shot.blob);
     const media = isMotion(shot) ? Object.assign(el('video'), { src: url, controls: true, playsInline: true, loop: true }) : Object.assign(el('img'), { src: url, alt: '' });
     const actions = el('figcaption', 'public-actions');
-    const save = el('button', 'btn btn-outline btn-sm', 'Download');
+    const save = el('button', 'btn btn-outline btn-sm', 'Unduh');
     save.type = 'button';
     save.addEventListener('click', () => downloadBlob(shot.blob, `photo-${shot.id.slice(0, 6)}.${extensionOf(shot.blob)}`));
-    const share = el('button', 'btn btn-primary btn-sm', 'Share');
+    const share = el('button', 'btn btn-primary btn-sm', 'Bagikan');
     share.type = 'button';
     share.dataset.share = '';
     share.disabled = !agreed;
@@ -261,7 +261,7 @@ async function galleryScreen(ops: Ops, content: HTMLElement, sessions: BoothSess
     grid.append(card);
   }
 
-  const all = el('button', 'btn btn-secondary', 'Download all');
+  const all = el('button', 'btn btn-secondary', 'Unduh semua');
   all.type = 'button';
   all.addEventListener('click', async () => {
     const files = await Promise.all(shots.map(async (shot, index) => ({ name: `photo-${index + 1}.${extensionOf(shot.blob)}`, data: new Uint8Array(await shot.blob.arrayBuffer()) })));
@@ -270,7 +270,7 @@ async function galleryScreen(ops: Ops, content: HTMLElement, sessions: BoothSess
 
   const { branding } = ops.state;
   const social = el('nav', 'public-social');
-  for (const [label, url] of [['Instagram', branding.instagram], ['TikTok', branding.tiktok], ['Website', branding.website]]) {
+  for (const [label, url] of [['Instagram', branding.instagram], ['TikTok', branding.tiktok], ['Situs web', branding.website]]) {
     if (!url) continue;
     const link = el('a', 'btn btn-ghost btn-sm', label);
     link.href = url.startsWith('http') ? url : `https://${url}`;
@@ -278,5 +278,5 @@ async function galleryScreen(ops: Ops, content: HTMLElement, sessions: BoothSess
     link.rel = 'noopener';
     social.append(link);
   }
-  content.append(el('p', 'display-label', branding.thanks || 'Your photos'), gate, all, grid, social);
+  content.append(el('p', 'display-label', branding.thanks || 'Foto Anda'), gate, all, grid, social);
 }

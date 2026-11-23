@@ -2,7 +2,9 @@
 // to free up calls them, and a called ticket leaves every other queue, so nobody is called twice.
 // Every function returns a new list and leaves its input alone.
 
-import type { Ticket } from './model';
+import type { Ticket, TicketStatus } from './model';
+
+const TICKET_STATUS: Record<TicketStatus, string> = { waiting: 'menunggu', called: 'dipanggil', done: 'selesai', skipped: 'dilewati' };
 
 export interface NewTicket {
   boothIds: string[];
@@ -27,7 +29,7 @@ export function issueTicket(
   token: string,
   now: number,
 ): Ticket[] {
-  if (input.boothIds.length === 0) throw new Error('Pick at least one booth.');
+  if (input.boothIds.length === 0) throw new Error('Pilih minimal satu booth.');
   const ticket: Ticket = {
     id: token,
     number,
@@ -73,7 +75,7 @@ export function callNext(tickets: readonly Ticket[], boothId: string, now: numbe
 }
 
 function update(tickets: readonly Ticket[], id: string, change: (ticket: Ticket) => Ticket): Ticket[] {
-  if (!tickets.some((ticket) => ticket.id === id)) throw new Error('That ticket is gone.');
+  if (!tickets.some((ticket) => ticket.id === id)) throw new Error('Tiket itu sudah tidak ada.');
   return tickets.map((ticket) => (ticket.id === id ? change(ticket) : ticket));
 }
 
@@ -87,7 +89,7 @@ export const skipTicket = (tickets: readonly Ticket[], id: string) =>
 /** Calls the same customer again, for the TV display and the notification. */
 export const recallTicket = (tickets: readonly Ticket[], id: string, now: number) =>
   update(tickets, id, (ticket) => {
-    if (ticket.status !== 'called') throw new Error('Only a called ticket can be called again.');
+    if (ticket.status !== 'called') throw new Error('Hanya tiket yang sudah dipanggil yang bisa dipanggil ulang.');
     return { ...ticket, recalls: ticket.recalls + 1, calledAt: now };
   });
 
@@ -101,7 +103,7 @@ export function reRegister(tickets: readonly Ticket[], id: string, place: 'front
 /** Drag reorder: moves a waiting ticket in front of another, or to the end when `beforeId` is null. */
 export function moveTicket(tickets: readonly Ticket[], id: string, beforeId: string | null): Ticket[] {
   const order = waiting(tickets).sort((a, b) => a.position - b.position).map((ticket) => ticket.id).filter((other) => other !== id);
-  if (!waiting(tickets).some((ticket) => ticket.id === id)) throw new Error('Only waiting tickets can move.');
+  if (!waiting(tickets).some((ticket) => ticket.id === id)) throw new Error('Hanya tiket yang menunggu yang bisa dipindah.');
   const at = beforeId === null ? order.length : order.indexOf(beforeId);
   order.splice(at < 0 ? order.length : at, 0, id);
   const rank = new Map(order.map((ticketId, index) => [ticketId, index + 1]));
@@ -110,8 +112,8 @@ export function moveTicket(tickets: readonly Ticket[], id: string, beforeId: str
 
 export function checkIn(tickets: readonly Ticket[], token: string): Ticket[] {
   const ticket = tickets.find((candidate) => candidate.token === token);
-  if (!ticket) throw new Error('This ticket is not in the queue.');
-  if (ticket.status !== 'waiting') throw new Error(`Ticket ${ticket.number} is already ${ticket.status}.`);
+  if (!ticket) throw new Error('Tiket ini tidak ada di antrean.');
+  if (ticket.status !== 'waiting') throw new Error(`Tiket ${ticket.number} sudah ${TICKET_STATUS[ticket.status]}.`);
   return update(tickets, ticket.id, (current) => ({ ...current, checkedIn: true }));
 }
 
@@ -135,7 +137,7 @@ export function findTicket(tickets: readonly Ticket[], code: string): Ticket {
   if (byToken) return byToken;
   const number = raw.toUpperCase();
   const byNumber = tickets.filter((ticket) => ticket.number === number).sort((a, b) => b.createdAt - a.createdAt)[0];
-  if (!byNumber) throw new Error(`Ticket ${raw || '?'} is not in the queue.`);
+  if (!byNumber) throw new Error(`Tiket ${raw || '?'} tidak ada di antrean.`);
   return byNumber;
 }
 

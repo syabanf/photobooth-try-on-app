@@ -32,14 +32,14 @@ export async function publishGallery(token: string, brand: string, files: Delive
         headers: { 'Content-Type': file.blob.type },
         body: file.blob,
       });
-      if (!response.ok) throw new Error(`File upload failed (${response.status}).`);
+      if (!response.ok) throw new Error(`Gagal mengunggah file (${response.status}).`);
     }
     const response = await fetch(`/api/gallery/${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brand, retentionDays, files: files.map(({ id, kind }) => ({ id, kind })) }),
     });
-    if (!response.ok) throw new Error(`Gallery upload failed (${response.status}).`);
+    if (!response.ok) throw new Error(`Gagal mengunggah galeri (${response.status}).`);
     return `${publicOrigin}/#g=${token}`;
   } catch (error) {
     console.warn('Customer gallery unavailable', error);
@@ -60,7 +60,7 @@ export async function renderRemoteGallery(token: string): Promise<boolean> {
     if (!response.ok) {
       document.body.classList.add('display-mode');
       const root = el('main', 'display display--gallery');
-      root.append(el('h1', 'display-title', response.status === 410 ? 'These photos have expired' : 'Photos unavailable'));
+      root.append(el('h1', 'display-title', response.status === 410 ? 'Foto ini sudah kedaluwarsa' : 'Foto tidak tersedia'));
       document.body.replaceChildren(root);
       return true;
     }
@@ -69,14 +69,14 @@ export async function renderRemoteGallery(token: string): Promise<boolean> {
     document.body.classList.add('display-mode');
     const root = el('main', 'display display--gallery');
     const head = el('header', 'display-head');
-    head.append(el('span', 'display-brand', gallery.brand || 'Your photos'));
+    head.append(el('span', 'display-brand', gallery.brand || 'Foto Anda'));
     const content = el('section', 'display-content');
     const canUseShare = isSecureContext && typeof navigator.share === 'function';
-    content.append(el('h1', 'display-title', 'Your photos'), el('p', 'display-label', canUseShare ? 'Download or share the files you want to keep.' : 'Download your files, then open them in your photo or social app.'));
+    content.append(el('h1', 'display-title', 'Foto Anda'), el('p', 'display-label', canUseShare ? 'Unduh atau bagikan file yang ingin disimpan.' : 'Unduh file, lalu buka di aplikasi foto atau media sosial.'));
     const consent = el('label', 'consent-gate');
     const box = el('input') as HTMLInputElement;
     box.type = 'checkbox';
-    consent.append(box, ' I agree to share these photos outside this page');
+    consent.append(box, ' Saya setuju foto ini dibagikan di luar halaman ini');
     const grid = el('div', 'gallery-public');
     for (const file of gallery.files) {
       const url = `/api/gallery/${encodeURIComponent(token)}/${encodeURIComponent(file.id)}`;
@@ -89,7 +89,7 @@ export async function renderRemoteGallery(token: string): Promise<boolean> {
         (media as HTMLVideoElement).playsInline = true;
       } else (media as HTMLImageElement).alt = file.kind;
       const actions = el('figcaption', 'public-actions');
-      const save = el('button', 'btn btn-outline btn-sm', 'Download') as HTMLButtonElement;
+      const save = el('button', 'btn btn-outline btn-sm', 'Unduh') as HTMLButtonElement;
       save.type = 'button';
       save.addEventListener('click', async () => {
         const blob = await fetch(url).then((r) => r.blob());
@@ -98,7 +98,7 @@ export async function renderRemoteGallery(token: string): Promise<boolean> {
       actions.append(save);
       let feedback: HTMLElement | null = null;
       if (canUseShare) {
-        const share = el('button', 'btn btn-primary btn-sm', 'Share') as HTMLButtonElement;
+        const share = el('button', 'btn btn-primary btn-sm', 'Bagikan') as HTMLButtonElement;
         share.type = 'button';
         share.disabled = true;
         box.addEventListener('change', () => (share.disabled = !box.checked));
@@ -108,14 +108,14 @@ export async function renderRemoteGallery(token: string): Promise<boolean> {
           const blob = await fetch(url).then((r) => r.blob());
           const item = new File([blob], `${file.kind}.${extensionOf(blob)}`, { type: blob.type });
           if (navigator.canShare && !navigator.canShare({ files: [item] })) {
-            feedback!.textContent = 'This browser cannot share this file. Use Download instead.';
+            feedback!.textContent = 'Browser ini tidak bisa membagikan file ini. Pakai Unduh saja.';
             feedback!.hidden = false;
             return;
           }
           try { await navigator.share({ files: [item], title: gallery.brand }); }
           catch (error) {
             if ((error as DOMException).name !== 'AbortError') {
-              feedback!.textContent = 'Sharing failed. Use Download instead.';
+              feedback!.textContent = 'Gagal membagikan. Pakai Unduh saja.';
               feedback!.hidden = false;
             }
           }

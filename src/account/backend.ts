@@ -130,7 +130,7 @@ const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 function clean(value: string, field: string, label: string): string {
   const trimmed = value.trim();
-  if (!trimmed) throw new AccountError(`Enter ${label}.`, field);
+  if (!trimmed) throw new AccountError(`Isi ${label}.`, field);
   return trimmed;
 }
 
@@ -143,11 +143,11 @@ function newCode(): string {
 
 const normalizeCode = (code: string) => code.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^(.{4})(.{4})$/, '$1-$2');
 
-/** "Chrome on macOS": enough to tell the booth tablet from the owner's phone. */
+/** "Chrome di macOS": enough to tell the booth tablet from the owner's phone. */
 export function deviceLabel(agent: string): string {
   const browser = /Edg\//.test(agent) ? 'Edge' : /Firefox\//.test(agent) ? 'Firefox' : /Chrome\//.test(agent) ? 'Chrome' : /Safari\//.test(agent) ? 'Safari' : '';
   const system = /iPhone|iPad/.test(agent) ? 'iOS' : /Android/.test(agent) ? 'Android' : /Mac OS X|Macintosh/.test(agent) ? 'macOS' : /Windows/.test(agent) ? 'Windows' : /Linux/.test(agent) ? 'Linux' : '';
-  return [browser, system].filter(Boolean).join(' on ') || 'Unknown device';
+  return [browser, system].filter(Boolean).join(' di ') || 'Perangkat tidak dikenal';
 }
 
 function publicMember({ hash: _hash, salt: _salt, inviteCode: _code, ...member }: Credential): Member {
@@ -189,28 +189,28 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
   /** The credential behind an email and password; wrong passwords count toward the lock. */
   async function checkCredentials(email: string, password: string): Promise<Credential> {
     const user = byEmail(email);
-    const wrong = new AccountError('Email or password is wrong.', 'password');
+    const wrong = new AccountError('Email atau kata sandi salah.', 'password');
     // Each browser address keeps its own accounts in this build: localhost:5173 and the booth
     // server at 192.168.x.x:4173 do not share them. Say so instead of blaming the password.
     if (Object.keys(users()).length === 0) {
-      const here = typeof location === 'undefined' ? 'this address' : location.host;
-      throw new AccountError(`No account exists at ${here} yet. Accounts in this build stay with the browser address they were made at. Create an account here, or open the address you signed up at.`, 'email');
+      const here = typeof location === 'undefined' ? 'alamat ini' : location.host;
+      throw new AccountError(`Belum ada akun di ${here}. Akun tersimpan di alamat browser tempat akun itu dibuat. Buat akun di sini, atau buka alamat tempat Anda mendaftar.`, 'email');
     }
     if (!user) throw wrong;
-    if (user.status === 'disabled') throw new AccountError('Sign-in is turned off for this email. Ask the workspace owner.', 'email');
-    if (user.status === 'invited') throw new AccountError('This email has an invite waiting. Use the code you were given to set a password.', 'email');
+    if (user.status === 'disabled') throw new AccountError('Akses masuk untuk email ini dimatikan. Hubungi pemilik usaha.', 'email');
+    if (user.status === 'invited') throw new AccountError('Email ini punya undangan yang belum dipakai. Pakai kode yang Anda terima untuk membuat kata sandi.', 'email');
     if (user.lockedUntil > now()) {
       const minutes = Math.ceil((user.lockedUntil - now()) / 60_000);
-      throw new AccountError(`Too many wrong passwords. Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}, or ask the owner to unlock you.`, 'password');
+      throw new AccountError(`Terlalu banyak kata sandi salah. Coba lagi dalam ${minutes} menit, atau minta pemilik membuka kunci akun Anda.`, 'password');
     }
     if (!(await checkSecret(password, user.hash, user.salt))) {
       const failedAttempts = user.failedAttempts + 1;
       const locked = failedAttempts >= MAX_TRIES;
       saveUser({ ...user, failedAttempts: locked ? 0 : failedAttempts, lockedUntil: locked ? now() + LOCK_MS : 0 });
       record(user, locked ? 'locked' : 'failed');
-      if (locked) throw new AccountError(`Too many wrong passwords. Sign-in is locked for ${LOCK_MS / 60_000} minutes.`, 'password');
+      if (locked) throw new AccountError(`Terlalu banyak kata sandi salah. Akses masuk dikunci selama ${LOCK_MS / 60_000} menit.`, 'password');
       const left = MAX_TRIES - failedAttempts;
-      throw new AccountError(`Email or password is wrong. ${left} ${left === 1 ? 'try' : 'tries'} left before a short lock.`, 'password');
+      throw new AccountError(`Email atau kata sandi salah. Sisa ${left} kali percobaan sebelum dikunci sebentar.`, 'password');
     }
     return user;
   }
@@ -240,13 +240,13 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
 
   function requireSession(): Session {
     const session = currentSession();
-    if (!session) throw new AccountError('Sign in again to continue.');
+    if (!session) throw new AccountError('Masuk lagi untuk melanjutkan.');
     return session;
   }
 
   function memberOf(userId: string): Credential {
     const user = users()[userId];
-    if (!user || user.accountId !== requireSession().account.id) throw new AccountError('That person has no sign-in here.');
+    if (!user || user.accountId !== requireSession().account.id) throw new AccountError('Orang itu tidak punya akses masuk di sini.');
     return user;
   }
 
@@ -258,12 +258,12 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
   }
 
   async function owner(accountId: string, input: OwnerInput): Promise<Credential> {
-    const name = clean(input.name, 'name', 'your name');
+    const name = clean(input.name, 'name', 'nama Anda');
     const email = normalizeEmail(input.email);
-    if (!validEmail(email)) throw new AccountError('Enter an email like name@example.com.', 'email');
-    if (byEmail(email)) throw new AccountError('This email already has an account. Sign in instead.', 'email');
+    if (!validEmail(email)) throw new AccountError('Isi email seperti nama@contoh.com.', 'email');
+    if (byEmail(email)) throw new AccountError('Email ini sudah punya akun. Silakan masuk.', 'email');
     const problem = passwordProblem(input.password);
-    if (problem) throw new AccountError(`Password needs: ${problem.toLowerCase()}.`, 'password');
+    if (problem) throw new AccountError(`Kata sandi perlu ${problem.toLowerCase()}.`, 'password');
     const { hash, salt } = await hashSecret(input.password);
     return { userId: `owner-${accountId}`, accountId, name, email, status: 'active', createdAt: now(), lastSignInAt: null, failedAttempts: 0, lockedUntil: 0, inviteExpiresAt: null, hash, salt, inviteCode: '' };
   }
@@ -279,15 +279,15 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
   function invited(code: string): Credential {
     const wanted = normalizeCode(code);
     const user = Object.values(users()).find((entry) => entry.status === 'invited' && entry.inviteCode === wanted);
-    if (!user) throw new AccountError('That code is not valid. Check it, or ask for a new one.', 'code');
-    if ((user.inviteExpiresAt ?? 0) <= now()) throw new AccountError('That code has expired. Ask the owner for a new one.', 'code');
+    if (!user) throw new AccountError('Kode itu tidak valid. Periksa lagi, atau minta kode baru.', 'code');
+    if ((user.inviteExpiresAt ?? 0) <= now()) throw new AccountError('Kode itu sudah kedaluwarsa. Minta kode baru ke pemilik.', 'code');
     return user;
   }
 
   /** Every write to locations and points: signed in, and still inside the trial. */
   function editableSites(): { account: Account; sites: Sites; commit(): void } {
     const { account } = requireSession();
-    if (trialExpired(account, now())) throw new AccountError('Your trial has ended. Changes are locked.');
+    if (trialExpired(account, now())) throw new AccountError('Masa coba sudah berakhir. Perubahan dikunci.');
     const sites = read<Sites>(sitesKey(account.id), { locations: [], points: [] });
     return { account, sites, commit: () => write(sitesKey(account.id), sites) };
   }
@@ -312,7 +312,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
 
     register(input, key) {
       return once('register', key, async () => {
-        const business = clean(input.business, 'business', 'the business name');
+        const business = clean(input.business, 'business', 'nama usaha');
         const createdAt = now();
         const account: Account = { id: uuid(), business, createdAt, trialEndsAt: trialEnd(createdAt) };
         const user = await owner(account.id, input);
@@ -325,8 +325,8 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
     claim(accountId, input, key) {
       return once('claim', key, async () => {
         const account = accounts().find((entry) => entry.id === accountId);
-        if (!account) throw new AccountError('That workspace is no longer on this device.');
-        if (Object.values(users()).some((user) => user.accountId === accountId)) throw new AccountError('This workspace already has an owner. Sign in with their email.');
+        if (!account) throw new AccountError('Usaha itu sudah tidak ada di perangkat ini.');
+        if (Object.values(users()).some((user) => user.accountId === accountId)) throw new AccountError('Usaha ini sudah punya pemilik. Masuk dengan email pemilik.');
         const user = await owner(accountId, input);
         record(user, 'claim');
         return open(account, user);
@@ -336,7 +336,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
     async signIn(email, password) {
       const user = await checkCredentials(email, password);
       const account = accounts().find((entry) => entry.id === user.accountId);
-      if (!account) throw new AccountError('That workspace is no longer on this device.');
+      if (!account) throw new AccountError('Usaha itu sudah tidak ada di perangkat ini.');
       record(user, 'signin');
       return open(account, user);
     },
@@ -349,10 +349,10 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
 
     async changePassword(current, next) {
       const user = users()[requireSession().member.userId];
-      if (!(await checkSecret(current, user.hash, user.salt))) throw new AccountError('Your current password is wrong.', 'current');
+      if (!(await checkSecret(current, user.hash, user.salt))) throw new AccountError('Kata sandi sekarang salah.', 'current');
       const problem = passwordProblem(next);
-      if (problem) throw new AccountError(`Password needs: ${problem.toLowerCase()}.`, 'next');
-      if (current === next) throw new AccountError('Pick a password you have not used here.', 'next');
+      if (problem) throw new AccountError(`Kata sandi perlu ${problem.toLowerCase()}.`, 'next');
+      if (current === next) throw new AccountError('Pilih kata sandi yang belum pernah dipakai di sini.', 'next');
       saveUser({ ...user, ...(await hashSecret(next)) });
       record(user, 'password');
     },
@@ -366,11 +366,11 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
       return once('invite', key, async () => {
         const { account } = requireSession();
         const email = normalizeEmail(input.email);
-        if (!validEmail(email)) throw new AccountError('Add an email like name@example.com to this person first.', 'email');
+        if (!validEmail(email)) throw new AccountError('Tambahkan dulu email orang ini, seperti nama@contoh.com.', 'email');
         const taken = byEmail(email);
-        if (taken && taken.userId !== input.userId) throw new AccountError(`${email} already signs in as ${taken.name}.`, 'email');
+        if (taken && taken.userId !== input.userId) throw new AccountError(`${email} sudah dipakai oleh ${taken.name}.`, 'email');
         const existing = users()[input.userId];
-        if (existing?.status === 'active') throw new AccountError(`${existing.name} already signs in. Reset their password instead.`);
+        if (existing?.status === 'active') throw new AccountError(`${existing.name} sudah bisa masuk. Reset kata sandinya saja.`);
         const base: Credential = existing ?? { userId: input.userId, accountId: account.id, name: '', email, status: 'invited', createdAt: now(), lastSignInAt: null, failedAttempts: 0, lockedUntil: 0, inviteExpiresAt: null, hash: '', salt: '', inviteCode: '' };
         const invite = issueCode({ ...base, name: input.name.trim(), email });
         // A code handed out again is the same code: one log line.
@@ -381,15 +381,15 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
 
     async resetAccess(userId) {
       const user = memberOf(userId);
-      if (userId === requireSession().member.userId) throw new AccountError('Change your own password from your account instead.');
+      if (userId === requireSession().member.userId) throw new AccountError('Ganti kata sandi Anda sendiri lewat menu akun.');
       record(user, 'reset', currentSession());
       return issueCode(user, true);
     },
 
     async setAccess(userId, enabled) {
       const user = memberOf(userId);
-      if (userId === requireSession().member.userId) throw new AccountError('You cannot turn off your own sign-in.');
-      if (enabled && user.status === 'disabled' && !user.hash) throw new AccountError(`${user.name} never set a password. Send a new code instead.`);
+      if (userId === requireSession().member.userId) throw new AccountError('Anda tidak bisa mematikan akses masuk Anda sendiri.');
+      if (enabled && user.status === 'disabled' && !user.hash) throw new AccountError(`${user.name} belum pernah membuat kata sandi. Kirim kode baru saja.`);
       const next: Credential = { ...user, status: enabled ? (user.hash ? 'active' : user.status) : 'disabled', failedAttempts: 0, lockedUntil: 0 };
       saveUser(next);
       const kind = !enabled ? 'disabled' : user.status === 'disabled' ? 'enabled' : 'unlocked';
@@ -400,7 +400,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
     async inviteFor(code) {
       const user = invited(code);
       const account = accounts().find((entry) => entry.id === user.accountId);
-      if (!account) throw new AccountError('That workspace is no longer on this device.', 'code');
+      if (!account) throw new AccountError('Usaha itu sudah tidak ada di perangkat ini.', 'code');
       return { account, member: publicMember(user) };
     },
 
@@ -408,9 +408,9 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
       return once('accept', key, async () => {
         const user = invited(code);
         const problem = passwordProblem(password);
-        if (problem) throw new AccountError(`Password needs: ${problem.toLowerCase()}.`, 'password');
+        if (problem) throw new AccountError(`Kata sandi perlu ${problem.toLowerCase()}.`, 'password');
         const account = accounts().find((entry) => entry.id === user.accountId);
-        if (!account) throw new AccountError('That workspace is no longer on this device.', 'code');
+        if (!account) throw new AccountError('Usaha itu sudah tidak ada di perangkat ini.', 'code');
         record(user, 'accepted');
         return open(account, { ...user, ...(await hashSecret(password)), status: 'active', inviteCode: '', inviteExpiresAt: null });
       });
@@ -418,7 +418,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
 
     async confirmMember(accountId, email, password) {
       const user = await checkCredentials(email, password);
-      if (user.accountId !== accountId) throw new AccountError('That email is not on this workspace\'s team.', 'email');
+      if (user.accountId !== accountId) throw new AccountError('Email itu tidak ada di tim usaha ini.', 'email');
       record(user, 'screen');
       return publicMember(user);
     },
@@ -436,8 +436,8 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
     async saveLocation(input) {
       const { sites, commit } = editableSites();
       const fields = {
-        name: clean(input.name, 'name', 'location name'),
-        city: clean(input.city, 'city', 'city'),
+        name: clean(input.name, 'name', 'nama lokasi'),
+        city: clean(input.city, 'city', 'kota'),
         address: input.address.trim(),
       };
       const existing = sites.locations.find((location) => location.id === input.id);
@@ -447,7 +447,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
         return existing;
       }
       if (sites.locations.length >= TRIAL_LIMITS.locations) {
-        throw new AccountError(`The trial covers up to ${TRIAL_LIMITS.locations} locations.`);
+        throw new AccountError(`Masa coba hanya untuk maksimal ${TRIAL_LIMITS.locations} lokasi.`);
       }
       const location: Location = { id: uuid(), createdAt: now(), ...fields };
       sites.locations.push(location);
@@ -465,16 +465,16 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
     async savePoint(input) {
       const { sites, commit } = editableSites();
       if (!sites.locations.some((location) => location.id === input.locationId)) {
-        throw new AccountError('Pick a location.', 'locationId');
+        throw new AccountError('Pilih lokasi.', 'locationId');
       }
       const fields = {
         locationId: input.locationId,
-        name: clean(input.name, 'name', 'point name'),
-        code: clean(input.code, 'code', 'code').toUpperCase(),
+        name: clean(input.name, 'name', 'nama booth'),
+        code: clean(input.code, 'code', 'kode').toUpperCase(),
         active: input.active,
       };
       if (sites.points.some((point) => point.code === fields.code && point.id !== input.id)) {
-        throw new AccountError(`${fields.code} is already in use.`, 'code');
+        throw new AccountError(`${fields.code} sudah dipakai.`, 'code');
       }
       const existing = sites.points.find((point) => point.id === input.id);
       if (existing) {
@@ -483,7 +483,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
         return existing;
       }
       if (sites.points.length >= TRIAL_LIMITS.points) {
-        throw new AccountError(`The trial covers up to ${TRIAL_LIMITS.points} points.`);
+        throw new AccountError(`Masa coba hanya untuk maksimal ${TRIAL_LIMITS.points} booth.`);
       }
       const point: Point = { id: uuid(), createdAt: now(), ...fields };
       sites.points.push(point);

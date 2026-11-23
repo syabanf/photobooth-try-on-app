@@ -14,8 +14,8 @@ const DEFAULT_BRANDING: Branding = {
   accent: '#f04e30',
   ink: '#101112',
   background: '#f1f0f1',
-  welcome: 'Tap to start',
-  thanks: 'Scan to get your photos',
+  welcome: 'Sentuh untuk mulai',
+  thanks: 'Pindai untuk ambil foto Anda',
   instagram: '',
   tiktok: '',
   website: '',
@@ -28,7 +28,7 @@ const DEFAULT_SETTINGS: Settings = {
   payments: DEFAULT_PAYMENTS,
   idleSeconds: 60,
   adsEnabled: false,
-  receiptFooter: 'Thank you! Show this receipt at the booth.',
+  receiptFooter: 'Terima kasih! Tunjukkan struk ini di booth.',
   queuePrefix: 'A',
   faceLibrary: 'all',
   presetPrice: 25_000,
@@ -39,10 +39,10 @@ const preset = (id: string, name: string, layout: Preset['layout'], prompt: stri
 
 /** The templates every workspace starts with. Owners edit their prompts and add their own. */
 export const BUILT_IN_PRESETS: Preset[] = [
-  preset('cover', 'Magazine cover', 'cover', 'Restyle as a glossy fashion magazine cover shot: studio lighting, crisp skin detail, bold editorial colour grade, sharp focus on the face.'),
+  preset('cover', 'Sampul majalah', 'cover', 'Restyle as a glossy fashion magazine cover shot: studio lighting, crisp skin detail, bold editorial colour grade, sharp focus on the face.'),
   preset('polaroid', 'Polaroid', 'polaroid', 'Make this a real instant-film photo: soft flash, warm faded colours, light grain and gentle vignette, like a candid party snapshot.'),
-  preset('poster', 'Movie poster', 'poster', 'Turn this into a cinematic movie poster: dramatic rim light, teal and orange grade, haze in the background, the person as the lead star.'),
-  preset('pass', 'VIP pass', 'pass', 'Make this a premium event VIP pass photo: clean studio portrait, even soft light, neutral backdrop, printed on glossy card stock.'),
+  preset('poster', 'Poster film', 'poster', 'Turn this into a cinematic movie poster: dramatic rim light, teal and orange grade, haze in the background, the person as the lead star.'),
+  preset('pass', 'Kartu VIP', 'pass', 'Make this a premium event VIP pass photo: clean studio portrait, even soft light, neutral backdrop, printed on glossy card stock.'),
   preset('squad', 'Squad', 'squad', 'Make this a fun group photo collage with matching bright studio light and colour, every face sharp and natural, like a team poster.'),
 ];
 
@@ -167,7 +167,9 @@ export class OpsStore {
   update(change: (draft: OpsState) => void, entry?: Omit<ActivityEntry, 'id' | 'at'>): void {
     // Re-read first: another window (the customer screen, a second till) may have written since.
     this.state = this.read() ?? this.state;
-    const draft = structuredClone(this.state);
+    // Parsing the saved text makes the copy: it takes a third of the time structuredClone needs on
+    // a large document, and the state is plain JSON either way.
+    const draft: OpsState = this.raw ? JSON.parse(this.raw) : structuredClone(this.state);
     change(draft);
     if (entry) {
       draft.activity.unshift({ id: this.id(), at: this.now(), ...entry });
@@ -177,7 +179,7 @@ export class OpsStore {
     try {
       this.kv.setItem(this.key, raw);
     } catch {
-      throw new Error('This device’s storage is full, so the change was not saved. Free up space or call support before selling more.');
+      throw new Error('Penyimpanan perangkat ini penuh, jadi perubahan tidak tersimpan. Kosongkan ruang atau hubungi bantuan sebelum lanjut berjualan.');
     }
     this.state = draft;
     this.raw = raw;

@@ -21,9 +21,9 @@ export interface CatalogItem {
 }
 
 export const CATEGORY_LABELS: Record<Category, string> = {
-  glasses: 'Glasses',
-  hat: 'Hats',
-  clothing: 'Clothing',
+  glasses: 'Kacamata',
+  hat: 'Topi',
+  clothing: 'Pakaian',
 };
 
 export const CATEGORY_DEFAULTS: Record<Category, Placement> = {
@@ -36,10 +36,10 @@ export const CATEGORY_DEFAULTS: Record<Category, Placement> = {
 };
 
 export const DEFAULT_ITEMS: CatalogItem[] = [
-  { id: 'glasses-round', name: 'Round', category: 'glasses', src: '/items/glasses-round.png', scale: 1.7, offsetX: 0, offsetY: 0 },
+  { id: 'glasses-round', name: 'Bulat', category: 'glasses', src: '/items/glasses-round.png', scale: 1.7, offsetX: 0, offsetY: 0 },
   { id: 'glasses-aviator', name: 'Aviator', category: 'glasses', src: '/items/glasses-aviator.png', scale: 1.75, offsetX: 0, offsetY: 0.02 },
-  { id: 'hat-cap', name: 'Cap', category: 'hat', src: '/items/hat-cap.png', scale: 1.4, offsetX: 0, offsetY: 0.12 },
-  { id: 'hat-beanie', name: 'Beanie', category: 'hat', src: '/items/hat-beanie.png', scale: 1.35, offsetX: 0, offsetY: 0.1 },
+  { id: 'hat-cap', name: 'Topi', category: 'hat', src: '/items/hat-cap.png', scale: 1.4, offsetX: 0, offsetY: 0.12 },
+  { id: 'hat-beanie', name: 'Kupluk', category: 'hat', src: '/items/hat-beanie.png', scale: 1.35, offsetX: 0, offsetY: 0.1 },
   { id: 'shirt-tee', name: 'Tee', category: 'clothing', src: '/items/shirt-tee.png', scale: 1.45, offsetX: 0, offsetY: 0 },
   { id: 'jacket-hoodie', name: 'Hoodie', category: 'clothing', src: '/items/jacket-hoodie.png', scale: 1.5, offsetX: 0, offsetY: 0 },
 ];
@@ -70,7 +70,7 @@ export function loadImage(src: string): Promise<ItemImage> {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(`Could not load ${src}`));
+      img.onerror = () => reject(new Error(`${src} gagal dimuat`));
       img.src = src;
     }).then(prepareImage);
     imageCache.set(src, pending);
@@ -119,7 +119,7 @@ export function createUploadItem(file: File, category: Category): CatalogItem {
   const defaults = CATEGORY_DEFAULTS[category];
   return {
     id: `upload-${uploadCount}`,
-    name: file.name.replace(/\.png$/i, '') || `Upload ${uploadCount}`,
+    name: file.name.replace(/\.png$/i, '') || `Unggahan ${uploadCount}`,
     category,
     src: URL.createObjectURL(file),
     scale: defaults.scale,

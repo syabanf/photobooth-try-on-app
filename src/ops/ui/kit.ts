@@ -11,11 +11,11 @@ import { formatRupiah } from '../cart';
 export { actionButton, el };
 export const money = formatRupiah;
 
-/** "1 face", "3 faces". */
-export const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+/** "1 wajah", "3 wajah": Indonesian has no plural form. */
+export const count = (n: number, noun: string) => `${n} ${noun}`;
 
 export function dateTime(time: number | undefined): string {
-  return time ? new Date(time).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+  return time ? new Date(time).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 }
 
 export interface PageParts {
@@ -27,9 +27,11 @@ export interface PageParts {
 /** The page card every business page sits in: title, description, actions, then the content. */
 export function page(title: string, description: string): PageParts {
   const root = el('div', 'card page-card ops-page');
+  // The top bar already shows the page name in big type; the card carries only what it is for.
+  root.setAttribute('aria-label', title);
   const head = el('header', 'page-head');
   const text = el('div');
-  text.append(el('h2', 'card-title', title), el('p', 'card-desc', description));
+  text.append(el('p', 'card-desc', description));
   const actions = el('div', 'page-actions');
   head.append(text, actions);
   const body = el('div', 'ops-body');
@@ -79,7 +81,7 @@ export function table<T>(columns: Column<T>[], rows: readonly T[], options: { em
     const cell = body.insertRow().insertCell();
     cell.colSpan = columns.length;
     cell.className = 'cell-empty';
-    cell.textContent = options.empty ?? 'Nothing here yet.';
+    cell.textContent = options.empty ?? 'Belum ada data.';
   }
   for (const row of rows) {
     const tr = body.insertRow();
@@ -145,13 +147,16 @@ export function notice(message: string, kind: 'info' | 'ok' | 'warn' | 'error' =
     box = el('div', 'ops-notice');
     box.id = 'opsNotice';
     box.setAttribute('role', 'status');
+    box.title = 'Ketuk untuk menutup';
+    box.addEventListener('click', () => (box!.hidden = true));
     document.body.append(box);
   }
   box.textContent = message;
   box.dataset.kind = kind;
   box.hidden = false;
   clearTimeout(noticeTimer);
-  noticeTimer = window.setTimeout(() => (box!.hidden = true), kind === 'error' || kind === 'warn' ? 6000 : 3500);
+  // A problem stays until someone taps it away; good news fades on its own.
+  if (kind !== 'error' && kind !== 'warn') noticeTimer = window.setTimeout(() => (box!.hidden = true), 3500);
 }
 
 /** A QR code as a crisp canvas. */
@@ -170,7 +175,7 @@ export function qrCanvas(text: string, size = 220): HTMLCanvasElement {
   ctx.fillStyle = '#000';
   for (let r = 0; r < count; r++) for (let c = 0; c < count; c++) if (qr.isDark(r, c)) ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
   canvas.setAttribute('role', 'img');
-  canvas.setAttribute('aria-label', 'QR code');
+  canvas.setAttribute('aria-label', 'Kode QR');
   return canvas;
 }
 

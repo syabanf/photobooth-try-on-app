@@ -7,12 +7,12 @@ import type { Frame, Preset } from './model';
 export const PRESET_SIZE = { width: 1080, height: 1350 };
 
 export const LAYOUT_LABELS: Record<Preset['layout'], string> = {
-  cover: 'Magazine cover',
+  cover: 'Sampul majalah',
   polaroid: 'Polaroid',
-  poster: 'Movie poster',
-  pass: 'VIP pass',
-  squad: 'Group of faces',
-  frame: 'Uploaded frame',
+  poster: 'Poster film',
+  pass: 'Kartu VIP',
+  squad: 'Foto grup',
+  frame: 'Bingkai unggahan',
 };
 
 export interface PresetLook {
@@ -69,7 +69,7 @@ const monthYear = (date: Date) => date.toLocaleDateString(undefined, { month: 'l
 const longDate = (date: Date) => date.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
 
 export async function renderPreset(preset: Preset, faces: readonly Face[], look: PresetLook): Promise<HTMLCanvasElement> {
-  if (faces.length === 0) throw new Error('Pick at least one face.');
+  if (faces.length === 0) throw new Error('Pilih minimal satu wajah.');
   await document.fonts.load(`800 40px "DM Sans"`).catch(() => undefined);
   const { width, height } = PRESET_SIZE;
   const canvas = document.createElement('canvas');
@@ -201,7 +201,7 @@ export async function renderPreset(preset: Preset, faces: readonly Face[], look:
     text(ctx, `${brand} · ${longDate(look.date)}`, 60, 185, 30, 600, look.accent, 'left', 3);
   } else {
     const chosen = look.frame;
-    if (!chosen) throw new Error('This preset needs a frame. Pick one on the Frames page.');
+    if (!chosen) throw new Error('Preset ini butuh bingkai. Pilih di halaman Bingkai.');
     const { frame, image } = chosen;
     const filled = composeFrame(image, frame.width, frame.height, frame.slots, faces as CanvasImageSource[]);
     // The frame keeps its own shape, centred on the 4:5 page.

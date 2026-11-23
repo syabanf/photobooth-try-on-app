@@ -8,12 +8,12 @@ export type ShotKind = 'photobooth' | 'snapshot' | 'gif' | 'video' | 'live' | 'b
 
 export const SHOT_LABELS: Record<ShotKind, string> = {
   photobooth: 'Photobooth',
-  snapshot: 'Snapshot',
+  snapshot: 'Foto',
   gif: 'GIF',
   video: 'Video',
-  live: 'Live photo',
-  bts: 'Behind the scenes',
-  preset: 'AI preset',
+  live: 'Foto live',
+  bts: 'Di balik layar',
+  preset: 'Preset AI',
 };
 
 /** Kinds stored as video; the rest are images. */

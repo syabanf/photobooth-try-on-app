@@ -3,7 +3,7 @@
 // the soft files. Ads play when the booth sits idle.
 
 import { canvasToBlob, downloadBlob } from '../../render/overlay';
-import { saveShot, type ShotKind } from '../../gallery';
+import { saveShot, SHOT_LABELS, type ShotKind } from '../../gallery';
 import { extensionOf } from '../../gallery-view';
 import { FRAMES, composeBooth } from '../../photobooth';
 import { blobUrl } from '../blobs';
@@ -116,7 +116,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
     const text = el('div');
     text.append(el('h2', 'card-title', title), el('p', 'card-desc', description));
     const path: Step[] = flow.price === 0 ? ['mode', 'style', 'shoot', 'finish'] : ['mode', 'pay', 'style', 'shoot', 'finish'];
-    const progress = flow.step === 'mode' ? 'Choose a session' : `${path.indexOf(flow.step) + 1} / ${path.length}`;
+    const progress = flow.step === 'mode' ? 'Pilih sesi' : `${path.indexOf(flow.step) + 1} / ${path.length}`;
     head.append(text, el('span', 'step-count', progress));
     const body = el('div', 'card-body');
     body.append(...content);
@@ -128,9 +128,9 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
   function modeStep(): HTMLElement {
     const id = booth();
     if (!id) {
-      const link = actionButton('Link this device to a booth', 'btn btn-primary');
+      const link = actionButton('Hubungkan perangkat ini ke booth', 'btn btn-primary');
       link.addEventListener('click', hooks.openLocations);
-      return card('Booth', 'This device needs to know which booth it is, for prices, printers and reports.', link);
+      return card('Booth', 'Pilih booth untuk perangkat ini. Harga, printer dan laporan mengikuti booth tersebut.', link);
     }
     const profile = ops.profile(id);
     const grid = el('div', 'mode-grid');
@@ -142,7 +142,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       if (!priced.event && category?.prices[mode] === undefined) continue;
       const button = el('button', 'mode-tile');
       button.type = 'button';
-      button.append(el('span', 'pos-tile-title', SESSION_MODES[mode].label), el('span', 'pos-tile-meta', SESSION_MODES[mode].detail), el('span', 'pos-tile-price', priced.price === 0 ? 'Free' : money(priced.price)));
+      button.append(el('span', 'pos-tile-title', SESSION_MODES[mode].label), el('span', 'pos-tile-meta', SESSION_MODES[mode].detail), el('span', 'pos-tile-price', priced.price === 0 ? 'Gratis' : money(priced.price)));
       button.addEventListener('click', () => {
         flow = { ...fresh(), mode, price: priced.price };
         if (mode === 'vintage') flow.effects.filter = 'vintage';
@@ -150,19 +150,19 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       });
       grid.append(button);
     }
-    const intro = event ? `${(event as Voucher).code}: sessions are free during this event.` : ops.state.branding.welcome || 'Pick what you want to make.';
+    const intro = event ? `${(event as Voucher).code}: sesi gratis selama acara ini.` : ops.state.branding.welcome || 'Pilih yang ingin Anda buat.';
     const preflight = el('div', 'booth-preflight');
-    preflight.append(el('p', 'kicker', 'Staff: phone download check'));
-    const check = act('Check again', 'btn btn-outline btn-sm', () => void checkDelivery());
+    preflight.append(el('p', 'kicker', 'Staf: cek unduhan di ponsel'));
+    const check = act('Cek lagi', 'btn btn-outline btn-sm', () => void checkDelivery());
     preflight.setAttribute('role', 'status');
-    if (deliveryOrigin === undefined) preflight.append(el('p', 'field-hint', 'Checking the local photo server…'));
-    else if (!deliveryOrigin) preflight.append(el('p', 'callout', 'Phone links are unavailable. Start the app with pnpm serve, then check again.'), check);
+    if (deliveryOrigin === undefined) preflight.append(el('p', 'field-hint', 'Mengecek server foto lokal…'));
+    else if (!deliveryOrigin) preflight.append(el('p', 'callout', 'Tautan ponsel belum tersedia. Jalankan aplikasi dengan pnpm serve, lalu cek lagi.'), check);
     else preflight.append(
-      el('p', 'field-hint', 'Scan this test QR with a phone on the venue Wi-Fi. “Phone connected” confirms the phone can open photo links.'),
+      el('p', 'field-hint', 'Scan QR uji ini dengan ponsel yang terhubung ke Wi-Fi lokasi. Jika ponsel menampilkan “Ponsel terhubung”, ponsel bisa membuka tautan foto.'),
       qrCanvas(`${deliveryOrigin}/connection-test`, 150),
       check,
     );
-    return card(ops.boothName(id), intro, grid.childElementCount ? grid : el('p', 'card-desc', 'No mode has a price here. Set prices in Settings.'), preflight);
+    return card(ops.boothName(id), intro, grid.childElementCount ? grid : el('p', 'card-desc', 'Belum ada mode yang punya harga di sini. Atur harga di Pengaturan.'), preflight);
   }
 
   async function checkDelivery(): Promise<void> {
@@ -176,10 +176,10 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
   function payStep(): HTMLElement {
     const id = booth()!;
     const voucherInput = el('input', 'input');
-    voucherInput.placeholder = 'Voucher or receipt code';
+    voucherInput.placeholder = 'Kode voucher atau struk';
     const voucherField = el('label', 'field');
-    voucherField.append(el('span', 'field-label', 'Voucher or receipt code'), voucherInput);
-    const apply = act('Apply', 'btn btn-outline', () => {
+    voucherField.append(el('span', 'field-label', 'Kode voucher atau struk'), voucherInput);
+    const apply = act('Pakai', 'btn btn-outline', () => {
       const { voucher, discount } = ops.redeemAtBooth(voucherInput.value, id, flow.price);
       flow.voucher = voucher;
       flow.discount = discount;
@@ -191,30 +191,30 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
     const extras = el('div', 'field-row extra-prints');
     if (PRINTABLE.includes(flow.mode) && printPrice()) {
       const minus = actionButton('−', 'btn btn-outline btn-icon');
-      minus.setAttribute('aria-label', 'Remove one extra print');
+      minus.setAttribute('aria-label', 'Kurangi satu cetakan tambahan');
       minus.addEventListener('click', () => {
         flow.extraPrints = Math.max(0, flow.extraPrints - 1);
         draw();
       });
       const plus = actionButton('+', 'btn btn-outline btn-icon');
-      plus.setAttribute('aria-label', 'Add one extra print');
+      plus.setAttribute('aria-label', 'Tambah satu cetakan tambahan');
       plus.addEventListener('click', () => {
         flow.extraPrints += 1;
         draw();
       });
-      extras.append(el('span', 'field-label', `Extra ${printSize()} prints · ${money(printPrice())} each`), minus, el('span', 'cart-qty', String(flow.extraPrints)), plus);
+      extras.append(el('span', 'field-label', `Cetakan tambahan ${printSize()} · ${money(printPrice())} per lembar`), minus, el('span', 'cart-qty', String(flow.extraPrints)), plus);
     }
 
     const total = due();
     const summary = el('dl', 'cart-totals');
     summary.append(el('dt', '', SESSION_MODES[flow.mode].label), el('dd', '', money(flow.price)));
     if (flow.discount) summary.append(el('dt', '', flow.voucher!.code), el('dd', '', `−${money(flow.discount)}`));
-    if (flow.extraPrints) summary.append(el('dt', '', `${flow.extraPrints} extra prints`), el('dd', '', money(flow.extraPrints * printPrice())));
-    summary.append(el('dt', 'cart-total-label', 'To pay'), el('dd', 'cart-total', money(total)));
+    if (flow.extraPrints) summary.append(el('dt', '', `${flow.extraPrints} cetakan tambahan`), el('dd', '', money(flow.extraPrints * printPrice())));
+    summary.append(el('dt', 'cart-total-label', 'Total bayar'), el('dd', 'cart-total', money(total)));
 
     const qrArea = el('div', 'pay-qris');
     if (flow.qr) {
-      qrArea.append(qrCanvas(flow.qr, 260), el('p', 'card-desc', `Scan with any bank or e-wallet app · ${ops.gateway.label}`));
+      qrArea.append(qrCanvas(flow.qr, 260), el('p', 'card-desc', `Scan dengan aplikasi bank atau e-wallet apa saja · ${ops.gateway.label}`));
       const payment = ops.order(flow.orderId!).payments.find((entry) => entry.reference === flow.reference);
       if (payment) {
         qrArea.append(
@@ -224,27 +224,27 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
             if (status === 'paid') return;
             flow.qr = '';
             flow.reference = '';
-            notice(status === 'expired' ? 'The QR ran out. Tap Pay for a new one.' : 'The cashier cancelled that QR. Tap Pay for a new one.', 'warn');
+            notice(status === 'expired' ? 'Waktu QR habis. Ketuk Bayar untuk QR baru.' : 'Kasir membatalkan QR itu. Ketuk Bayar untuk QR baru.', 'warn');
             draw();
           }),
         );
       }
       if (ops.gateway.simulated) {
-        const simulate = actionButton('Simulate payment', 'btn btn-outline btn-sm');
+        const simulate = actionButton('Simulasi bayar', 'btn btn-outline btn-sm');
         simulate.addEventListener('click', () => ops.gateway.simulatePaid!(flow.reference));
-        qrArea.append(badge('Simulator: no money moves', 'warn'), simulate);
+        qrArea.append(badge('Simulator: tidak ada uang yang berpindah', 'warn'), simulate);
       }
     }
 
     const qrisOff = !methodAllowed(ops.payments, 'qris', 'booth');
     const next = total === 0
-      ? act('Start', 'btn btn-primary btn-block', () => go('style'))
+      ? act('Mulai', 'btn btn-primary btn-block', () => go('style'))
       : qrisOff
-        ? el('p', 'callout', 'Pay at the cashier and type the code from your receipt here.')
-        : act(flow.qr ? 'Waiting for payment…' : `Pay ${money(total)} with QRIS`, 'btn btn-primary btn-block', async () => {
+        ? el('p', 'callout', 'Bayar di kasir, lalu ketik kode dari struk di sini.')
+        : act(flow.qr ? 'Menunggu pembayaran…' : `Bayar ${money(total)} dengan QRIS`, 'btn btn-primary btn-block', async () => {
           if (flow.qr) return;
           const lines: CartLine[] = [{ kind: 'session', refId: ops.profile(id).categoryId, label: SESSION_MODES[flow.mode].label, unitPrice: flow.price, qty: 1, mode: flow.mode }];
-          if (flow.extraPrints) lines.push({ kind: 'print', refId: printSize(), label: `Extra print ${printSize()}`, unitPrice: printPrice(), qty: flow.extraPrints, size: printSize() });
+          if (flow.extraPrints) lines.push({ kind: 'print', refId: printSize(), label: `Cetakan tambahan ${printSize()}`, unitPrice: printPrice(), qty: flow.extraPrints, size: printSize() });
           // A retry after an expired QR reuses the open order.
           const order = flow.orderId ? ops.order(flow.orderId) : ops.createOrder({ lines, presetId: null, voucherCode: flow.voucher?.code ?? '', channel: 'booth', branchId: ops.branchOf(id) ?? '', boothId: id });
           flow.orderId = order.id;
@@ -258,19 +258,19 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
             if (flow.orderId && amountDue(ops.order(flow.orderId)) === 0 && flow.step === 'pay') {
               unsubscribe?.();
               unsubscribe = null;
-              notice('Paid. Enjoy your session!', 'ok');
+              notice('Lunas. Selamat menikmati sesi Anda!', 'ok');
               go('style');
             }
           });
           draw();
         });
-    const back = act('Back', 'btn btn-ghost btn-block', () => {
+    const back = act('Kembali', 'btn btn-ghost btn-block', () => {
       if (flow.orderId) ops.cancelOrder(flow.orderId);
       unsubscribe?.();
       flow = fresh();
       draw();
     });
-    return card('Pay', 'Pay with QRIS, or type a voucher or the code on your cashier receipt.', voucherRow, extras, summary, qrArea, next, back);
+    return card('Bayar', 'Bayar dengan QRIS, atau ketik voucher atau kode di struk kasir.', voucherRow, extras, summary, qrArea, next, back);
   }
 
   // ---------- 3. style ----------
@@ -278,7 +278,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
     const frames = availableFrames(ops.state.frames, ops.state.vouchers, flow.voucher);
     const frameGrid = el('div', 'frame-pick');
     if (flow.mode === 'strip' || flow.mode === 'vintage') {
-      const none = el('button', `frame-option${flow.frameId === null ? ' is-active' : ''}`, 'Classic strip');
+      const none = el('button', `frame-option${flow.frameId === null ? ' is-active' : ''}`, 'Strip klasik');
       none.type = 'button';
       none.addEventListener('click', () => {
         flow.frameId = null;
@@ -320,33 +320,33 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       wrap.append(el('span', '', label), input, out);
       return wrap;
     };
-    const mirror = act(flow.effects.mirror ? 'Mirror on' : 'Mirror off', 'btn btn-outline btn-sm', () => {
+    const mirror = act(flow.effects.mirror ? 'Cermin aktif' : 'Cermin mati', 'btn btn-outline btn-sm', () => {
       flow.effects.mirror = !flow.effects.mirror;
       preview();
       draw();
     });
-    const start = act('Start shooting', 'btn btn-primary btn-block', () => shoot());
+    const start = act('Mulai memotret', 'btn btn-primary btn-block', () => shoot());
     const paid = !!flow.orderId && ops.order(flow.orderId).status === 'paid';
     const back = paid
-      ? act('Need to change? Get staff help', 'btn btn-outline btn-block', hooks.openStaffControls)
-      : act('Back to modes', 'btn btn-outline btn-block', () => {
+      ? act('Perlu mengubah? Minta bantuan staf', 'btn btn-outline btn-block', hooks.openStaffControls)
+      : act('Kembali ke mode', 'btn btn-outline btn-block', () => {
           flow = fresh();
           resetPreview();
           draw();
         });
     return card(
-      'Look',
-      'Pick a frame and a look. Pinch the camera to zoom.',
-      ...(frameGrid.childElementCount ? [el('p', 'kicker', 'Frame'), frameGrid] : []),
+      'Gaya',
+      'Pilih bingkai dan gaya. Cubit layar kamera untuk zoom.',
+      ...(frameGrid.childElementCount ? [el('p', 'kicker', 'Bingkai'), frameGrid] : []),
       el('p', 'kicker', 'Filter'),
       filters,
       slider('zoom', 'Zoom', 1, 3, 0.1),
-      slider('brightness', 'Brightness', 60, 140, 1),
-      slider('contrast', 'Contrast', 60, 140, 1),
-      slider('saturation', 'Colour', 0, 180, 1),
+      slider('brightness', 'Kecerahan', 60, 140, 1),
+      slider('contrast', 'Kontras', 60, 140, 1),
+      slider('saturation', 'Warna', 0, 180, 1),
       mirror,
       start,
-      ...(paid ? [el('p', 'field-hint', 'Payment is complete. Staff can help change or cancel this session.')] : []),
+      ...(paid ? [el('p', 'field-hint', 'Pembayaran selesai. Staf bisa membantu mengubah atau membatalkan sesi ini.')] : []),
       back,
     );
   }
@@ -372,7 +372,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       frame = ops.camera?.shoot ? applyEffects(await blobToCanvas(await ops.camera.shoot()), flow.effects) : shotFrame();
     } catch (error) {
       // The camera missed the shot: the preview frame keeps the session going, and staff hear why.
-      notice(`DSLR: ${(error as Error).message} Used the preview frame instead.`, 'warn');
+      notice(`DSLR: ${(error as Error).message} Memakai gambar pratinjau sebagai gantinya.`, 'warn');
       frame = shotFrame();
     }
     await ops.camera?.apply('preview', ops.cameraProfile(id).preview).catch(() => {});
@@ -387,7 +387,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
 
   async function shoot(): Promise<void> {
     if (!hooks.cameraLive()) {
-      notice('The camera is not running.', 'error');
+      notice('Kamera belum menyala.', 'error');
       return;
     }
     const id = booth()!;
@@ -403,7 +403,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
         const count = frame ? frame.slots.length : flow.mode === 'vintage' ? 1 : 4;
         const shots: HTMLCanvasElement[] = [];
         for (let i = 0; i < count; i++) {
-          flow.busy = `Shot ${i + 1} of ${count}`;
+          flow.busy = `Foto ${i + 1} dari ${count}`;
           draw();
           await countdown(3);
           shots.push(await snap());
@@ -419,17 +419,17 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
         flow.printBlob = await canvasToBlob(sheet);
         await keep('photobooth', flow.printBlob);
       } else if (flow.mode === 'gif') {
-        flow.busy = 'Get ready to move!';
+        flow.busy = 'Siap-siap bergerak!';
         draw();
         await countdown(3);
-        flow.busy = 'Recording the GIF…';
+        flow.busy = 'Merekam GIF…';
         draw();
         await keep('gif', await gifBurst(shotFrame));
       } else if (flow.mode === 'video') {
-        flow.busy = 'Recording starts after the countdown';
+        flow.busy = 'Perekaman mulai setelah hitung mundur';
         draw();
         await countdown(3);
-        flow.busy = 'Recording 8 seconds…';
+        flow.busy = 'Merekam 8 detik…';
         draw();
         await keep('video', await recordFrames(shotFrame, 8));
       } else {
@@ -437,7 +437,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
         const still = await snap();
         flow.printBlob = await canvasToBlob(still);
         await keep('snapshot', flow.printBlob);
-        flow.busy = 'Hold still for the live part…';
+        flow.busy = 'Tahan posisi untuk bagian live…';
         draw();
         await keep('live', await recordFrames(shotFrame, 3));
       }
@@ -450,7 +450,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
         }
       }
       flow.printsLeft = (PRINTABLE.includes(flow.mode) && flow.mode !== 'live' ? 1 : 0) + flow.extraPrints;
-      flow.busy = 'Preparing phone downloads…';
+      flow.busy = 'Menyiapkan unduhan untuk ponsel…';
       draw();
       flow.deliveryUrl = await publishGallery(
         flow.session.token,
@@ -468,14 +468,14 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
         stopBts = null;
       }
       flow.busy = '';
-      flow.error = (error as Error).message || 'The capture could not finish.';
+      flow.error = (error as Error).message || 'Pemotretan tidak selesai.';
       go('finish');
     }
   }
 
   async function retryCapture(): Promise<void> {
     if (!hooks.cameraLive()) {
-      notice('The camera is not running. Ask staff for help.', 'error');
+      notice('Kamera belum menyala. Minta bantuan staf.', 'error');
       return;
     }
     if (flow.session) await ops.clearSessionShots(flow.session.id);
@@ -489,9 +489,9 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
   }
 
   function shootStep(): HTMLElement {
-    const progress = el('p', 'queue-now', flow.busy || 'Starting…');
+    const progress = el('p', 'queue-now', flow.busy || 'Memulai…');
     progress.setAttribute('role', 'status');
-    return card('Smile!', SESSION_MODES[flow.mode].label, progress);
+    return card('Senyum!', SESSION_MODES[flow.mode].label, progress);
   }
 
   // ---------- 5. finish ----------
@@ -501,7 +501,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       const media = result.blob.type.startsWith('video/')
         ? Object.assign(el('video'), { src: result.url, autoplay: true, muted: true, loop: true, playsInline: true })
         : Object.assign(el('img'), { src: result.url, alt: '' });
-      const save = act(`Save ${result.kind}`, 'btn btn-outline btn-sm', () => {
+      const save = act(`Simpan ${SHOT_LABELS[result.kind]}`, 'btn btn-outline btn-sm', () => {
         downloadBlob(result.blob, `${result.kind}-${result.id}.${extensionOf(result.blob)}`);
       }, 'download');
       const item = el('div', 'session-result');
@@ -511,16 +511,16 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
     const prints = el('div', 'field-row');
     if (flow.printBlob && flow.printsLeft > 0) {
       prints.append(
-        act(`Print ${flow.printsLeft === 1 ? 'my photo' : `${flow.printsLeft} copies`}`, 'btn btn-secondary', async () => {
+        act(`Cetak ${flow.printsLeft === 1 ? 'foto saya' : `${flow.printsLeft} lembar`}`, 'btn btn-secondary', async () => {
           const printer = await ops.print(booth()!, flow.printBlob!, printSize(), flow.printsLeft, flow.session?.id ?? null);
-          notice(`Printing on ${printer}.`, 'ok');
+          notice(`Mencetak di ${printer}.`, 'ok');
           flow.printsLeft = 0;
           draw();
         }, 'printer'),
       );
     }
     if (flow.printBlob && printPrice()) {
-      prints.append(act(`Buy prints · ${money(printPrice())}`, 'btn btn-outline', () => buyPrints(), 'cart'));
+      prints.append(act(`Beli cetakan · ${money(printPrice())}`, 'btn btn-outline', () => buyPrints(), 'cart'));
     }
     const link = flow.deliveryUrl;
     const consent = el('label', 'consent-gate');
@@ -528,7 +528,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
     box.type = 'checkbox';
     box.checked = flow.consent;
     box.addEventListener('change', () => (flow.consent = box.checked));
-    consent.append(box, ' Allow these photos in the public event gallery');
+    consent.append(box, ' Izinkan foto ini tampil di galeri publik acara');
     const closeSession = () => {
       if (flow.session) ops.endSession(flow.session.id, flow.consent, '', flow.deliveryUrl ?? undefined, flow.error || undefined);
       for (const result of flow.results) URL.revokeObjectURL(result.url);
@@ -537,29 +537,29 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       preview();
       draw();
     };
-    const done = act(flow.error ? 'End failed session' : 'Done', flow.error ? 'btn btn-ghost btn-block' : 'btn btn-primary btn-block', () => {
+    const done = act(flow.error ? 'Akhiri sesi gagal' : 'Selesai', flow.error ? 'btn btn-ghost btn-block' : 'btn btn-primary btn-block', () => {
       if (!flow.error) return closeSession();
       confirmDialog({
-        title: 'End this failed session?',
-        message: flow.orderId || flow.voucher?.orderId ? 'The payment stays recorded. Ask staff to review a refund in Transactions.' : 'This closes the session without a photo.',
-        confirmLabel: 'End session',
+        title: 'Akhiri sesi gagal ini?',
+        message: flow.orderId || flow.voucher?.orderId ? 'Pembayaran tetap tercatat. Minta staf memeriksa refund di Transaksi.' : 'Sesi ditutup tanpa foto.',
+        confirmLabel: 'Akhiri sesi',
         async run() { closeSession(); },
       });
     });
-    const retry = flow.error ? act('Try capture again', 'btn btn-primary btn-block', retryCapture) : null;
-    const staffHelp = flow.error ? act('Get staff help', 'btn btn-outline btn-block', hooks.openStaffControls) : null;
+    const retry = flow.error ? act('Coba foto lagi', 'btn btn-primary btn-block', retryCapture) : null;
+    const staffHelp = flow.error ? act('Minta bantuan staf', 'btn btn-outline btn-block', hooks.openStaffControls) : null;
     const retryLink = !link && !flow.error && flow.results.length
-      ? act('Retry phone link', 'btn btn-outline btn-block', async () => {
+      ? act('Coba lagi tautan ponsel', 'btn btn-outline btn-block', async () => {
           flow.deliveryUrl = await publishGallery(flow.session!.token, ops.state.branding.brandName || ops.account.business, flow.results, ops.state.settings.retentionDays);
           draw();
         })
       : null;
     const networkHelp = link
-      ? el('p', 'field-hint', 'Connect your phone to the venue Wi-Fi, then scan the QR. If it does not open, ask staff to save the files here.')
+      ? el('p', 'field-hint', 'Hubungkan ponsel ke Wi-Fi lokasi, lalu scan QR. Jika tidak terbuka, minta staf menyimpan file di sini.')
       : null;
     return card(
-      flow.error ? 'Capture did not finish' : link ? (ops.state.branding.thanks || 'Your photos are ready') : 'Files saved on this booth',
-      flow.error ? `${flow.error} Try again or ask staff for help.` : link ? 'Scan to save your files on your phone.' : 'Phone downloads are unavailable. Save the files here or ask staff for help.',
+      flow.error ? 'Pemotretan tidak selesai' : link ? (ops.state.branding.thanks || 'Foto Anda sudah siap') : 'File tersimpan di booth ini',
+      flow.error ? `${flow.error} Coba lagi atau minta bantuan staf.` : link ? 'Scan untuk menyimpan file di ponsel Anda.' : 'Unduhan ke ponsel belum tersedia. Simpan file di sini atau minta bantuan staf.',
       results,
       prints,
       link ? qrCanvas(link, 220) : '',
@@ -574,13 +574,13 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
   /** Post-session extra prints: QRIS for the copies, then they print. */
   function buyPrints(): void {
     formDialog({
-      title: 'More prints',
-      description: `${printSize()} · ${money(printPrice())} each`,
-      submitLabel: 'Pay with QRIS',
-      fields: [{ name: 'qty', label: 'How many', value: '1', type: 'number' }],
+      title: 'Tambah cetakan',
+      description: `${printSize()} · ${money(printPrice())} per lembar`,
+      submitLabel: 'Bayar dengan QRIS',
+      fields: [{ name: 'qty', label: 'Jumlah', value: '1', type: 'number' }],
       async submit(values) {
         const qty = Math.round(Number(values.qty));
-        if (!(qty > 0 && qty <= 20)) throw new Error('Pick 1 to 20 prints.');
+        if (!(qty > 0 && qty <= 20)) throw new Error('Pilih 1 sampai 20 cetakan.');
         await chargePrints(qty);
       },
     });
@@ -588,16 +588,16 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
 
   async function chargePrints(qty: number): Promise<void> {
     const id = booth()!;
-    const order = ops.createOrder({ lines: [{ kind: 'print', refId: printSize(), label: `Extra print ${printSize()}`, unitPrice: printPrice(), qty, size: printSize() }], presetId: null, voucherCode: '', channel: 'booth', branchId: ops.branchOf(id) ?? '', boothId: id });
+    const order = ops.createOrder({ lines: [{ kind: 'print', refId: printSize(), label: `Cetakan tambahan ${printSize()}`, unitPrice: printPrice(), qty, size: printSize() }], presetId: null, voucherCode: '', channel: 'booth', branchId: ops.branchOf(id) ?? '', boothId: id });
     const payment = await ops.chargeQris(order.id);
     const area = el('div', 'pay-qris');
     area.append(qrCanvas(payment.qrString ?? '', 240), el('p', 'pay-due', money(payable(payment))), ...[qrExact(ops, payment, { showAmount: false })].filter((node) => node !== null));
     if (ops.gateway.simulated) {
-      const simulate = actionButton('Simulate payment', 'btn btn-outline btn-sm');
+      const simulate = actionButton('Simulasi bayar', 'btn btn-outline btn-sm');
       simulate.addEventListener('click', () => ops.gateway.simulatePaid!(payment.reference));
       area.append(simulate);
     }
-    panel.replaceChildren(card('Pay for prints', `${qty} × ${printSize()}`, area));
+    panel.replaceChildren(card('Bayar cetakan', `${qty} × ${printSize()}`, area));
     const stop = ops.store.subscribe(() => {
       if (ops.order(order.id).status !== 'paid') return;
       stop();
@@ -628,7 +628,7 @@ export function mountSessionPanel(ops: Ops, hooks: SessionHooks) {
       const url = await blobUrl(ad.src);
       if (!adLayer) break;
       const media = ad.kind === 'video' ? Object.assign(el('video'), { src: url, autoplay: true, muted: true, playsInline: true }) : Object.assign(el('img'), { src: url, alt: '' });
-      adLayer.replaceChildren(media, el('p', 'ad-hint', 'Tap to start'));
+      adLayer.replaceChildren(media, el('p', 'ad-hint', 'Ketuk untuk mulai'));
       if (ad.kind === 'video') await new Promise((resolve) => ((media as HTMLVideoElement).onended = media.onerror = resolve));
       else await wait(ad.seconds * 1000);
     }

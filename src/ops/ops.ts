@@ -32,7 +32,7 @@ import type {
   Ticket,
   Voucher,
 } from './model';
-import { PAYMENT_LABELS } from './model';
+import { PAYMENT_LABELS, PAYMENT_STATUS_LABELS, SESSION_MODES } from './model';
 import { Outbox } from './outbox';
 import { cleanName } from './face-tags';
 import { feeFor, gatewayLabel, isExpired, methodAllowed } from './payments';
@@ -63,6 +63,10 @@ export interface OpsHooks {
 }
 
 const DAY_MS = 86_400_000;
+/** Wrong PINs in a row before PIN entry on a device pauses, and for how long. */
+const PIN_TRIES = 5;
+const PIN_PAUSE_MS = 5 * 60_000;
+const ORDER_STATUS: Record<Order['status'], string> = { open: 'masih terbuka', paid: 'sudah lunas', void: 'sudah dibatalkan' };
 
 export class Ops {
   private readonly simulator: SimulatedGateway;
@@ -129,7 +133,10 @@ export class Ops {
 
   actor(): Staff | null {
     const id = localStorage.getItem(this.actorKey);
-    return this.state.staff.find((person) => person.id === id && person.active) ?? this.state.staff.find((person) => person.role === 'owner') ?? null;
+    // A device nobody has used yet, such as a kiosk or TV, acts for the owner. A person who was
+    // turned off or removed loses their access, instead of handing the device to the owner.
+    if (id === null) return this.state.staff.find((person) => person.role === 'owner') ?? null;
+    return this.state.staff.find((person) => person.id === id && person.active) ?? null;
   }
 
   can(permission: Permission): boolean {
@@ -137,15 +144,44 @@ export class Ops {
   }
 
   require(permission: Permission): void {
-    if (!this.can(permission)) throw new Error(`${this.actor()?.name ?? 'This user'} is not allowed to do that.`);
+    if (!this.can(permission)) throw new Error(`${this.actor()?.name ?? 'Pengguna ini'} tidak punya izin untuk itu.`);
   }
 
   async switchActor(staffId: string, pin: string): Promise<void> {
     const person = this.state.staff.find((candidate) => candidate.id === staffId && candidate.active);
-    if (!person) throw new Error('That person is not on the team.');
-    if (person.pinHash && !(await checkPin(person, pin))) throw new Error('Wrong PIN.');
+    if (!person) throw new Error('Orang itu tidak ada di tim.');
+    // Without a PIN anyone at the till could become this person, the owner included.
+    if (!person.pinHash) throw new Error(`${person.name} belum punya PIN. Masuk dengan kata sandinya, atau atur PIN di halaman Pengguna.`);
+    if (!(await this.pinCheck(() => checkPin(person, pin)))) throw new Error('PIN salah.');
     localStorage.setItem(this.actorKey, person.id);
-    this.commit('staff.switch', `${person.name} took over this device.`, () => {});
+    this.commit('staff.switch', `${person.name} mengambil alih perangkat ini.`, () => {});
+  }
+
+  /**
+   * Runs a PIN check and counts the wrong ones. A PIN has as few as 10,000 values, so after
+   * PIN_TRIES misses every PIN on this device waits PIN_PAUSE_MS, and the history records it.
+   */
+  private async pinCheck<T>(check: () => Promise<T>): Promise<T> {
+    const key = `${this.store.key}:pin-misses`;
+    const read = (): { misses: number; until: number } => {
+      try {
+        return { misses: 0, until: 0, ...JSON.parse(this.store.kv.getItem(key) ?? '{}') };
+      } catch {
+        return { misses: 0, until: 0 };
+      }
+    };
+    const wait = read().until - this.now();
+    if (wait > 0) throw new Error(`Terlalu banyak PIN salah di perangkat ini. Coba lagi dalam ${Math.ceil(wait / 60_000)} menit.`);
+    const result = await check();
+    if (result) {
+      this.store.kv.removeItem(key);
+      return result;
+    }
+    const misses = read().misses + 1;
+    const paused = misses >= PIN_TRIES;
+    this.store.kv.setItem(key, JSON.stringify(paused ? { misses: 0, until: this.now() + PIN_PAUSE_MS } : { misses, until: 0 }));
+    if (paused) this.commit('auth.pin-locked', `${PIN_TRIES} kali PIN salah berturut-turut. Input PIN di perangkat ini dijeda ${PIN_PAUSE_MS / 60_000} menit.`, () => {});
+    return result;
   }
 
   // ---------- sign-in (IAM) ----------
@@ -156,7 +192,7 @@ export class Ops {
    */
   adoptSession(member: Member): void {
     const known = this.state.staff.find((person) => person.id === member.userId);
-    if (!known && !member.userId.startsWith('owner-')) throw new Error(`${member.name} is not on the team any more.`);
+    if (!known && !member.userId.startsWith('owner-')) throw new Error(`${member.name} sudah tidak ada di tim.`);
     localStorage.setItem(this.actorKey, member.userId);
     const adopt = (draft: OpsState) => {
       const person = draft.staff.find((entry) => entry.id === member.userId);
@@ -174,7 +210,7 @@ export class Ops {
       return;
     }
     localStorage.setItem(seenKey, signIn);
-    this.commit('auth.signin', `${member.name} signed in.`, adopt);
+    this.commit('auth.signin', `${member.name} masuk.`, adopt);
   }
 
   async refreshMembers(): Promise<Member[]> {
@@ -188,25 +224,25 @@ export class Ops {
 
   private teamMate(staffId: string): Staff {
     this.require('staff.manage');
-    if (!this.accounts) throw new Error('Sign-in is not available on this screen.');
+    if (!this.accounts) throw new Error('Fitur masuk tidak tersedia di layar ini.');
     const person = this.state.staff.find((entry) => entry.id === staffId);
-    if (!person) throw new Error('That person is not on the team.');
+    if (!person) throw new Error('Orang itu tidak ada di tim.');
     // Only an owner changes another owner's access.
-    if (person.role === 'owner' && this.actor()?.role !== 'owner') throw new Error('Only an owner can change an owner\'s sign-in.');
+    if (person.role === 'owner' && this.actor()?.role !== 'owner') throw new Error('Hanya pemilik yang bisa mengubah akses masuk pemilik.');
     return person;
   }
 
   /** Gives a role a new set of permissions. The owner role keeps every permission. */
   saveRole(role: Role, permissions: readonly Permission[]): void {
-    if (role === 'owner') throw new Error('The owner can always do everything, so nobody gets locked out.');
+    if (role === 'owner') throw new Error('Pemilik selalu punya semua izin, supaya tidak ada yang terkunci.');
     const allowed = PERMISSIONS.filter((permission) => permissions.includes(permission));
-    this.edit('staff.manage', 'role.save', `${ROLES[role].label} can now do ${allowed.length} of ${PERMISSIONS.length} things.`, (draft) => {
+    this.edit('staff.manage', 'role.save', `${ROLES[role].label} sekarang punya ${allowed.length} dari ${PERMISSIONS.length} izin.`, (draft) => {
       draft.settings.rolePermissions = { ...draft.settings.rolePermissions, [role]: allowed };
     });
   }
 
   resetRole(role: Role): void {
-    this.edit('staff.manage', 'role.reset', `${ROLES[role].label} is back to its standard permissions.`, (draft) => {
+    this.edit('staff.manage', 'role.reset', `${ROLES[role].label} kembali ke izin standar.`, (draft) => {
       const { [role]: _dropped, ...rest } = draft.settings.rolePermissions;
       draft.settings.rolePermissions = rest;
     });
@@ -215,10 +251,10 @@ export class Ops {
   /** A sign-in code for a team member. The same key, or a code still waiting, gives the same code. */
   async inviteMember(staffId: string, key: string): Promise<Invite> {
     const person = this.teamMate(staffId);
-    if (!person.active) throw new Error(`${person.name} has left. Mark them active first.`);
+    if (!person.active) throw new Error(`${person.name} sudah tidak aktif. Tandai aktif dulu.`);
     const invite = await this.accounts!.invite({ userId: person.id, name: person.name, email: person.email }, key);
     await this.refreshMembers();
-    this.commit('auth.invite', `Sent ${person.name} a sign-in code.`, () => {});
+    this.commit('auth.invite', `Mengirim kode masuk ke ${person.name}.`, () => {});
     return invite;
   }
 
@@ -226,7 +262,7 @@ export class Ops {
     const person = this.teamMate(staffId);
     const invite = await this.accounts!.resetAccess(person.id);
     await this.refreshMembers();
-    this.commit('auth.reset', `Reset ${person.name}'s password. Their old one no longer works.`, () => {});
+    this.commit('auth.reset', `Mengatur ulang kata sandi ${person.name}. Kata sandi lama tidak berlaku lagi.`, () => {});
     return invite;
   }
 
@@ -234,25 +270,25 @@ export class Ops {
     const person = this.teamMate(staffId);
     await this.accounts!.setAccess(person.id, enabled);
     await this.refreshMembers();
-    this.commit('auth.access', `${enabled ? 'Turned on' : 'Turned off'} sign-in for ${person.name}.`, () => {});
+    this.commit('auth.access', `${enabled ? 'Mengaktifkan' : 'Mematikan'} akses masuk ${person.name}.`, () => {});
   }
 
   /** Saves a person and returns their id, so a new one can be sent a sign-in code straight away. */
   async saveStaff(input: Omit<Staff, 'pinHash' | 'pinSalt' | 'id'> & { id?: string }, pin: string): Promise<string> {
     this.require('staff.manage');
-    if (!input.name.trim()) throw new Error('Enter a name.');
+    if (!input.name.trim()) throw new Error('Isi nama.');
     const secret = pin ? await hashPin(pin) : null;
     const owners = this.state.staff.filter((person) => person.role === 'owner' && person.active && person.id !== input.id);
-    if (owners.length === 0 && (input.role !== 'owner' || !input.active)) throw new Error('The workspace needs an active owner.');
+    if (owners.length === 0 && (input.role !== 'owner' || !input.active)) throw new Error('Harus ada pemilik yang aktif.');
     const id = input.id ?? this.store.id();
     const email = input.email.trim().toLowerCase();
-    if (email && this.state.staff.some((person) => person.id !== id && person.email.toLowerCase() === email)) throw new Error(`${email} belongs to someone else on the team.`);
-    this.commit('staff.save', `${input.id ? 'Updated' : 'Added'} ${input.name.trim()} (${input.role}).`, (draft) => {
+    if (email && this.state.staff.some((person) => person.id !== id && person.email.toLowerCase() === email)) throw new Error(`${email} sudah dipakai orang lain di tim.`);
+    this.commit('staff.save', `${input.id ? 'Mengubah' : 'Menambah'} ${input.name.trim()} (${ROLES[input.role].label}).`, (draft) => {
       const existing = draft.staff.find((person) => person.id === input.id);
       const fields = { ...input, email, name: input.name.trim(), ...(secret ?? {}) };
       if (existing) Object.assign(existing, fields);
       else {
-        if ((input.role === 'supervisor' || input.role === 'admin') && !secret) throw new Error('Supervisors and admins need a PIN to approve refunds.');
+        if ((input.role === 'supervisor' || input.role === 'admin') && !secret) throw new Error('Supervisor dan admin butuh PIN untuk menyetujui refund.');
         draft.staff.push({ pinHash: '', pinSalt: '', ...fields, id });
       }
     });
@@ -274,8 +310,8 @@ export class Ops {
   // ---------- booths ----------
 
   boothName(boothId: string | null): string {
-    if (!boothId) return 'Cashier';
-    return this.sites.points.find((point) => point.id === boothId)?.name ?? 'Removed booth';
+    if (!boothId) return 'Kasir';
+    return this.sites.points.find((point) => point.id === boothId)?.name ?? 'Booth terhapus';
   }
 
   branchOf(boothId: string | null): string | null {
@@ -283,7 +319,7 @@ export class Ops {
   }
 
   branchName(branchId: string | null): string {
-    return this.sites.locations.find((location) => location.id === branchId)?.name ?? 'No branch';
+    return this.sites.locations.find((location) => location.id === branchId)?.name ?? 'Tanpa cabang';
   }
 
   profile(boothId: string): BoothProfile {
@@ -299,7 +335,7 @@ export class Ops {
 
   saveProfile(profile: BoothProfile): void {
     this.require('settings.manage');
-    this.commit('booth.profile', `Updated settings for ${this.boothName(profile.pointId)}.`, (draft) => {
+    this.commit('booth.profile', `Mengubah pengaturan ${this.boothName(profile.pointId)}.`, (draft) => {
       draft.booths = [...draft.booths.filter((entry) => entry.pointId !== profile.pointId), profile];
     });
   }
@@ -329,10 +365,10 @@ export class Ops {
   saveVoucher(voucher: Omit<Voucher, 'id' | 'uses' | 'createdAt'> & { id?: string }): void {
     this.require('vouchers.manage');
     const code = normalizeCode(voucher.code);
-    if (!code) throw new Error('Enter a code.');
-    if (this.state.vouchers.some((other) => other.code === code && other.id !== voucher.id)) throw new Error(`${code} already exists.`);
-    if (voucher.kind !== 'free' && voucher.value <= 0) throw new Error('Enter a discount above zero.');
-    this.commit('voucher.save', `${voucher.id ? 'Updated' : 'Created'} voucher ${code}.`, (draft) => {
+    if (!code) throw new Error('Isi kode.');
+    if (this.state.vouchers.some((other) => other.code === code && other.id !== voucher.id)) throw new Error(`${code} sudah ada.`);
+    if (voucher.kind !== 'free' && voucher.value <= 0) throw new Error('Isi diskon di atas nol.');
+    this.commit('voucher.save', `${voucher.id ? 'Mengubah' : 'Membuat'} voucher ${code}.`, (draft) => {
       const existing = draft.vouchers.find((entry) => entry.id === voucher.id);
       if (existing) Object.assign(existing, { ...voucher, code });
       else draft.vouchers.unshift({ ...voucher, code, id: this.store.id(), uses: 0, createdAt: this.now() });
@@ -342,7 +378,7 @@ export class Ops {
   deleteVoucher(id: string): void {
     this.require('vouchers.manage');
     const voucher = this.state.vouchers.find((entry) => entry.id === id);
-    this.commit('voucher.delete', `Deleted voucher ${voucher?.code ?? ''}.`, (draft) => {
+    this.commit('voucher.delete', `Menghapus voucher ${voucher?.code ?? ''}.`, (draft) => {
       draft.vouchers = draft.vouchers.filter((entry) => entry.id !== id);
     });
   }
@@ -355,21 +391,21 @@ export class Ops {
 
   openShift(branchId: string, openingCash: Rupiah): void {
     this.require('shift.run');
-    if (this.openShiftFor(branchId)) throw new Error('A shift is already open at this branch.');
-    if (openingCash < 0) throw new Error('Opening cash cannot be negative.');
+    if (this.openShiftFor(branchId)) throw new Error('Shift di cabang ini sudah dibuka.');
+    if (openingCash < 0) throw new Error('Modal awal tidak boleh negatif.');
     const shift: Shift = { id: this.store.id(), branchId, staffId: this.actor()?.id ?? null, openedAt: this.now(), openingCash };
-    this.commit('shift.open', `Opened a shift at ${this.branchName(branchId)}.`, (draft) => draft.shifts.unshift(shift), { amount: openingCash, branchId, sync: shift });
+    this.commit('shift.open', `Membuka shift di ${this.branchName(branchId)}.`, (draft) => draft.shifts.unshift(shift), { amount: openingCash, branchId, sync: shift });
   }
 
   closeShift(shiftId: string, countedCash: Rupiah): ShiftSlip {
     this.require('shift.run');
     const shift = this.state.shifts.find((entry) => entry.id === shiftId);
-    if (!shift || shift.closedAt) throw new Error('That shift is not open.');
+    if (!shift || shift.closedAt) throw new Error('Shift itu tidak sedang dibuka.');
     const closed = { ...shift, closedAt: this.now(), countedCash };
     const slip = shiftSlip(closed, this.state.orders, this.state.refunds);
     this.commit(
       'shift.close',
-      `Closed the shift at ${this.branchName(shift.branchId)}. Drawer ${slip.variance === 0 ? 'matches' : slip.variance! < 0 ? 'is short' : 'is over'}.`,
+      `Menutup shift di ${this.branchName(shift.branchId)}. Uang di laci ${slip.variance === 0 ? 'pas' : slip.variance! < 0 ? 'kurang' : 'lebih'}.`,
       (draft) => Object.assign(draft.shifts.find((entry) => entry.id === shiftId)!, closed),
       { amount: countedCash, branchId: shift.branchId, sync: closed },
     );
@@ -388,15 +424,15 @@ export class Ops {
   }
 
   createOrder(input: { lines: CartLine[]; presetId: string | null; voucherCode: string; channel: Channel; branchId: string; boothId: string | null; customerEmail?: string }): Order {
-    if (input.lines.length === 0) throw new Error('The cart is empty.');
+    if (input.lines.length === 0) throw new Error('Keranjang kosong.');
     if (input.channel === 'cashier') this.require('pos.sell');
     if (input.presetId) this.require('pos.discount');
     const shift = this.openShiftFor(input.branchId);
-    if (input.channel === 'cashier' && this.state.settings.shiftsEnabled && !shift) throw new Error('Open a shift before selling.');
+    if (input.channel === 'cashier' && this.state.settings.shiftsEnabled && !shift) throw new Error('Buka shift sebelum berjualan.');
     for (const line of input.lines.filter((entry) => entry.kind === 'merch')) {
       const product = this.state.products.find((entry) => entry.id === line.refId);
       const inCart = input.lines.filter((entry) => entry.refId === line.refId).reduce((sum, entry) => sum + entry.qty, 0);
-      if (!product || product.stock < inCart) throw new Error(`Only ${product?.stock ?? 0} ${line.label} left in stock.`);
+      if (!product || product.stock < inCart) throw new Error(`Stok ${line.label} tinggal ${product?.stock ?? 0}.`);
     }
     const quote = this.quote(input.lines, input.presetId, input.voucherCode, input.boothId);
     if (quote.voucherError) throw new Error(quote.voucherError);
@@ -434,7 +470,7 @@ export class Ops {
 
   order(id: string): Order {
     const order = this.state.orders.find((entry) => entry.id === id);
-    if (!order) throw new Error('That order is gone.');
+    if (!order) throw new Error('Pesanan itu sudah tidak ada.');
     return order;
   }
 
@@ -443,9 +479,9 @@ export class Ops {
   }
 
   private requireMethod(order: Order, method: PaymentMethod): void {
-    if (order.status !== 'open') throw new Error(`Order ${order.number} is ${order.status}.`);
+    if (order.status !== 'open') throw new Error(`Pesanan ${order.number} ${ORDER_STATUS[order.status]}.`);
     if (!methodAllowed(this.payments, method, order.channel)) {
-      throw new Error(`${PAYMENT_LABELS[method]} is switched off for the ${order.channel === 'booth' ? 'booth' : 'till'}. Change it on the Payments page.`);
+      throw new Error(`${PAYMENT_LABELS[method]} dimatikan untuk ${order.channel === 'booth' ? 'booth' : 'kasir'}. Ubah di halaman Pembayaran.`);
     }
   }
 
@@ -454,9 +490,9 @@ export class Ops {
     const order = this.order(orderId);
     this.requireMethod(order, method);
     const due = amountDue(order);
-    if (method === 'cash' && amount <= 0) throw new Error('Enter the cash received.');
-    if (method !== 'cash' && !reference.trim()) throw new Error('Enter the approval or reference number.');
-    if (method === 'ewallet' && this.payments.wallets.length && !via.wallet) throw new Error('Pick the e-wallet.');
+    if (method === 'cash' && amount <= 0) throw new Error('Isi uang diterima.');
+    if (method !== 'cash' && !reference.trim()) throw new Error('Isi kode approval atau nomor referensi.');
+    if (method === 'ewallet' && this.payments.wallets.length && !via.wallet) throw new Error('Pilih e-wallet.');
     const applied = method === 'cash' ? Math.min(amount, due) : Math.min(amount || due, due);
     const payment: Payment = {
       id: this.store.id(),
@@ -498,7 +534,7 @@ export class Ops {
     const order = this.order(orderId);
     this.requireMethod(order, 'qris');
     const due = amountDue(order);
-    if (due <= 0) throw new Error('Nothing is due.');
+    if (due <= 0) throw new Error('Tidak ada tagihan.');
     const waiting = order.payments.find((payment) => payment.method === 'qris' && payment.status === 'pending' && payment.amount === due && (payment.expiresAt ?? 0) > this.now());
     if (waiting) return waiting;
     const reference = `${order.number}-${order.payments.length + 1}`;
@@ -556,7 +592,7 @@ export class Ops {
   private findPayment(orderId: string, paymentId: string): { order: Order; payment: Payment } {
     const order = this.order(orderId);
     const payment = order.payments.find((entry) => entry.id === paymentId);
-    if (!payment) throw new Error('That payment is gone.');
+    if (!payment) throw new Error('Pembayaran itu sudah tidak ada.');
     return { order, payment };
   }
 
@@ -566,26 +602,26 @@ export class Ops {
    */
   async confirmPayment(orderId: string, paymentId: string, bankReference: string, pin: string): Promise<void> {
     const { order, payment } = this.findPayment(orderId, paymentId);
-    if (payment.status !== 'pending') throw new Error(`This payment is ${payment.status}.`);
-    if (!bankReference.trim()) throw new Error('Enter the reference from the bank or wallet app.');
-    const approver = await findApprover(this.state.staff, pin);
-    if (!approver) throw new Error('That PIN does not belong to a supervisor.');
+    if (payment.status !== 'pending') throw new Error(`Pembayaran ini ${PAYMENT_STATUS_LABELS[payment.status].toLowerCase()}.`);
+    if (!bankReference.trim()) throw new Error('Isi nomor referensi dari aplikasi bank atau e-wallet.');
+    const approver = await this.pinCheck(() => findApprover(this.state.staff, pin));
+    if (!approver) throw new Error('PIN itu bukan milik supervisor.');
     // The gateway, or a second tap, may have settled it during the PIN check.
     const now = this.findPayment(orderId, paymentId).payment.status;
-    if (now !== 'pending') throw new Error(`This payment is ${now}.`);
-    const note = `Confirmed by ${approver.name} from ${bankReference.trim()}`;
+    if (now !== 'pending') throw new Error(`Pembayaran ini ${PAYMENT_STATUS_LABELS[now].toLowerCase()}.`);
+    const note = `Dikonfirmasi oleh ${approver.name} dari ${bankReference.trim()}`;
     this.settlePending(orderId, payment.reference, note);
-    this.commit('payment.confirm', `${order.number}: QRIS ${payment.reference} confirmed by hand. ${note}.`, () => {}, { amount: payment.amount, branchId: order.branchId, sync: { orderId, paymentId, note } });
+    this.commit('payment.confirm', `${order.number}: QRIS ${payment.reference} ditandai lunas manual. ${note}.`, () => {}, { amount: payment.amount, branchId: order.branchId, sync: { orderId, paymentId, note } });
   }
 
   /** Stops a QR that is still waiting, for a customer who walked away or paid another way. */
   cancelPayment(orderId: string, paymentId: string, reason: string): void {
     const { order, payment } = this.findPayment(orderId, paymentId);
-    if (payment.status !== 'pending') throw new Error(`This payment is ${payment.status}.`);
-    if (!reason.trim()) throw new Error('Enter a reason.');
+    if (payment.status !== 'pending') throw new Error(`Pembayaran ini ${PAYMENT_STATUS_LABELS[payment.status].toLowerCase()}.`);
+    if (!reason.trim()) throw new Error('Isi alasan.');
     this.commit(
       'payment.cancel',
-      `${order.number}: QRIS ${payment.reference} cancelled. ${reason.trim()}.`,
+      `${order.number}: QRIS ${payment.reference} dibatalkan. ${reason.trim()}.`,
       (draft) => {
         const target = draft.orders.find((entry) => entry.id === orderId)!.payments.find((entry) => entry.id === paymentId)!;
         target.status = 'cancelled';
@@ -614,8 +650,8 @@ export class Ops {
   cancelOrder(orderId: string): void {
     const order = this.order(orderId);
     if (order.status !== 'open') return;
-    if (order.payments.some((payment) => payment.status === 'paid')) throw new Error('Part of this order is paid. Refund it instead.');
-    this.commit('order.void', `Voided ${order.number}.`, (draft) => {
+    if (order.payments.some((payment) => payment.status === 'paid')) throw new Error('Sebagian pesanan ini sudah dibayar. Lakukan refund.');
+    this.commit('order.void', `Membatalkan ${order.number}.`, (draft) => {
       const target = draft.orders.find((entry) => entry.id === orderId)!;
       target.status = 'void';
       for (const payment of target.payments) if (payment.status === 'pending') payment.status = 'expired';
@@ -669,7 +705,7 @@ export class Ops {
     const paid = { ...order, status: 'paid' as const, paidAt: now, sessionVouchers: codes.map((code) => code.code), ticketNumbers: numbers };
     this.commit(
       'order.paid',
-      `${order.number} paid, ${order.lines.map((line) => `${line.qty}× ${line.label}`).join(', ')}.`,
+      `${order.number} lunas, ${order.lines.map((line) => `${line.qty}× ${line.label}`).join(', ')}.`,
       (draft) => {
         Object.assign(draft.orders.find((entry) => entry.id === orderId)!, paid);
         for (const line of order.lines.filter((entry) => entry.kind === 'merch')) {
@@ -691,19 +727,19 @@ export class Ops {
     this.require('pos.sell');
     const order = this.order(orderId);
     const line = order.lines.find((entry) => entry.id === lineId);
-    if (order.status !== 'paid' || !line) throw new Error('Only paid lines can be refunded.');
-    if (line.refunded) throw new Error('That line was refunded already.');
-    if (!reason.trim()) throw new Error('Enter a reason.');
-    const approver = await findApprover(this.state.staff, pin);
-    if (!approver) throw new Error('That PIN does not belong to a supervisor.');
+    if (order.status !== 'paid' || !line) throw new Error('Hanya item yang sudah lunas yang bisa di-refund.');
+    if (line.refunded) throw new Error('Item itu sudah di-refund.');
+    if (!reason.trim()) throw new Error('Isi alasan.');
+    const approver = await this.pinCheck(() => findApprover(this.state.staff, pin));
+    if (!approver) throw new Error('PIN itu bukan milik supervisor.');
     // Checked again after the slow PIN check, so a double tap refunds the line once.
-    if (this.order(orderId).lines.find((entry) => entry.id === lineId)?.refunded) throw new Error('That line was refunded already.');
+    if (this.order(orderId).lines.find((entry) => entry.id === lineId)?.refunded) throw new Error('Item itu sudah di-refund.');
     const amount = lineNet(line);
     const method = refundMethod(order);
     const refund = { id: this.store.id(), orderId, lineId, amount, reason: reason.trim(), staffId: this.actor()?.id ?? null, supervisorId: approver.id, method, at: this.now() };
     this.commit(
       'order.refund',
-      `Refunded ${line.label} on ${order.number}: ${reason.trim()}. Approved by ${approver.name}.`,
+      `Refund ${line.label} di ${order.number}: ${reason.trim()}. Disetujui oleh ${approver.name}.`,
       (draft) => {
         const target = draft.orders.find((entry) => entry.id === orderId)!;
         target.lines.find((entry) => entry.id === lineId)!.refunded = true;
@@ -742,7 +778,7 @@ export class Ops {
     const counter = this.state.counters.ticket + 1;
     const number = ticketNumber(this.state.settings.queuePrefix, counter);
     const id = this.store.id();
-    this.commit(`queue.issue`, `Issued ticket ${number}.`, (draft) => {
+    this.commit(`queue.issue`, `Menerbitkan tiket ${number}.`, (draft) => {
       draft.tickets = issueTicket(draft.tickets, input, number, id, this.now());
       draft.counters.ticket = counter;
     });
@@ -753,7 +789,7 @@ export class Ops {
     this.require('queue.run');
     const result = callNext(this.state.tickets, boothId, this.now());
     if (!result.called) return null;
-    this.commit('queue.call', `${this.boothName(boothId)} called ${result.called.number}.`, (draft) => {
+    this.commit('queue.call', `${this.boothName(boothId)} memanggil ${result.called.number}.`, (draft) => {
       draft.tickets = callNext(draft.tickets, boothId, this.now()).tickets;
     });
     this.announce(result.called, boothId);
@@ -762,29 +798,29 @@ export class Ops {
 
   recall(ticketId: string): void {
     const ticket = this.state.tickets.find((entry) => entry.id === ticketId)!;
-    this.queueChange('queue.recall', `Called ${ticket.number} again.`, (tickets) => recallTicket(tickets, ticketId, this.now()));
+    this.queueChange('queue.recall', `Memanggil ulang ${ticket.number}.`, (tickets) => recallTicket(tickets, ticketId, this.now()));
     this.announce(ticket, ticket.calledBoothId!);
   }
 
   completeTicket(ticketId: string): void {
-    this.queueChange('queue.done', 'Served a ticket.', (tickets) => completeTicket(tickets, ticketId));
+    this.queueChange('queue.done', 'Menyelesaikan satu tiket.', (tickets) => completeTicket(tickets, ticketId));
   }
 
   skipTicket(ticketId: string): void {
-    this.queueChange('queue.skip', 'Marked a ticket as a no-show.', (tickets) => skipTicket(tickets, ticketId));
+    this.queueChange('queue.skip', 'Menandai tiket tidak hadir.', (tickets) => skipTicket(tickets, ticketId));
   }
 
   reRegister(ticketId: string, place: 'front' | 'back'): void {
-    this.queueChange('queue.reregister', `Put a late customer back at the ${place}.`, (tickets) => reRegister(tickets, ticketId, place));
+    this.queueChange('queue.reregister', `Mengembalikan pelanggan terlambat ke ${place === 'front' ? 'depan' : 'belakang'} antrean.`, (tickets) => reRegister(tickets, ticketId, place));
   }
 
   moveTicket(ticketId: string, beforeId: string | null): void {
-    this.queueChange('queue.move', 'Reordered the queue.', (tickets) => moveTicket(tickets, ticketId, beforeId));
+    this.queueChange('queue.move', 'Mengubah urutan antrean.', (tickets) => moveTicket(tickets, ticketId, beforeId));
   }
 
   checkIn(token: string): Ticket {
     const ticket = this.state.tickets.find((entry) => entry.token === token);
-    this.commit('queue.checkin', `${ticket?.number ?? 'A ticket'} checked in.`, (draft) => {
+    this.commit('queue.checkin', `${ticket?.number ?? 'Tiket'} sudah check-in.`, (draft) => {
       draft.tickets = checkIn(draft.tickets, token);
     });
     return this.state.tickets.find((entry) => entry.token === token)!;
@@ -808,10 +844,10 @@ export class Ops {
 
   /** Tells a called customer by WhatsApp or email when they left a contact. */
   private announce(ticket: Ticket, boothId: string): void {
-    const body = `Ticket ${ticket.number}: it's your turn at ${this.boothName(boothId)}.`;
+    const body = `Tiket ${ticket.number}: giliran Anda di ${this.boothName(boothId)}.`;
     this.store.update((draft) => {
-      if (ticket.phone) draft.notifications.unshift({ id: this.store.id(), channel: 'whatsapp', to: ticket.phone, subject: 'Your turn', body, at: this.now() });
-      if (ticket.email) draft.notifications.unshift({ id: this.store.id(), channel: 'email', to: ticket.email, subject: 'Your turn', body, at: this.now() });
+      if (ticket.phone) draft.notifications.unshift({ id: this.store.id(), channel: 'whatsapp', to: ticket.phone, subject: 'Giliran Anda', body, at: this.now() });
+      if (ticket.email) draft.notifications.unshift({ id: this.store.id(), channel: 'email', to: ticket.email, subject: 'Giliran Anda', body, at: this.now() });
     });
   }
 
@@ -849,7 +885,7 @@ export class Ops {
       consent: false,
       email: '',
     };
-    this.commit('session.start', `${this.boothName(input.boothId)} started a ${input.mode} session.`, (draft) => {
+    this.commit('session.start', `${this.boothName(input.boothId)} memulai sesi ${SESSION_MODES[input.mode].label}.`, (draft) => {
       draft.sessions.unshift(session);
       if (input.voucherCode) {
         const voucher = draft.vouchers.find((entry) => entry.code === input.voucherCode);
@@ -878,15 +914,15 @@ export class Ops {
   endSession(sessionId: string, consent: boolean, email: string, deliveryUrl?: string, failureReason?: string): BoothSession {
     const session = this.state.sessions.find((entry) => entry.id === sessionId)!;
     const ended = { ...session, consent, email: deliveryUrl ? email.trim() : '', deliveryUrl, failureReason, endedAt: this.now() };
-    this.commit('session.end', `${this.boothName(session.boothId)} ${failureReason ? `closed a failed session: ${failureReason}` : `finished a session${consent ? ', sharing allowed' : ''}`}.`, (draft) => {
+    this.commit('session.end', `${this.boothName(session.boothId)} ${failureReason ? `menutup sesi gagal: ${failureReason}` : `menyelesaikan sesi${consent ? ', boleh dibagikan' : ''}`}.`, (draft) => {
       Object.assign(draft.sessions.find((entry) => entry.id === sessionId)!, ended);
       if (ended.email) {
         draft.notifications.unshift({
           id: this.store.id(),
           channel: 'email',
           to: ended.email,
-          subject: `Your photos from ${this.state.branding.brandName || this.account.business}`,
-          body: `Download your photos: ${this.galleryLink(ended)}`,
+          subject: `Foto Anda dari ${this.state.branding.brandName || this.account.business}`,
+          body: `Unduh foto Anda: ${this.galleryLink(ended)}`,
           at: this.now(),
         });
       }
@@ -897,8 +933,8 @@ export class Ops {
   /** Records a phone link restored by staff after the customer has left the booth flow. */
   setSessionDelivery(sessionId: string, deliveryUrl: string): void {
     const session = this.state.sessions.find((entry) => entry.id === sessionId);
-    if (!session?.endedAt || session.purgedAt || !session.shotIds.length) throw new Error('This session cannot be restored.');
-    this.commit('session.delivery', `Restored the phone link for ${this.boothName(session.boothId)} session.`, (draft) => {
+    if (!session?.endedAt || session.purgedAt || !session.shotIds.length) throw new Error('Sesi ini tidak bisa dipulihkan.');
+    this.commit('session.delivery', `Memulihkan link ponsel untuk sesi ${this.boothName(session.boothId)}.`, (draft) => {
       draft.sessions.find((entry) => entry.id === sessionId)!.deliveryUrl = deliveryUrl;
     }, { branchId: session.branchId, sync: { sessionId, deliveryUrl } });
   }
@@ -933,7 +969,7 @@ export class Ops {
     const printer = pickPrinter(this.state.printers, boothId, size);
     if (!printer) throw new Error(noPrinterReason(this.state.printers, boothId, size));
     await printImage(image, { size, copies });
-    this.commit('print', `${printer.name} printed ${copies}× ${size} for ${this.boothName(boothId)}.`, (draft) => {
+    this.commit('print', `${printer.name} mencetak ${copies}× ${size} untuk ${this.boothName(boothId)}.`, (draft) => {
       const target = draft.printers.find((entry) => entry.id === printer.id)!;
       Object.assign(target, afterPrint(target, copies));
       const session = draft.sessions.find((entry) => entry.id === sessionId);
@@ -952,7 +988,7 @@ export class Ops {
   /** Saves a booth's camera profiles; this device's camera takes the preview profile at once. */
   saveCameraProfile(profile: CameraProfile): void {
     this.require('devices.manage');
-    this.commit('camera.profile', `Saved camera settings for ${this.boothName(profile.boothId)}.`, (draft) => {
+    this.commit('camera.profile', `Menyimpan pengaturan kamera ${this.boothName(profile.boothId)}.`, (draft) => {
       draft.cameras = [...draft.cameras.filter((entry) => entry.boothId !== profile.boothId), profile];
     });
     if (profile.boothId === this.hooks.devicePointId()) void this.camera?.apply('preview', profile.preview).catch(() => {});
@@ -1013,7 +1049,7 @@ export class Ops {
   /** The update agent on this device: installs the version the rollout gives it. */
   applyUpdate(boothId: string): string {
     const target = this.targetFor(boothId);
-    this.commit('fleet.update', `${this.boothName(boothId)} moved to ${target}.`, (draft) => {
+    this.commit('fleet.update', `${this.boothName(boothId)} diperbarui ke ${target}.`, (draft) => {
       const health = draft.health.find((entry) => entry.boothId === boothId);
       if (health) health.version = target;
       else draft.health.push({ boothId, lastHeartbeat: this.now(), version: target, cameraConnected: true, cameraBattery: null, online: true });
@@ -1027,12 +1063,12 @@ export class Ops {
   async addFace(image: Blob, boothId: string | null, ticketId: string | null = null): Promise<FaceRecord> {
     const face: FaceRecord = { id: this.store.id(), image: await putBlob(image), boothId, ticketId, name: '', createdAt: this.now() };
     const ticket = this.state.tickets.find((entry) => entry.id === ticketId);
-    this.commit('face.capture', `${this.boothName(boothId)} captured a face${ticket ? ` for ticket ${ticket.number}` : ' for AI presets'}.`, (draft) => draft.faces.unshift(face), { branchId: this.branchOf(boothId) });
+    this.commit('face.capture', `${this.boothName(boothId)} mengambil foto wajah${ticket ? ` untuk tiket ${ticket.number}` : ' untuk preset AI'}.`, (draft) => draft.faces.unshift(face), { branchId: this.branchOf(boothId) });
     return face;
   }
 
   savePresetPrice(price: Rupiah): void {
-    this.edit('settings.manage', 'preset.price', price ? `A printed AI preset costs ${formatRupiah(price)}.` : 'AI presets are free.', (draft) => {
+    this.edit('settings.manage', 'preset.price', price ? `Preset AI yang dicetak seharga ${formatRupiah(price)}.` : 'Preset AI gratis.', (draft) => {
       draft.settings.presetPrice = price;
     });
   }
@@ -1043,10 +1079,10 @@ export class Ops {
    */
   tagFace(id: string, name: string): void {
     const face = this.state.faces.find((entry) => entry.id === id);
-    if (!face) throw new Error('That face is gone.');
+    if (!face) throw new Error('Wajah itu sudah tidak ada.');
     const clean = cleanName(name);
     if (clean === face.name) return;
-    this.commit('face.tag', clean ? `Named a face ${clean}.` : 'Removed the name from a face.', (draft) => {
+    this.commit('face.tag', clean ? `Memberi nama wajah ${clean}.` : 'Menghapus nama dari wajah.', (draft) => {
       draft.faces.find((entry) => entry.id === id)!.name = clean;
     }, { branchId: this.branchOf(face.boothId) });
   }
@@ -1060,7 +1096,7 @@ export class Ops {
     const face = this.state.faces.find((entry) => entry.id === id);
     if (!face) return;
     await deleteBlob(face.image);
-    this.commit('face.delete', 'Deleted a captured face.', (draft) => {
+    this.commit('face.delete', 'Menghapus satu wajah.', (draft) => {
       draft.faces = draft.faces.filter((entry) => entry.id !== id);
     });
   }
@@ -1074,7 +1110,7 @@ export class Ops {
     if (expired.length === 0) return 0;
     for (const session of expired) for (const shotId of session.shotIds) await deleteShot(shotId);
     const ids = new Set(expired.map((session) => session.id));
-    this.commit('retention.purge', `Deleted the photos of ${expired.length} sessions older than ${this.state.settings.retentionDays} days.`, (draft) => {
+    this.commit('retention.purge', `Menghapus foto ${expired.length} sesi yang lebih lama dari ${this.state.settings.retentionDays} hari.`, (draft) => {
       for (const session of draft.sessions) {
         if (ids.has(session.id)) {
           session.purgedAt = this.now();
@@ -1094,7 +1130,7 @@ export class Ops {
     if (old.length === 0) return;
     for (const face of old) await deleteBlob(face.image);
     const ids = new Set(old.map((face) => face.id));
-    this.commit('retention.faces', `Deleted ${old.length} captured faces older than ${days} days.`, (draft) => {
+    this.commit('retention.faces', `Menghapus ${old.length} wajah yang lebih lama dari ${days} hari.`, (draft) => {
       draft.faces = draft.faces.filter((face) => !ids.has(face.id));
     });
   }

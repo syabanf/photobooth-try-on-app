@@ -40,7 +40,7 @@ export interface QrisDeskState {
   log: Notification[];
 }
 
-const STATUS_LABELS: Record<Status, string> = { matched: 'Matched', unmatched: 'Unmatched', ignored: 'Ignored' };
+const STATUS_LABELS: Record<Status, string> = { matched: 'Cocok', unmatched: 'Tidak cocok', ignored: 'Diabaikan' };
 const STATUS_KIND: Record<Status, BadgeKind> = { matched: 'ok', unmatched: 'warn', ignored: 'muted' };
 const view = { status: '' as Status | '', query: '' };
 
@@ -50,19 +50,19 @@ const reference = (key: string) => key.slice(key.indexOf(':') + 1);
 /** The booth computer's QRIS state, or the reason this device cannot see it. */
 export async function loadQrisDesk(): Promise<QrisDeskState | string> {
   const reply = await fetch('/api/qris/setup').catch(() => null);
-  if (!reply) return 'The booth computer did not answer. Your own QRIS needs the app opened from the booth computer (pnpm serve).';
+  if (!reply) return 'Komputer booth tidak menjawab. QRIS milik toko butuh aplikasi yang dibuka dari komputer booth (pnpm serve).';
   const data = (await reply.json().catch(() => ({}))) as QrisDeskState & { error?: string };
-  return reply.ok ? data : (data.error ?? 'Open this page on the booth computer.');
+  return reply.ok ? data : (data.error ?? 'Buka halaman ini di komputer booth.');
 }
 
 async function post(path: string, body?: unknown): Promise<void> {
   const reply = await fetch(`/api/qris/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
-  if (!reply.ok) throw new Error(((await reply.json().catch(() => ({}))) as { error?: string }).error ?? 'The booth computer refused that.');
+  if (!reply.ok) throw new Error(((await reply.json().catch(() => ({}))) as { error?: string }).error ?? 'Komputer booth menolak permintaan itu.');
 }
 
 export function qrisHistoryTab({ ops, redraw }: PageContext): HTMLElement {
   const box = el('div', 'ops-body');
-  box.append(el('p', 'card-desc', 'Checking the booth computer…'));
+  box.append(el('p', 'card-desc', 'Memeriksa komputer booth…'));
   void loadQrisDesk().then((desk) => {
     if (typeof desk === 'string') return box.replaceChildren(el('p', 'callout', desk));
     box.replaceChildren(history(desk), waitingQrs(desk));
@@ -70,7 +70,7 @@ export function qrisHistoryTab({ ops, redraw }: PageContext): HTMLElement {
   return box;
 
   function history(desk: QrisDeskState): HTMLElement {
-    const part = section('QRIS notifications', 'Every "money received" notification the phone forwarded, newest first, and the QR each one settled. The booth computer keeps the last 500.');
+    const part = section('Notifikasi QRIS', 'Setiap notifikasi "dana masuk" yang diteruskan ponsel, terbaru di atas, beserta QR yang dilunasinya. Komputer booth menyimpan 500 terakhir.');
     const today = new Date().setHours(0, 0, 0, 0);
     const recent = desk.log.filter((entry) => entry.at >= today);
     const matched = recent.filter((entry) => entry.status === 'matched');
@@ -80,7 +80,7 @@ export function qrisHistoryTab({ ops, redraw }: PageContext): HTMLElement {
 
     const search = el('input', 'input');
     search.type = 'search';
-    search.placeholder = 'Text, amount or reference';
+    search.placeholder = 'Teks, nominal atau referensi';
     search.value = view.query;
     search.addEventListener('change', () => {
       view.query = search.value;
@@ -88,7 +88,7 @@ export function qrisHistoryTab({ ops, redraw }: PageContext): HTMLElement {
     });
     const filters = el('div', 'ops-filters');
     filters.append(
-      pills([{ value: '', label: 'All' }, ...(Object.keys(STATUS_LABELS) as Status[]).map((status) => ({ value: status, label: STATUS_LABELS[status] }))], view.status, (status) => {
+      pills([{ value: '', label: 'Semua' }, ...(Object.keys(STATUS_LABELS) as Status[]).map((status) => ({ value: status, label: STATUS_LABELS[status] }))], view.status, (status) => {
         view.status = status;
         redraw();
       }),
@@ -96,34 +96,34 @@ export function qrisHistoryTab({ ops, redraw }: PageContext): HTMLElement {
       act('CSV', 'btn btn-outline btn-sm', () =>
         downloadText(
           toCsv(
-            ['When', 'Status', 'Amounts read', 'Settled QR', 'Total', 'By hand', 'Text'],
-            rows.map((entry) => [new Date(entry.at).toISOString(), STATUS_LABELS[entry.status], entry.amounts.join(' '), entry.key ? reference(entry.key) : '', entry.total ?? '', entry.byHand ? 'yes' : '', entry.text]),
+            ['Waktu', 'Status', 'Nominal terbaca', 'QR yang dilunasi', 'Total', 'Manual', 'Teks'],
+            rows.map((entry) => [new Date(entry.at).toISOString(), STATUS_LABELS[entry.status], entry.amounts.join(' '), entry.key ? reference(entry.key) : '', entry.total ?? '', entry.byHand ? 'ya' : '', entry.text]),
           ),
           'qris-notifications.csv',
         ),
       'download'),
-      act('Refresh', 'btn btn-ghost btn-sm', redraw),
+      act('Muat ulang', 'btn btn-ghost btn-sm', redraw),
     );
 
     part.body.append(
       statRow([
-        { label: 'Received today', value: String(recent.length), hint: desk.lastSeen ? `Last at ${new Date(desk.lastSeen).toLocaleTimeString(undefined, { timeStyle: 'short' })}` : 'None yet' },
-        { label: 'Matched today', value: money(matched.reduce((sum, entry) => sum + (entry.total ?? 0), 0)), hint: `${matched.length} payments` },
-        { label: 'Unmatched', value: String(open.length), hint: open.length ? 'Open each one to place it' : 'Nothing to look at' },
-        { label: 'QRs waiting now', value: String(desk.waiting.length) },
+        { label: 'Masuk hari ini', value: String(recent.length), hint: desk.lastSeen ? `Terakhir pukul ${new Date(desk.lastSeen).toLocaleTimeString('id-ID', { timeStyle: 'short' })}` : 'Belum ada' },
+        { label: 'Cocok hari ini', value: money(matched.reduce((sum, entry) => sum + (entry.total ?? 0), 0)), hint: `${matched.length} pembayaran` },
+        { label: 'Tidak cocok', value: String(open.length), hint: open.length ? 'Buka satu per satu untuk mencocokkannya' : 'Tidak ada yang perlu diperiksa' },
+        { label: 'QR menunggu saat ini', value: String(desk.waiting.length) },
       ]),
       filters,
       table<Notification>(
         [
-          { label: 'When', cell: (entry) => dateTime(entry.at) },
+          { label: 'Waktu', cell: (entry) => dateTime(entry.at) },
           { label: 'Status', cell: (entry) => badge(STATUS_LABELS[entry.status], STATUS_KIND[entry.status]) },
-          { label: 'Amounts read', cell: (entry) => entry.amounts.map(money).join(', ') || 'None' },
-          { label: 'Settled QR', cell: (entry) => (entry.key ? `${reference(entry.key)} · ${money(entry.total ?? 0)}${entry.byHand ? ' · by hand' : ''}` : '—') },
-          { label: 'Text', cell: (entry) => entry.text },
-          { label: '', cell: (entry) => act(entry.status === 'unmatched' ? 'Place it' : 'View', entry.status === 'unmatched' ? 'btn btn-outline btn-sm' : 'btn btn-ghost btn-sm', () => notificationDialog(entry, desk)) },
+          { label: 'Nominal terbaca', cell: (entry) => entry.amounts.map(money).join(', ') || 'Tidak ada' },
+          { label: 'QR yang dilunasi', cell: (entry) => (entry.key ? `${reference(entry.key)} · ${money(entry.total ?? 0)}${entry.byHand ? ' · manual' : ''}` : '—') },
+          { label: 'Teks', cell: (entry) => entry.text },
+          { label: '', cell: (entry) => act(entry.status === 'unmatched' ? 'Cocokkan' : 'Lihat', entry.status === 'unmatched' ? 'btn btn-outline btn-sm' : 'btn btn-ghost btn-sm', () => notificationDialog(entry, desk)) },
         ],
         rows,
-        { empty: desk.log.length ? 'No notification fits these filters.' : 'No notification has arrived yet. Send a test from the QRIS gateway tab.' },
+        { empty: desk.log.length ? 'Tidak ada notifikasi yang sesuai filter ini.' : 'Belum ada notifikasi yang masuk. Kirim tes dari tab Gateway QRIS.' },
       ),
     );
     return part.root;
@@ -132,31 +132,31 @@ export function qrisHistoryTab({ ops, redraw }: PageContext): HTMLElement {
   function notificationDialog(entry: Notification, desk: QrisDeskState): void {
     const facts = el('dl', 'facts');
     for (const [label, value] of [
-      ['Received', dateTime(entry.at)],
-      ['Status', `${STATUS_LABELS[entry.status]}${entry.byHand ? ' by hand' : ''}`],
-      ['Amounts read', entry.amounts.map(money).join(', ') || 'None'],
-      ['Settled QR', entry.key ? `${reference(entry.key)} · ${money(entry.total ?? 0)}` : '—'],
-      ['Text', entry.text],
+      ['Diterima', dateTime(entry.at)],
+      ['Status', `${STATUS_LABELS[entry.status]}${entry.byHand ? ' manual' : ''}`],
+      ['Nominal terbaca', entry.amounts.map(money).join(', ') || 'Tidak ada'],
+      ['QR yang dilunasi', entry.key ? `${reference(entry.key)} · ${money(entry.total ?? 0)}` : '—'],
+      ['Teks', entry.text],
     ]) {
       facts.append(el('dt', '', label), el('dd', '', value));
     }
     const ignore = async () => {
       await post(`log/${entry.id}`, { action: 'ignore' });
-      ops.edit('settings.manage', 'payment.qris-ignore', `QRIS notification set aside: "${entry.text.slice(0, 80)}".`, () => {});
+      ops.edit('settings.manage', 'payment.qris-ignore', `Notifikasi QRIS diabaikan: "${entry.text.slice(0, 80)}".`, () => {});
     };
     if (entry.status !== 'unmatched') {
-      const close = actionButton('Done', 'btn btn-primary');
+      const close = actionButton('Selesai', 'btn btn-primary');
       close.dataset.close = '';
-      openDialog({ title: 'QRIS notification', body: [facts], footer: [close] });
+      openDialog({ title: 'Notifikasi QRIS', body: [facts], footer: [close] });
       return;
     }
     if (desk.waiting.length === 0) {
       const dialog = openDialog({
-        title: 'Unmatched notification',
-        description: 'No QR is waiting, so there is nothing to place this on. If the customer’s QR ran out, find it under Payments and use Mark paid. Set this aside once it is dealt with.',
+        title: 'Notifikasi tidak cocok',
+        description: 'Tidak ada QR yang menunggu, jadi notifikasi ini tidak bisa dicocokkan. Kalau QR pelanggan sudah kedaluwarsa, cari di Pembayaran lalu pakai Tandai lunas. Abaikan notifikasi ini setelah selesai ditangani.',
         body: [facts],
         footer: [
-          act('Set aside', 'btn btn-outline', async () => {
+          act('Abaikan', 'btn btn-outline', async () => {
             await ignore();
             dialog.close();
           }),
@@ -165,44 +165,44 @@ export function qrisHistoryTab({ ops, redraw }: PageContext): HTMLElement {
       return;
     }
     formDialog({
-      title: 'Unmatched notification',
-      description: `"${entry.text}" named no waiting QR. Pick the QR this customer was paying, for example when they typed a different amount, and its booth or till finishes the order.`,
-      submitLabel: 'Mark that QR paid',
-      fields: [{ name: 'key', label: 'Waiting QR', value: desk.waiting[0].key, options: desk.waiting.map((qr) => ({ value: qr.key, label: `${reference(qr.key)} · ${money(qr.total)}` })) }],
+      title: 'Notifikasi tidak cocok',
+      description: `"${entry.text}" tidak cocok dengan QR yang menunggu. Pilih QR yang dibayar pelanggan ini, misalnya bila mereka mengetik nominal lain, lalu booth atau kasirnya menyelesaikan pesanan.`,
+      submitLabel: 'Tandai QR itu lunas',
+      fields: [{ name: 'key', label: 'QR yang menunggu', value: desk.waiting[0].key, options: desk.waiting.map((qr) => ({ value: qr.key, label: `${reference(qr.key)} · ${money(qr.total)}` })) }],
       danger: {
-        label: 'Set aside',
+        label: 'Abaikan',
         run: (close) =>
           void ignore().then(close, (error: Error) => notice(error.message, 'error')),
       },
       async submit(values) {
         const key = String(values.key);
         await post(`log/${entry.id}`, { action: 'match', key });
-        ops.edit('settings.manage', 'payment.qris-match', `QRIS ${reference(key)} settled by hand from the notification "${entry.text.slice(0, 80)}".`, () => {});
+        ops.edit('settings.manage', 'payment.qris-match', `QRIS ${reference(key)} dilunasi manual dari notifikasi "${entry.text.slice(0, 80)}".`, () => {});
       },
     });
   }
 
   function waitingQrs(desk: QrisDeskState): HTMLElement {
-    const part = section('QRs waiting now', 'Across every booth, kiosk and till. Each holds its total until it is paid, cancelled or out of time, so no other customer is asked for the same amount.');
+    const part = section('QR menunggu saat ini', 'Dari semua booth, kiosk dan kasir. Setiap QR memegang totalnya sampai lunas, dibatalkan atau habis waktunya, supaya tidak ada pelanggan lain yang diminta nominal yang sama.');
     part.body.append(
       table<WaitingQr>(
         [
-          { label: 'Reference', cell: (qr) => reference(qr.key) },
-          { label: 'Customer pays', cell: (qr) => money(qr.total) },
-          { label: 'Unique code', cell: (qr) => (qr.code ? money(qr.code) : '—') },
-          { label: 'Valid until', cell: (qr) => new Date(qr.expiresAt).toLocaleTimeString(undefined, { timeStyle: 'short' }) },
+          { label: 'Referensi', cell: (qr) => reference(qr.key) },
+          { label: 'Dibayar pelanggan', cell: (qr) => money(qr.total) },
+          { label: 'Kode unik', cell: (qr) => (qr.code ? money(qr.code) : '—') },
+          { label: 'Berlaku sampai', cell: (qr) => new Date(qr.expiresAt).toLocaleTimeString('id-ID', { timeStyle: 'short' }) },
           {
             label: '',
             cell: (qr) =>
-              act('Release', 'btn btn-ghost btn-sm', async () => {
+              act('Lepaskan', 'btn btn-ghost btn-sm', async () => {
                 const reply = await fetch(`/api/qris/charges/${encodeURIComponent(qr.key)}`, { method: 'DELETE' });
-                if (!reply.ok) throw new Error('The booth computer refused that.');
-                ops.edit('settings.manage', 'payment.qris-release', `Waiting QRIS ${reference(qr.key)} released: a payment to it will no longer settle on its own.`, () => {});
+                if (!reply.ok) throw new Error('Komputer booth menolak permintaan itu.');
+                ops.edit('settings.manage', 'payment.qris-release', `QRIS ${reference(qr.key)} yang menunggu dilepas: pembayaran ke QR ini tidak akan lunas otomatis lagi.`, () => {});
               }),
           },
         ],
         desk.waiting,
-        { empty: 'No QR is waiting.' },
+        { empty: 'Tidak ada QR yang menunggu.' },
       ),
     );
     return part.root;

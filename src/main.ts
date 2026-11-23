@@ -155,7 +155,7 @@ const ui = mountUi(document.body, {
   onSelect: toggleItem,
   onUpload(file) {
     if (file.type !== 'image/png') {
-      setStatus('Upload a PNG with a transparent background.', 'warn');
+      setStatus('Unggah PNG dengan latar transparan.', 'warn');
       return;
     }
     const item = createUploadItem(file, state.activeTab);
@@ -179,8 +179,8 @@ const ui = mountUi(document.body, {
     handCursor.setEnabled(state.handControl);
     if (state.handControl) {
       if (!state.gesture) void loadGestureRecognizer();
-      if (state.cameraLive) setStatus('Hand control on. Pinch to click.', 'ok');
-      else setStatus('Start the camera to use hand control.', 'warn');
+      if (state.cameraLive) setStatus('Kontrol tangan aktif. Jepit untuk klik.', 'ok');
+      else setStatus('Nyalakan kamera untuk memakai kontrol tangan.', 'warn');
     }
     syncLoop();
   },
@@ -241,19 +241,24 @@ function syncLoop(): void {
 function showView(view: View): void {
   if (view === state.view) return;
   if (state.booth.running) {
-    setStatus('Finish or cancel the photobooth first.', 'warn');
+    setStatus('Selesaikan atau batalkan photobooth dulu.', 'warn');
     return;
   }
   if (state.view === 'session' && business?.session.step() !== 'mode' && !staffExitAuthorized) {
-    setStatus('Finish this booth session before leaving.', 'warn');
+    setStatus('Selesaikan sesi booth ini sebelum pindah.', 'warn');
     return;
   }
   if (customerMode && state.view === 'session' && view !== 'session') {
-    setStatus('Open Staff controls to leave the booth.', 'warn');
+    setStatus('Buka Kontrol staf untuk keluar dari booth.', 'warn');
     return;
   }
   state.view = view;
   ui.setView(view);
+  // The camera starts on the first page that needs it, so a manager's laptop never asks for it.
+  if (CAMERA_VIEWS.includes(view) && !cameraRequested) {
+    cameraRequested = true;
+    void boot();
+  }
   updateCustomerShell();
   stickers.setVisible(view === 'photobooth');
   if (view !== 'photobooth') booth.showPreview(null);
@@ -374,17 +379,17 @@ function schedulePreview(): void {
 async function startPhotobooth(): Promise<void> {
   if (state.booth.running) return;
   if (!state.cameraLive) {
-    setStatus('Start the camera first.', 'warn');
+    setStatus('Nyalakan kamera dulu.', 'warn');
     return;
   }
   const settings = booth.settings();
   const blend = settings.blend === 'ai';
   if (blend && state.background.kind === 'none') {
-    setStatus('Pick a backdrop for the AI blend.', 'warn');
+    setStatus('Pilih latar untuk paduan AI.', 'warn');
     return;
   }
   if (blend && !settings.apiKey) {
-    setStatus('Paste your Decart API key for the AI blend.', 'warn');
+    setStatus('Tempel API key Decart untuk paduan AI.', 'warn');
     return;
   }
   const total = shotsFor(settings.layout);
@@ -395,7 +400,7 @@ async function startPhotobooth(): Promise<void> {
   state.booth.cancelled = false;
   booth.setRunning(true);
   booth.progress(0, total);
-  setStatus('Photobooth running. Strike a pose.', 'info');
+  setStatus('Photobooth berjalan. Ayo bergaya.', 'info');
 
   try {
     const shots = await runBoothSession(total, settings.seconds, {
@@ -414,12 +419,12 @@ async function startPhotobooth(): Promise<void> {
       cancelled: () => state.booth.cancelled,
     });
     if (!shots) {
-      setStatus('Photobooth cancelled.', 'info');
+      setStatus('Photobooth dibatalkan.', 'info');
       return;
     }
     if (blend) {
-      booth.working('Blending with AI…');
-      setStatus(`Decart is blending ${total} ${total === 1 ? 'shot' : 'shots'} into the scene…`, 'info');
+      booth.working('Memadukan dengan AI…');
+      setStatus(`Decart sedang memadukan ${total} foto ke latar…`, 'info');
     }
     const final = blend ? await Promise.all(blends) : shots;
     const sheet = await composeBooth(final, settings.layout, settings.frame, settings.caption, new Date());
@@ -427,12 +432,12 @@ async function startPhotobooth(): Promise<void> {
     await saveShot(blob, 'photobooth', devicePoint(), settings.layout);
     booth.setResult(blob);
     await gallery.refresh();
-    setStatus('Sheet saved to the gallery.', 'ok');
+    setStatus('Lembar foto tersimpan di galeri.', 'ok');
   } catch (e) {
     console.error(e);
     // The Decart SDK rejects with plain { code, message } objects rather than Errors.
     const reason = (e as { message?: string } | null)?.message ?? String(e);
-    setStatus(blend ? `AI blend failed: ${reason}` : 'Photobooth failed.', 'error');
+    setStatus(blend ? `Paduan AI gagal: ${reason}` : 'Photobooth gagal.', 'error');
   } finally {
     state.booth.running = false;
     state.booth.armed = false;
@@ -455,28 +460,28 @@ function switchMode(mode: Mode): void {
     video.hidden = false;
     overlay.canvas.hidden = false;
     syncLoop();
-    setStatus('Ready', 'ok');
+    setStatus('Siap', 'ok');
     return;
   }
 
   overlay.clear();
   syncLoop();
-  setStatus('Paste your Decart API key, then press Connect.');
+  setStatus('Tempel API key Decart, lalu tekan Hubungkan.');
 }
 
 async function connectAi(apiKey: string): Promise<void> {
   if (!apiKey) {
-    setStatus('A Decart API key is needed for this mode.', 'warn');
+    setStatus('Mode ini butuh API key Decart.', 'warn');
     return;
   }
   const stream = video.srcObject as MediaStream | null;
   if (!stream) {
-    setStatus('Start the camera first.', 'warn');
+    setStatus('Nyalakan kamera dulu.', 'warn');
     return;
   }
 
   storeKey(apiKey);
-  setStatus('Connecting to Decart…');
+  setStatus('Menghubungkan ke Decart…');
   try {
     const { connect: connectDecart, wearGarment } = await decartSdk();
     state.decart = await connectDecart(apiKey, stream, {
@@ -485,7 +490,7 @@ async function connectAi(apiKey: string): Promise<void> {
         remoteVideo.hidden = false;
         video.hidden = true;
         overlay.canvas.hidden = true;
-        setStatus('Streaming to Decart. Billed per second.', 'ok');
+        setStatus('Streaming ke Decart. Ditagih per detik.', 'ok');
       },
       onClosed: (reason) => setStatus(`Decart: ${reason}`, 'warn', true),
       onError: (message) => setStatus(`Decart: ${message}`, 'error'),
@@ -494,7 +499,7 @@ async function connectAi(apiKey: string): Promise<void> {
     if (worn) await wearGarment(state.decart, worn);
   } catch (e) {
     console.error(e);
-    setStatus(e instanceof Error ? `Decart: ${e.message}` : 'Could not reach Decart.', 'error', true);
+    setStatus(e instanceof Error ? `Decart: ${e.message}` : 'Decart tidak bisa dihubungi.', 'error', true);
   }
 }
 
@@ -548,7 +553,7 @@ async function wear(item: CatalogItem): Promise<void> {
     const image = await loadImage(item.src);
     if (state.worn[category] === item) state.images[category] = image;
   } catch {
-    setStatus(`Could not read ${item.name}.`, 'error');
+    setStatus(`${item.name} tidak bisa dibaca.`, 'error');
     takeOff(category);
     return;
   }
@@ -558,7 +563,7 @@ async function wear(item: CatalogItem): Promise<void> {
 function toggleItem(item: CatalogItem): void {
   if (state.mode === 'ai') {
     if (item.category !== 'clothing') {
-      setStatus('Decart AI changes clothing only.', 'warn');
+      setStatus('Decart AI hanya mengganti pakaian.', 'warn');
       return;
     }
     state.worn.clothing = item;
@@ -578,21 +583,21 @@ function toggleItem(item: CatalogItem): void {
 async function loadNeededDetectors(): Promise<boolean> {
   const missing = [...neededDetectors()].filter((detector) => state[detector] === null);
   if (missing.length === 0) {
-    setStatus('Ready', 'ok');
+    setStatus('Siap', 'ok');
     return true;
   }
-  setStatus('Loading model…');
+  setStatus('Memuat model…');
   try {
     for (const detector of missing) {
       if (detector === 'face') state.face = await getFaceLandmarker();
       else state.pose = await getPoseLandmarker();
     }
     if (neededDetectors().has('pose')) void loadSegmenter();
-    setStatus('Ready', 'ok');
+    setStatus('Siap', 'ok');
     return true;
   } catch (e) {
     console.error(e);
-    setStatus('Could not load the tracking model. Check your connection.', 'error', true);
+    setStatus('Model pelacak gagal dimuat. Periksa koneksi internet.', 'error', true);
     return false;
   }
 }
@@ -612,7 +617,7 @@ async function loadGestureRecognizer(): Promise<void> {
     state.gesture = await getGestureRecognizer();
   } catch (e) {
     console.error(e);
-    setStatus('Gesture capture unavailable. Use the Snapshot button.', 'warn');
+    setStatus('Foto dengan gestur tidak tersedia. Pakai tombol Foto.', 'warn');
   }
 }
 
@@ -622,15 +627,15 @@ function devicePoint(): string | null {
 
 async function takeSnapshot(): Promise<void> {
   if (!state.cameraLive) {
-    setStatus('Start the camera first.', 'warn');
+    setStatus('Nyalakan kamera dulu.', 'warn');
     return;
   }
   try {
     await saveShot(await canvasToBlob(currentFrame()), 'snapshot', devicePoint());
     await gallery.refresh();
-    setStatus('Snapshot saved to the gallery.', 'ok');
+    setStatus('Foto tersimpan di galeri.', 'ok');
   } catch (e) {
-    setStatus('Snapshot failed.', 'error');
+    setStatus('Foto gagal.', 'error');
     console.error(e);
   }
 }
@@ -700,10 +705,10 @@ function drawClothing(lm: NormalizedLandmark[] | null, width: number, height: nu
 
 function trackingStatus(needed: Set<Detector>): { text: string; kind: StatusKind } | null {
   if (needed.has('face') && state.lostFrames.face > LOST_FRAME_GRACE) {
-    return { text: 'No face detected.', kind: 'warn' };
+    return { text: 'Wajah tidak terdeteksi.', kind: 'warn' };
   }
   if (needed.has('pose') && state.lostFrames.pose > LOST_FRAME_GRACE) {
-    return { text: 'Step back so both shoulders are in view.', kind: 'warn' };
+    return { text: 'Mundur sedikit agar kedua bahu terlihat.', kind: 'warn' };
   }
   return null;
 }
@@ -714,7 +719,7 @@ function setLoopStatus(next: { text: string; kind: StatusKind } | null): void {
     setStatus(next.text, next.kind);
     state.loopStatus = next.text;
   } else if (state.loopStatus !== null) {
-    if (state.status === state.loopStatus) setStatus('Ready', 'ok');
+    if (state.status === state.loopStatus) setStatus('Siap', 'ok');
     state.loopStatus = null;
   }
 }
@@ -750,7 +755,7 @@ function frame(): void {
       state.loopStatus = null;
       void takeSnapshot();
     } else {
-      setLoopStatus(capture.secondsLeft === null ? null : { text: `Capturing in ${capture.secondsLeft}…`, kind: 'info' });
+      setLoopStatus(capture.secondsLeft === null ? null : { text: `Memotret dalam ${capture.secondsLeft}…`, kind: 'info' });
     }
     return;
   }
@@ -793,7 +798,7 @@ function frame(): void {
   }
   if (capture.secondsLeft !== null) {
     overlay.drawCountdown(capture.secondsLeft);
-    setLoopStatus({ text: `Capturing in ${capture.secondsLeft}…`, kind: 'info' });
+    setLoopStatus({ text: `Memotret dalam ${capture.secondsLeft}…`, kind: 'info' });
     return;
   }
   setLoopStatus(trackingStatus(needed));
@@ -830,26 +835,28 @@ document.addEventListener('vto:pick-camera', () => void pickCamera(() => void bo
 
 /** A 4:5 headshot of the person facing the camera, for AI presets. */
 async function captureFace(): Promise<HTMLCanvasElement> {
-  if (!state.cameraLive) throw new Error('The camera is not running.');
+  if (!state.cameraLive) throw new Error('Kamera belum menyala.');
   state.face ??= await getFaceLandmarker();
   const landmarks = detectFace(state.face, video, nextTimestamp());
-  if (!landmarks) throw new Error('No face found. Look straight at the camera and try again.');
+  if (!landmarks) throw new Error('Wajah tidak ditemukan. Lihat lurus ke kamera lalu coba lagi.');
   return cropFace(video, landmarks);
 }
 
 /** Everyone in front of the entrance camera, one 4:5 headshot each. */
 async function captureFaces(): Promise<HTMLCanvasElement[]> {
-  if (!state.cameraLive) throw new Error('The camera is not running.');
+  if (!state.cameraLive) throw new Error('Kamera belum menyala.');
   const faces = await detectFaces(video);
-  if (faces.length === 0) throw new Error('No face in view. Ask the party to look at the camera.');
+  if (faces.length === 0) throw new Error('Tidak ada wajah terlihat. Minta rombongan melihat ke kamera.');
   return faces.map((landmarks) => cropFace(video, landmarks));
 }
+
+let cameraRequested = false;
 
 async function boot(): Promise<void> {
   ui.setSnapshotEnabled(false);
   const source = readSource();
   cameraName.textContent = describeSource(source);
-  setStatus(`Starting ${describeSource(source).toLowerCase()}…`);
+  setStatus(`Menyalakan ${describeSource(source).toLowerCase()}…`);
   camera?.close();
   camera = null;
   state.cameraLive = false;
@@ -888,20 +895,20 @@ function updateCustomerShell(): void {
   const atBooth = state.view === 'session' && !!sites?.devicePointId();
   document.querySelector('.shell')!.classList.toggle('booth-customer-mode', atBooth && customerMode);
   boothModeToggle.hidden = !atBooth;
-  boothModeToggle.textContent = customerMode ? 'Staff controls' : 'Customer mode';
+  boothModeToggle.textContent = customerMode ? 'Kontrol staf' : 'Mode pelanggan';
 }
 
 boothModeToggle.addEventListener('click', () => {
   if (customerMode) {
     if (business?.session.step() === 'shoot') {
-      setStatus('Wait for the capture to finish before opening staff controls.', 'warn');
+      setStatus('Tunggu pemotretan selesai sebelum membuka kontrol staf.', 'warn');
       return;
     }
     const inSession = business?.session.step() !== 'mode';
     confirmDialog({
-      title: 'Open staff controls?',
-      message: inSession ? 'The current session will stay here for staff to resume.' : 'This leaves the customer screen and opens the workspace menu.',
-      confirmLabel: 'Open staff controls',
+      title: 'Buka kontrol staf?',
+      message: inSession ? 'Sesi yang berjalan tetap tersimpan agar staf bisa melanjutkannya.' : 'Layar pelanggan ditutup dan menu staf dibuka.',
+      confirmLabel: 'Buka kontrol staf',
       async run() {
         customerMode = false;
         staffExitAuthorized = true;
@@ -917,11 +924,18 @@ boothModeToggle.addEventListener('click', () => {
     updateCustomerShell();
   }
 });
+/** Where each role starts its day: the cashier at the till, the operator at the booth. */
+function homeView(ops: Ops): View {
+  const role = ops.actor()?.role;
+  const home: View = role === 'cashier' ? 'pos' : role === 'operator' ? 'session' : 'dashboard';
+  return mayOpen(ops, home) ? home : 'dashboard';
+}
+
 /** Heartbeats wait for the first camera start, so a page load never reports a camera as unplugged. */
 let heartbeats = false;
 
 async function startBusiness(account: Account): Promise<Ops> {
-  const records = await openRecords(() => notice('This device could not save the last change to its disk. Keep this window open and call support.', 'error'));
+  const records = await openRecords(() => notice('Perangkat ini gagal menyimpan perubahan terakhir. Biarkan jendela ini terbuka dan hubungi bantuan.', 'error'));
   const store = new OpsStore(records, account.id, account.business);
   const ops = new Ops(store, account, {
     toast: (message, kind) => notice(message, kind),
@@ -1043,10 +1057,9 @@ async function start(): Promise<void> {
   });
   // A kiosk linked to a point opens on the booth flow; a manager's device opens on the dashboard.
   customerMode = !!sites.devicePointId();
-  showView(customerMode ? 'session' : 'dashboard');
+  showView(customerMode ? 'session' : homeView(ops));
   void gallery.refresh();
   await wear(DEFAULT_ITEMS[0]);
-  await boot();
   heartbeats = true;
   const id = sites.devicePointId();
   if (id && ops.camera) ops.heartbeat(id, ops.camera.state());
@@ -1055,13 +1068,13 @@ async function start(): Promise<void> {
 // An error no handler caught still reaches the person at the screen, once per message a minute.
 const reported = new Map<string, number>();
 function reportUncaught(reason: unknown): void {
-  const message = reason instanceof Error ? reason.message : String(reason ?? 'Unknown error');
+  const message = reason instanceof Error ? reason.message : String(reason ?? 'Kesalahan tidak dikenal');
   // The browser raises this for layout timing; it never means something broke.
   if (message.includes('ResizeObserver loop')) return;
   console.error(reason);
   if (Date.now() - (reported.get(message) ?? 0) < 60_000) return;
   reported.set(message, Date.now());
-  notice(`Something went wrong: ${message}`, 'error');
+  notice(`Terjadi kesalahan: ${message}`, 'error');
 }
 window.addEventListener('error', (event) => reportUncaught(event.error ?? event.message));
 window.addEventListener('unhandledrejection', (event) => reportUncaught(event.reason));

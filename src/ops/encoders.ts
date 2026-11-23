@@ -172,7 +172,7 @@ function qrisFields(payload: string): { id: string; value: string }[] {
     const id = payload.slice(at, at + 2);
     const length = Number(payload.slice(at + 2, at + 4));
     const value = payload.slice(at + 4, at + 4 + length);
-    if (!/^\d{2}$/.test(id) || !Number.isInteger(length) || value.length !== length) throw new Error('That is not a QRIS code.');
+    if (!/^\d{2}$/.test(id) || !Number.isInteger(length) || value.length !== length) throw new Error('Itu bukan kode QRIS.');
     fields.push({ id, value });
     at += 4 + length;
   }
@@ -189,8 +189,8 @@ export interface QrisInfo {
 /** Checks a pasted QRIS string and reads who it pays. Throws with the reason when it is not valid. */
 export function readQris(payload: string): QrisInfo {
   const text = payload.trim();
-  if (!text.startsWith('000201') || text.slice(-8, -4) !== '6304') throw new Error('That is not a QRIS code.');
-  if (text.slice(-4).toUpperCase() !== crc16(text.slice(0, -4)).toString(16).toUpperCase().padStart(4, '0')) throw new Error('The QRIS checksum is wrong. Copy the whole code again.');
+  if (!text.startsWith('000201') || text.slice(-8, -4) !== '6304') throw new Error('Itu bukan kode QRIS.');
+  if (text.slice(-4).toUpperCase() !== crc16(text.slice(0, -4)).toString(16).toUpperCase().padStart(4, '0')) throw new Error('Checksum QRIS salah. Salin ulang seluruh kodenya.');
   const fields = qrisFields(text);
   const get = (id: string) => fields.find((field) => field.id === id)?.value ?? '';
   return { merchantName: get('59'), merchantCity: get('60'), hasAmount: Boolean(get('54')) };
@@ -302,7 +302,7 @@ export function lzw(indices: Uint8Array, minCodeSize = 8): Uint8Array {
 
 /** An endlessly looping GIF. `delay` is in hundredths of a second. */
 export function encodeGif(frames: readonly RgbaFrame[], delay = 20): Uint8Array {
-  if (frames.length === 0) throw new Error('A GIF needs at least one frame.');
+  if (frames.length === 0) throw new Error('GIF butuh minimal satu frame.');
   const { width, height } = frames[0];
   const bytes: number[] = [];
   const word = (n: number) => bytes.push(n & 0xff, (n >> 8) & 0xff);

@@ -51,7 +51,7 @@ function card(className: string, ...content: (Node | null)[]): HTMLElement {
 export function renderKiosk(ops: Ops, root: HTMLElement, head: HTMLElement): void {
   const boothId = ops.hooks.devicePointId();
   if (!boothId) {
-    root.append(card('kiosk-hero kiosk-hero--center', title('Kiosk belum siap', 'kiosk-hero-title'), el('p', 'kiosk-hero-desc', 'Petugas: buka kiosk dari halaman Queue di perangkat yang sudah terhubung ke booth.')));
+    root.append(card('kiosk-hero kiosk-hero--center', title('Kiosk belum siap', 'kiosk-hero-title'), el('p', 'kiosk-hero-desc', 'Petugas: buka kiosk dari halaman Antrean di perangkat yang sudah terhubung ke booth.')));
     return;
   }
   const booth = boothId;
@@ -342,7 +342,7 @@ export function renderKiosk(ops: Ops, root: HTMLElement, head: HTMLElement): voi
   function order() {
     if (orderId) return ops.order(orderId);
     const created = ops.createOrder({
-      lines: [{ kind: 'preset', refId: chosen!.preset.id, label: `AI preset · ${chosen!.preset.name}`, unitPrice: price(), qty: 1 }],
+      lines: [{ kind: 'preset', refId: chosen!.preset.id, label: `Preset AI · ${chosen!.preset.name}`, unitPrice: price(), qty: 1 }],
       presetId: null,
       voucherCode: voucher?.code ?? '',
       channel: 'booth',

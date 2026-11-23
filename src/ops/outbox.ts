@@ -24,6 +24,8 @@ export const backoff = (attempts: number) => Math.min(MAX_BACKOFF_MS, 1000 * 2 *
 
 export class Outbox {
   private flushing: Promise<number> | null = null;
+  /** The last text read or written and its items, so an unchanged queue is not parsed again. */
+  private cache: { raw: string; items: OutboxItem[] } | null = null;
 
   constructor(
     private readonly store: KeyValueStore,
@@ -33,15 +35,22 @@ export class Outbox {
   ) {}
 
   pending(): OutboxItem[] {
-    try {
-      return JSON.parse(this.store.getItem(this.key) ?? '[]') as OutboxItem[];
-    } catch {
-      return [];
+    const raw = this.store.getItem(this.key) ?? '[]';
+    if (this.cache?.raw !== raw) {
+      try {
+        this.cache = { raw, items: JSON.parse(raw) as OutboxItem[] };
+      } catch {
+        this.cache = { raw, items: [] };
+      }
     }
+    // A copy, so a caller that changes the list cannot change the cache.
+    return [...this.cache.items];
   }
 
   private save(items: OutboxItem[]): void {
-    this.store.setItem(this.key, JSON.stringify(items));
+    const raw = JSON.stringify(items);
+    this.store.setItem(this.key, raw);
+    this.cache = { raw, items };
   }
 
   /** Persists before returning, so a crash right after a sale still has it on disk. */

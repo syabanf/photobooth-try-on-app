@@ -13,12 +13,12 @@ const FILTERS: Record<Effects['filter'], string> = {
 };
 
 export const FILTER_LABELS: Record<Effects['filter'], string> = {
-  none: 'Natural',
+  none: 'Alami',
   mono: 'Mono',
-  warm: 'Warm',
-  cool: 'Cool',
+  warm: 'Hangat',
+  cool: 'Sejuk',
   vintage: 'Vintage',
-  vivid: 'Vivid',
+  vivid: 'Cerah',
 };
 
 /** The CSS filter for the live preview, and the same string for the canvas when capturing. */

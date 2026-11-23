@@ -11,11 +11,11 @@ export type Rupiah = number;
 export type SessionMode = 'strip' | 'gif' | 'video' | 'live' | 'vintage';
 
 export const SESSION_MODES: Record<SessionMode, { label: string; detail: string }> = {
-  strip: { label: 'Photo strip', detail: 'Timed shots printed on a sheet' },
-  gif: { label: 'GIF', detail: 'A looping burst of frames' },
-  video: { label: 'Video booth', detail: 'An 8 second clip' },
-  live: { label: 'Live photo', detail: 'A still with a 3 second clip' },
-  vintage: { label: 'Original / vintage', detail: 'Warm film tone, printed' },
+  strip: { label: 'Photo strip', detail: 'Beberapa foto berjeda, dicetak di satu lembar' },
+  gif: { label: 'GIF', detail: 'Rangkaian foto yang berputar ulang' },
+  video: { label: 'Video booth', detail: 'Klip 8 detik' },
+  live: { label: 'Live photo', detail: 'Foto diam dengan klip 3 detik' },
+  vintage: { label: 'Original / vintage', detail: 'Nuansa film hangat, dicetak' },
 };
 
 /** A kind of booth (photobox, studio, 360), each with its own price per mode. */
@@ -115,20 +115,20 @@ export type PaymentMethod = 'cash' | 'qris' | 'card' | 'ewallet';
 export const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'qris', 'card', 'ewallet'];
 
 export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  cash: 'Cash',
+  cash: 'Tunai',
   qris: 'QRIS',
-  card: 'Card',
+  card: 'Kartu',
   ewallet: 'E-wallet',
 };
 
 export type PaymentStatus = 'pending' | 'paid' | 'expired' | 'failed' | 'cancelled';
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
-  pending: 'Waiting',
-  paid: 'Paid',
-  expired: 'Expired',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
+  pending: 'Menunggu',
+  paid: 'Lunas',
+  expired: 'Kedaluwarsa',
+  failed: 'Gagal',
+  cancelled: 'Dibatalkan',
 };
 
 export interface Payment {
@@ -392,10 +392,10 @@ export interface BoothHealth {
 export type AlertKind = 'low-paper' | 'printer-error' | 'camera-disconnected' | 'camera-battery' | 'booth-offline';
 
 export const ALERT_LABELS: Record<AlertKind, string> = {
-  'low-paper': 'Low paper',
-  'printer-error': 'Printer error',
-  'camera-disconnected': 'Camera disconnected',
-  'camera-battery': 'Camera battery low',
+  'low-paper': 'Kertas menipis',
+  'printer-error': 'Printer bermasalah',
+  'camera-disconnected': 'Kamera terputus',
+  'camera-battery': 'Baterai kamera lemah',
   'booth-offline': 'Booth offline',
 };
 

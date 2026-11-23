@@ -80,7 +80,7 @@ export function mountOpsRouter(ops: Ops, nav: (view: View) => void): OpsRouter {
     const page = PAGES[current];
     if (!can(ops.actor(), page.permission)) {
       const locked = el('div', 'card page-card empty');
-      locked.append(el('p', 'empty-title', 'Not available for your role'), el('p', 'empty-desc', `${ops.actor()?.name ?? 'This user'} cannot open this page. Switch user on the Staff page or ask an owner.`));
+      locked.append(el('p', 'empty-title', 'Tidak tersedia untuk peran Anda'), el('p', 'empty-desc', `${ops.actor()?.name ?? 'Pengguna ini'} tidak punya izin membuka halaman ini. Ganti pengguna di halaman Pengguna atau minta bantuan pemilik.`));
       container.replaceChildren(locked);
       return;
     }
