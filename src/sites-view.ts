@@ -1,7 +1,7 @@
 // Master data: the account's locations, the points inside each one, and which point this device is.
 
 import type { AccountBackend } from './account/backend';
-import { TRIAL_LIMITS, suggestPointCode, trialDaysLeft, type Account, type Location, type Point, type Sites } from './account/model';
+import { suggestPointCode, type Account, type Location, type Point, type Sites } from './account/model';
 import { confirmDialog, formDialog, openDialog } from './dialogs';
 import { actionButton, el, stat, tile } from './dom';
 import { icon, iconButton } from './icons';
@@ -108,7 +108,7 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
         });
         await refresh();
         // Straight on to the new location's first point, once this dialog has closed.
-        if (!location && sites.points.length < TRIAL_LIMITS.points) setTimeout(() => editPoint(undefined, saved.id));
+        if (!location) setTimeout(() => editPoint(undefined, saved.id));
       },
     });
   }
@@ -227,23 +227,12 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
 
   // ---------- page ----------
 
-  /** The trial caps both lists; a full list disables its Add button instead of failing after the form is filled. */
-  function capAdd(button: HTMLButtonElement, kind: 'locations' | 'points'): void {
-    const full = sites[kind].length >= TRIAL_LIMITS[kind];
-    button.disabled = full;
-    button.title = full ? `Masa coba hanya untuk maksimal ${TRIAL_LIMITS[kind]} ${kind === 'locations' ? 'lokasi' : 'booth'}.` : '';
-  }
-
   function renderStats(): void {
-    capAdd(addLocation, 'locations');
-    capAdd(addPoint, 'points');
     const activePoints = sites.points.filter((point) => point.active).length;
-    const daysLeft = trialDaysLeft(account, Date.now());
     stats.replaceChildren(
-      stat('Lokasi', String(sites.locations.length), `dari ${TRIAL_LIMITS.locations} di masa coba`, 'pin', 'soft'),
-      stat('Booth', String(sites.points.length), `dari ${TRIAL_LIMITS.points} di masa coba`, 'point', 'soft'),
+      stat('Lokasi', String(sites.locations.length), 'tempat usaha', 'pin', 'soft'),
+      stat('Booth', String(sites.points.length), 'di semua lokasi', 'point', 'soft'),
       stat('Aktif', String(activePoints), `${sites.points.length - activePoints} dijeda`, 'check', 'soft'),
-      stat('Masa coba', String(daysLeft), 'hari tersisa', 'clock', daysLeft <= 3 ? 'accent' : 'ink'),
     );
   }
 
@@ -258,7 +247,6 @@ export function mountSitesView(backend: AccountBackend, account: Account, handle
 
   function addPointButton(location: Location): HTMLButtonElement {
     const add = actionButton('Tambah booth', 'btn btn-ghost btn-sm add-point', 'plus');
-    capAdd(add, 'points');
     add.addEventListener('click', () => editPoint(undefined, location.id));
     return add;
   }

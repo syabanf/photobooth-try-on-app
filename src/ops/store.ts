@@ -86,8 +86,6 @@ function starter(business: string, ownerId: string): OpsState {
     aiPresets: BUILT_IN_PRESETS.map((entry) => ({ ...entry })),
     branding: { ...DEFAULT_BRANDING, brandName: business },
     ads: [],
-    releases: [],
-    support: [],
     activity: [],
     settings: { ...DEFAULT_SETTINGS },
     counters: { order: 0, ticket: 0 },
@@ -198,7 +196,9 @@ export class OpsStore {
     const payments = withPaymentDefaults(legacy?.payments, legacy?.gateway);
     // Faces captured before tickets and names were kept on them.
     const faces = (saved.faces ?? []).map((face) => (face.ticketId === undefined || face.name === undefined ? { ...face, ticketId: face.ticketId ?? null, name: face.name ?? '' } : face));
-    return { ...starter('', `owner-${this.accountId}`), ...saved, faces, settings: { ...DEFAULT_SETTINGS, ...saved.settings, payments }, branding: { ...DEFAULT_BRANDING, ...saved.branding } };
+    // Releases and support sessions belonged to a platform for many businesses; Dusun Bambu has none.
+    const { releases: _releases, support: _support, ...kept } = saved as Partial<OpsState> & { releases?: unknown; support?: unknown };
+    return { ...starter('', `owner-${this.accountId}`), ...kept, faces, settings: { ...DEFAULT_SETTINGS, ...saved.settings, payments }, branding: { ...DEFAULT_BRANDING, ...saved.branding } };
   }
 
   private readList(field: RecordField): Stored[] {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { createLocalBackend, deviceLabel, INVITE_MS, LOCK_MS, MAX_TRIES, memoryStore } from './backend';
-import { TRIAL_LIMITS, trialDaysLeft } from './model';
 
 const DAY = 86_400_000;
 
@@ -13,36 +12,38 @@ function setup(start = Date.UTC(2026, 8, 25)) {
 
 const owner = (email = 'rizky@example.com') => ({ name: 'Rizky', email, password: 'bambu2026' });
 
-async function register(backend: ReturnType<typeof createLocalBackend>, business = 'Dusun Bambu', email?: string) {
-  return backend.register({ business, ...owner(email ?? `${business.toLowerCase().replace(/\W/g, '')}@example.com`) }, crypto.randomUUID());
+async function register(backend: ReturnType<typeof createLocalBackend>, email = 'dusunbambu@example.com') {
+  return backend.setupOwner(owner(email), crypto.randomUUID());
 }
 
-describe('register and sign in', () => {
-  it('opens a 14 day workspace with its owner signed in', async () => {
-    const { backend, clock } = setup();
-    const { account, member } = await backend.register({ business: '  Dusun Bambu ', ...owner(' Rizky@Example.com ') }, 'k1');
+describe('owner setup and sign in', () => {
+  it('sets up Dusun Bambu and its owner on a fresh device, signed in', async () => {
+    const { backend } = setup();
+    expect(await backend.needsOwner()).toBe(true);
+    expect(await backend.business()).toBeNull();
+    const { account, member } = await backend.setupOwner(owner(' Rizky@Example.com '), 'k1');
     expect(account.business).toBe('Dusun Bambu');
-    expect(trialDaysLeft(account, clock.now)).toBe(14);
     expect(member).toMatchObject({ userId: `owner-${account.id}`, email: 'rizky@example.com', status: 'active' });
     expect((await backend.session())?.account).toEqual(account);
+    expect(await backend.needsOwner()).toBe(false);
+    expect(await backend.business()).toEqual(account);
   });
 
-  it('refuses a weak password, a bad email and an email already in use', async () => {
+  it('refuses a weak password, a bad email, and a second owner', async () => {
     const { backend } = setup();
-    await expect(backend.register({ business: 'A', ...owner(), password: 'short1' }, 'a')).rejects.toThrow('minimal 8 karakter');
-    await expect(backend.register({ business: 'A', ...owner(), password: 'onlyletters' }, 'b')).rejects.toThrow('berisi huruf dan angka');
-    await expect(backend.register({ business: 'A', ...owner('nope') }, 'c')).rejects.toThrow('nama@contoh.com');
-    await register(backend, 'Dusun Bambu', 'rizky@example.com');
-    await expect(backend.register({ business: 'B', ...owner('RIZKY@example.com') }, 'd')).rejects.toThrow('sudah punya akun');
+    await expect(backend.setupOwner({ ...owner(), password: 'short1' }, 'a')).rejects.toThrow('minimal 8 karakter');
+    await expect(backend.setupOwner({ ...owner(), password: 'onlyletters' }, 'b')).rejects.toThrow('berisi huruf dan angka');
+    await expect(backend.setupOwner(owner('nope'), 'c')).rejects.toThrow('nama@contoh.com');
+    await register(backend, 'rizky@example.com');
+    // Everyone after the owner joins by invite.
+    await expect(backend.setupOwner(owner('other@example.com'), 'd')).rejects.toThrow('sudah punya pemilik');
   });
 
-  it('creates one workspace for a double submit or a retry with the same key', async () => {
+  it('sets up one owner for a double submit or a retry with the same key', async () => {
     const { backend } = setup();
-    const input = { business: 'Dusun Bambu', ...owner() };
-    const [first, second] = await Promise.all([backend.register(input, 'same'), backend.register(input, 'same')]);
+    const [first, second] = await Promise.all([backend.setupOwner(owner(), 'same'), backend.setupOwner(owner(), 'same')]);
     expect(second.account.id).toBe(first.account.id);
-    expect((await backend.register(input, 'same')).account.id).toBe(first.account.id);
-    expect(await backend.workspaces()).toHaveLength(1);
+    expect((await backend.setupOwner(owner(), 'same')).account.id).toBe(first.account.id);
   });
 
   it('signs in by email and password, and out again', async () => {
@@ -75,14 +76,11 @@ describe('register and sign in', () => {
   it('confirms a team member for a locked screen without changing the session', async () => {
     const { backend } = setup();
     const { account } = await register(backend);
-    await register(backend, 'Other Venue');
     await backend.signOut();
     await backend.signIn('dusunbambu@example.com', 'bambu2026');
     const member = await backend.confirmMember(account.id, 'dusunbambu@example.com', 'bambu2026');
     expect(member.userId).toBe(`owner-${account.id}`);
     expect((await backend.session())?.account.id).toBe(account.id);
-    // Another workspace's owner cannot unlock this one's screens.
-    await expect(backend.confirmMember(account.id, 'othervenue@example.com', 'bambu2026')).rejects.toThrow('tidak ada di tim usaha ini');
     // Wrong passwords count toward the same lock as sign-in.
     for (let i = 1; i < MAX_TRIES; i++) await expect(backend.confirmMember(account.id, 'dusunbambu@example.com', 'wrong1234')).rejects.toThrow('Sisa');
     await expect(backend.confirmMember(account.id, 'dusunbambu@example.com', 'wrong1234')).rejects.toThrow('dikunci selama 15 menit');
@@ -155,24 +153,23 @@ describe('team access', () => {
     await expect(backend.signIn('sari@example.com', 'kopi2026')).rejects.toThrow('dimatikan');
   });
 
-  it('gives a workspace from the quick access build its owner, once', async () => {
+  it('gives records kept from before sign-in their owner, keeping them', async () => {
     const { backend, store } = setup();
-    const account = { id: 'old', business: 'Studio Rupa', createdAt: 0, trialEndsAt: Date.UTC(2026, 9, 25) };
+    const account = { id: 'old', business: 'Dusun Bambu', createdAt: 0 };
     store.setItem('vto:accounts', JSON.stringify({ old: { account } }));
     store.setItem('vto:session', 'old');
     expect(await backend.session()).toBeNull();
-    expect(await backend.unclaimed()).toEqual([account]);
-    const session = await backend.claim('old', owner(), 'c1');
+    expect(await backend.needsOwner()).toBe(true);
+    const session = await backend.setupOwner(owner(), 'c1');
     expect(session.account).toEqual(account);
-    expect(await backend.unclaimed()).toEqual([]);
-    await expect(backend.claim('old', owner('other@example.com'), 'c2')).rejects.toThrow('sudah punya pemilik');
+    expect(await backend.needsOwner()).toBe(false);
   });
 });
 
 describe('locations and points', () => {
   it('keeps several points in several locations', async () => {
     const { backend } = setup();
-    await register(backend, 'Studio Rupa');
+    await register(backend);
     const mall = await backend.saveLocation({ name: 'Grand Indonesia', city: 'Jakarta', address: '' });
     const venue = await backend.saveLocation({ name: 'Pakuwon Mall', city: 'Surabaya', address: '' });
     await backend.savePoint({ locationId: mall.id, name: 'Kiosk 1', code: 'gra-01', active: true });
@@ -186,7 +183,7 @@ describe('locations and points', () => {
 
   it('refuses a duplicate point code', async () => {
     const { backend } = setup();
-    await register(backend, 'Studio Rupa');
+    await register(backend);
     const mall = await backend.saveLocation({ name: 'Grand Indonesia', city: 'Jakarta', address: '' });
     await backend.savePoint({ locationId: mall.id, name: 'Kiosk 1', code: 'GRA-01', active: true });
     await expect(
@@ -196,7 +193,7 @@ describe('locations and points', () => {
 
   it('edits in place and deletes a location with its points', async () => {
     const { backend } = setup();
-    await register(backend, 'Studio Rupa');
+    await register(backend);
     const mall = await backend.saveLocation({ name: 'Grand Indo', city: 'Jakarta', address: '' });
     await backend.saveLocation({ id: mall.id, name: 'Grand Indonesia', city: 'Jakarta', address: 'Jl. MH Thamrin 1' });
     await backend.savePoint({ locationId: mall.id, name: 'Kiosk 1', code: 'GRA-01', active: true });
@@ -206,36 +203,16 @@ describe('locations and points', () => {
     expect(await backend.sites()).toEqual({ locations: [], points: [] });
   });
 
-  it('holds the trial to its location and point limits', async () => {
-    const { backend } = setup();
-    await register(backend, 'Studio Rupa');
-    const ids = [];
-    for (let i = 0; i < TRIAL_LIMITS.locations; i++) {
-      ids.push((await backend.saveLocation({ name: `Store ${i}`, city: 'Bandung', address: '' })).id);
-    }
-    await expect(backend.saveLocation({ name: 'One more', city: 'Bandung', address: '' })).rejects.toThrow('maksimal 3 lokasi');
-    for (let i = 0; i < TRIAL_LIMITS.points; i++) {
-      await backend.savePoint({ locationId: ids[i % ids.length], name: `Kiosk ${i}`, code: `K-${i}`, active: true });
-    }
-    await expect(backend.savePoint({ locationId: ids[0], name: 'Extra', code: 'K-99', active: true })).rejects.toThrow('maksimal 10 booth');
-  });
-
-  it('locks changes once the trial ends but still reads them', async () => {
+  it('takes as many locations and booths as the venue has, a year on', async () => {
     const { backend, clock } = setup();
-    await register(backend, 'Studio Rupa');
-    await backend.saveLocation({ name: 'Grand Indonesia', city: 'Jakarta', address: '' });
-    clock.now += 15 * DAY;
-    await expect(backend.saveLocation({ name: 'Later', city: 'Jakarta', address: '' })).rejects.toThrow('Masa coba sudah berakhir');
-    expect((await backend.sites()).locations).toHaveLength(1);
-  });
-
-  it('keeps each account to its own data', async () => {
-    const { backend } = setup();
-    await register(backend, 'Studio Rupa');
-    await backend.saveLocation({ name: 'Grand Indonesia', city: 'Jakarta', address: '' });
-    await backend.signOut();
-    await register(backend, 'Toko Batik');
-    expect((await backend.sites()).locations).toEqual([]);
+    await register(backend);
+    clock.now += 365 * DAY;
+    const ids = [];
+    for (let i = 0; i < 4; i++) ids.push((await backend.saveLocation({ name: `Area ${i}`, city: 'Bandung Barat', address: '' })).id);
+    for (let i = 0; i < 12; i++) await backend.savePoint({ locationId: ids[i % ids.length], name: `Booth ${i}`, code: `B-${i}`, active: true });
+    const sites = await backend.sites();
+    expect(sites.locations).toHaveLength(4);
+    expect(sites.points).toHaveLength(12);
   });
 });
 
@@ -268,10 +245,6 @@ describe('sign-in log', () => {
       'Rizky:signin',
       'Sari:disabled by Rizky',
     ]);
-
-    await backend.signOut();
-    await register(backend, 'Toko Batik');
-    expect((await backend.signInLog()).map((event) => event.kind)).toEqual(['register']);
   });
 
   it('names the browser and system of the device', () => {

@@ -87,7 +87,7 @@ export function mountBoothPanel(handlers: BoothPanelHandlers): BoothPanel {
     layout: 'strip',
     frame: FRAMES[0],
     seconds: 3,
-    caption: 'Virtual Try-On',
+    caption: 'Dusun Bambu',
     blend: 'swap',
     apiKey: '',
   };

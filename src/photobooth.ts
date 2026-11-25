@@ -114,7 +114,7 @@ export async function composeBooth(
 
   ctx.textBaseline = 'alphabetic';
   ctx.font = `700 ${titleSize}px "DM Sans", system-ui, sans-serif`;
-  const title = caption.trim() || 'Virtual Try-On';
+  const title = caption.trim() || 'Dusun Bambu';
   const titleWidth = ctx.measureText(title).width;
   const periodWidth = ctx.measureText('.').width;
   const startX = centreX - (titleWidth + periodWidth) / 2;

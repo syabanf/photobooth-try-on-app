@@ -17,23 +17,12 @@ export async function startDisplay(): Promise<boolean> {
   const route = displayRoute(location.hash);
   if (!route) return false;
   if (route.kind === 'gallery' && await renderRemoteGallery(route.id)) return true;
-  const current = await backend.current();
-  const records = await openRecords((error) => console.error('Could not save to this device.', error));
-  const candidates = current ? [current, ...(await backend.workspaces())] : await backend.workspaces();
-  // A photo link or ticket belongs to whichever workspace on this device holds its token.
-  const holds = (candidateId: string, business: string): boolean => {
-    if (route.kind === 'customer' || route.kind === 'queue' || route.kind === 'kiosk') return candidateId === current?.id;
-    const saved = new OpsStore(records, candidateId, business).state;
-    const id = 'id' in route ? route.id : '';
-    if (route.kind === 'gallery') return saved.sessions.some((session) => session.token === id);
-    if (route.kind === 'event') return saved.events.some((event) => event.id === id);
-    return saved.tickets.some((ticket) => ticket.token === id);
-  };
-  const account = candidates.find((candidate) => holds(candidate.id, candidate.business)) ?? current ?? candidates[0];
+  const account = (await backend.current()) ?? (await backend.business());
   if (!account) {
-    document.body.textContent = 'Buka aplikasi staf dan pilih workspace dulu.';
+    document.body.textContent = 'Buka aplikasi staf di perangkat ini dan atur pemilik Dusun Bambu dulu.';
     return true;
   }
+  const records = await openRecords((error) => console.error('Could not save to this device.', error));
   // The kiosk sells and prints for a booth: the one in its link, or the one this device belongs to.
   const boothId = route.kind === 'kiosk' ? (route.boothId ?? localStorage.getItem(`vto:device-point:${account.id}`)) : null;
   const ops = new Ops(new OpsStore(records, account.id, account.business), account, { toast: () => {}, devicePointId: () => boothId });

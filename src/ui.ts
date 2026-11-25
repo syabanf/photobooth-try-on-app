@@ -3,14 +3,14 @@ import { openDialog } from './dialogs';
 import { hydrateIcons, icon, type IconName } from './icons';
 
 export type Mode = 'local' | 'ai';
-export type OpsView = 'setup' | 'faces' | 'roles' | 'signins' | 'history' | 'pos' | 'queue' | 'sales' | 'payments' | 'reports' | 'vouchers' | 'frames' | 'branding' | 'devices' | 'staff' | 'fleet' | 'settings';
+export type OpsView = 'setup' | 'faces' | 'roles' | 'signins' | 'history' | 'pos' | 'queue' | 'sales' | 'payments' | 'reports' | 'vouchers' | 'frames' | 'branding' | 'devices' | 'staff' | 'settings';
 export type View = 'dashboard' | 'tryon' | 'photobooth' | 'gallery' | 'sites' | 'session' | 'presets' | 'gate' | OpsView;
 
 /** Views that show the camera stage. */
 export const CAMERA_VIEWS: readonly View[] = ['tryon', 'photobooth', 'session', 'presets', 'gate'];
 
 /** Business pages, drawn by src/ops/ui into one container. */
-export const OPS_VIEWS: readonly OpsView[] = ['setup', 'faces', 'roles', 'signins', 'history', 'pos', 'queue', 'sales', 'payments', 'reports', 'vouchers', 'frames', 'branding', 'devices', 'staff', 'fleet', 'settings'];
+export const OPS_VIEWS: readonly OpsView[] = ['setup', 'faces', 'roles', 'signins', 'history', 'pos', 'queue', 'sales', 'payments', 'reports', 'vouchers', 'frames', 'branding', 'devices', 'staff', 'settings'];
 export const isOpsView = (view: View): view is OpsView => (OPS_VIEWS as readonly string[]).includes(view);
 export type StatusKind = 'info' | 'warn' | 'error' | 'ok';
 
@@ -79,7 +79,6 @@ const VIEWS: Record<View, { kicker: string; title: string; capture: string }> = 
   roles: { kicker: 'Akses · apa yang boleh tiap peran', title: 'Peran', capture: 'Buka kamera' },
   signins: { kicker: 'Akses · siapa yang masuk dan kapan', title: 'Log masuk', capture: 'Buka kamera' },
   history: { kicker: 'Semua perubahan', title: 'Riwayat aktivitas', capture: 'Buka kamera' },
-  fleet: { kicker: 'Pembaruan, bantuan dan sinkron', title: 'Pembaruan dan bantuan', capture: 'Buka kamera' },
   settings: { kicker: 'Harga dan aturan main', title: 'Harga dan aturan', capture: 'Buka kamera' },
   setup: { kicker: 'Sebelum pelanggan datang', title: 'Panduan setup', capture: 'Buka kamera' },
 };
@@ -92,7 +91,6 @@ const MENU: { group: string; items: [View, string, IconName][] }[] = [
   { group: 'Penjualan dan laporan', items: [['reports', 'Laporan', 'chart'], ['sales', 'Transaksi', 'receipt'], ['history', 'Riwayat aktivitas', 'clock'], ['vouchers', 'Voucher', 'ticket']] },
   { group: 'Pengaturan', items: [['setup', 'Panduan setup', 'check'], ['sites', 'Lokasi dan booth', 'pin'], ['devices', 'Kamera, printer dan peringatan', 'printer'], ['payments', 'Pembayaran', 'wallet'], ['settings', 'Harga dan aturan', 'settings'], ['frames', 'Bingkai', 'frame'], ['branding', 'Merek', 'palette']] },
   { group: 'Tim dan akses', items: [['staff', 'Pengguna', 'users'], ['roles', 'Peran dan izin', 'shield'], ['signins', 'Log masuk', 'key']] },
-  { group: 'Sistem', items: [['fleet', 'Pembaruan dan bantuan', 'rocket']] },
 ];
 
 /** Items shown before "Show all", so the grid stays short on a phone. */

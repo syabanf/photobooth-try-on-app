@@ -81,7 +81,7 @@ export function mountShareDialog(): ShareDialog {
   send.addEventListener('click', async () => {
     const blob = await encoded();
     try {
-      await navigator.share({ files: [new File([blob], fileName(), { type: blob.type })], title: 'Virtual Try-On' });
+      await navigator.share({ files: [new File([blob], fileName(), { type: blob.type })], title: 'Dusun Bambu' });
     } catch (e) {
       if ((e as DOMException).name !== 'AbortError') console.error(e);
     }

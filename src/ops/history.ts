@@ -4,7 +4,7 @@
 import type { ActivityEntry } from './model';
 import { zonedTime } from './time';
 
-export type Area = 'sales' | 'payments' | 'shifts' | 'queue' | 'booths' | 'faces' | 'access' | 'devices' | 'content' | 'settings' | 'fleet' | 'other';
+export type Area = 'sales' | 'payments' | 'shifts' | 'queue' | 'booths' | 'faces' | 'access' | 'devices' | 'content' | 'settings' | 'other';
 
 export const AREA_LABELS: Record<Area, string> = {
   sales: 'Penjualan',
@@ -17,7 +17,6 @@ export const AREA_LABELS: Record<Area, string> = {
   devices: 'Perangkat dan peringatan',
   content: 'Bingkai, merek dan iklan',
   settings: 'Harga dan pengaturan',
-  fleet: 'Pembaruan',
   other: 'Lainnya',
 };
 
@@ -52,9 +51,10 @@ const PREFIXES: Record<string, Area> = {
   event: 'content',
   settings: 'settings',
   category: 'settings',
-  fleet: 'fleet',
-  release: 'fleet',
-  support: 'fleet',
+  // Updates and support sessions from earlier builds read as device work.
+  fleet: 'devices',
+  release: 'devices',
+  support: 'devices',
 };
 
 export function areaOf(kind: string): Area {

@@ -14,7 +14,7 @@ const MODES = Object.keys(SESSION_MODES) as SessionMode[];
 
 export function renderSettings({ ops }: PageContext): HTMLElement {
   const { state } = ops;
-  const view = page('Harga dan aturan', 'Harga dan aturan yang diikuti setiap booth dan kasir di workspace ini. Lompat ke bagian di bawah, atau kerjakan berurutan dari atas.');
+  const view = page('Harga dan aturan', 'Harga dan aturan yang diikuti setiap booth dan kasir Dusun Bambu. Lompat ke bagian di bawah, atau kerjakan berurutan dari atas.');
 
   // ---------- booth categories ----------
   const categories = section('Kategori booth', 'Jenis booth dengan harga sendiri per mode sesi. Setiap booth masuk ke satu kategori.');

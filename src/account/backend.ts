@@ -1,12 +1,10 @@
-// The account backend. The app talks to the AccountBackend interface only; createLocalBackend is
-// the trial build's implementation and keeps everything in this browser. A server implementation
-// with the same methods replaces it for production, where the server decides who opens a workspace.
+// The account backend for Dusun Bambu. The app talks to the AccountBackend interface only;
+// createLocalBackend keeps everything in this browser. A server implementation with the same
+// methods can replace it later, so every device shares one set of accounts.
 
 import {
   AccountError,
-  TRIAL_LIMITS,
-  trialEnd,
-  trialExpired,
+  BUSINESS,
   type Account,
   type AuthEvent,
   type AuthEventKind,
@@ -22,32 +20,30 @@ import {
 import { checkSecret, hashSecret, normalizeEmail, passwordProblem, validEmail } from './password';
 import { uuid } from '../uuid';
 
-export interface Registration {
-  business: string;
+export interface OwnerInput {
   name: string;
   email: string;
   password: string;
 }
-
-export type OwnerInput = Omit<Registration, 'business'>;
 
 /**
  * Writes that create something take an idempotency key: a retry or a double submit with the same
  * key returns the first result instead of creating a second account, owner or invite.
  */
 export interface AccountBackend {
-  /** The signed-in person and their workspace, or null. */
+  /** The signed-in person and Dusun Bambu, or null. */
   session(): Promise<Session | null>;
-  /** The signed-in workspace, or null. */
+  /** Dusun Bambu while someone is signed in, or null. */
   current(): Promise<Account | null>;
-  /** Every workspace saved on this device, newest first. Customer screens open the right one. */
-  workspaces(): Promise<Account[]>;
-  /** Workspaces made before sign-in existed, waiting for an owner to secure them. */
-  unclaimed(): Promise<Account[]>;
-  /** Opens a new workspace with its owner, and signs the owner in. */
-  register(input: Registration, key: string): Promise<Session>;
-  /** Gives a workspace without sign-in its owner, and signs them in. */
-  claim(accountId: string, input: OwnerInput, key: string): Promise<Session>;
+  /** Dusun Bambu on this device once it has an owner, for the screens that run without sign-in. */
+  business(): Promise<Account | null>;
+  /** True until this device has Dusun Bambu's owner. The sign-in screen asks for them first. */
+  needsOwner(): Promise<boolean>;
+  /**
+   * Sets up the owner on a fresh device, or on records kept from before sign-in existed, and
+   * signs them in. Refused once an owner exists: everyone else joins by invite.
+   */
+  setupOwner(input: OwnerInput, key: string): Promise<Session>;
   signIn(email: string, password: string): Promise<Session>;
   signOut(): Promise<void>;
   changePassword(current: string, next: string): Promise<void>;
@@ -199,7 +195,7 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
     // server at 192.168.x.x:4173 do not share them. Say so instead of blaming the password.
     if (Object.keys(users()).length === 0) {
       const here = typeof location === 'undefined' ? 'alamat ini' : location.host;
-      throw new AccountError(`Belum ada akun di ${here}. Akun tersimpan di alamat browser tempat akun itu dibuat. Buat akun di sini, atau buka alamat tempat Anda mendaftar.`, 'email');
+      throw new AccountError(`Belum ada akun di ${here}. Akun tersimpan di alamat browser tempat akun itu dibuat. Buka alamat itu, atau atur pemilik di sini.`, 'email');
     }
     if (!user) throw wrong;
     if (user.status === 'disabled') throw new AccountError('Akses masuk untuk email ini dimatikan. Hubungi pemilik usaha.', 'email');
@@ -289,10 +285,21 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
     return user;
   }
 
-  /** Every write to locations and points: signed in, and still inside the trial. */
+  /** The business this device keeps: the one with an owner, else records from before sign-in existed. */
+  function home(): Account | null {
+    const owned = new Set(Object.values(users()).map((user) => user.accountId));
+    const oldestFirst = accounts().sort((a, b) => a.createdAt - b.createdAt);
+    return oldestFirst.find((account) => owned.has(account.id)) ?? oldestFirst[0] ?? null;
+  }
+
+  function needsOwner(): boolean {
+    const account = home();
+    return !account || !Object.values(users()).some((user) => user.accountId === account.id);
+  }
+
+  /** Every write to locations and points needs someone signed in. */
   function editableSites(): { account: Account; sites: Sites; commit(): void } {
     const { account } = requireSession();
-    if (trialExpired(account, now())) throw new AccountError('Masa coba sudah berakhir. Perubahan dikunci.');
     const sites = read<Sites>(sitesKey(account.id), { locations: [], points: [] });
     return { account, sites, commit: () => write(sitesKey(account.id), sites) };
   }
@@ -306,34 +313,24 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
       return currentSession()?.account ?? null;
     },
 
-    async workspaces() {
-      return accounts().sort((a, b) => b.createdAt - a.createdAt);
+    async business() {
+      return needsOwner() ? null : home();
     },
 
-    async unclaimed() {
-      const owned = new Set(Object.values(users()).map((user) => user.accountId));
-      return accounts().filter((account) => !owned.has(account.id)).sort((a, b) => b.createdAt - a.createdAt);
+    async needsOwner() {
+      return needsOwner();
     },
 
-    register(input, key) {
-      return once('register', key, async () => {
-        const business = clean(input.business, 'business', 'nama usaha');
-        const createdAt = now();
-        const account: Account = { id: uuid(), business, createdAt, trialEndsAt: trialEnd(createdAt) };
+    setupOwner(input, key) {
+      return once('owner', key, async () => {
+        if (!needsOwner()) throw new AccountError(`${BUSINESS} sudah punya pemilik. Masuk dengan email pemilik, atau minta undangan.`);
+        let account = home();
+        if (!account) {
+          account = { id: uuid(), business: BUSINESS, createdAt: now() };
+          write(ACCOUNTS_KEY, { ...saved(), [account.id]: { account } });
+        }
         const user = await owner(account.id, input);
-        write(ACCOUNTS_KEY, { ...saved(), [account.id]: { account } });
         record(user, 'register');
-        return open(account, user);
-      });
-    },
-
-    claim(accountId, input, key) {
-      return once('claim', key, async () => {
-        const account = accounts().find((entry) => entry.id === accountId);
-        if (!account) throw new AccountError('Usaha itu sudah tidak ada di perangkat ini.');
-        if (Object.values(users()).some((user) => user.accountId === accountId)) throw new AccountError('Usaha ini sudah punya pemilik. Masuk dengan email pemilik.');
-        const user = await owner(accountId, input);
-        record(user, 'claim');
         return open(account, user);
       });
     },
@@ -451,9 +448,6 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
         commit();
         return existing;
       }
-      if (sites.locations.length >= TRIAL_LIMITS.locations) {
-        throw new AccountError(`Masa coba hanya untuk maksimal ${TRIAL_LIMITS.locations} lokasi.`);
-      }
       const location: Location = { id: uuid(), createdAt: now(), ...fields };
       sites.locations.push(location);
       commit();
@@ -486,9 +480,6 @@ export function createLocalBackend(store: KeyValueStore, now: () => number = Dat
         Object.assign(existing, fields);
         commit();
         return existing;
-      }
-      if (sites.points.length >= TRIAL_LIMITS.points) {
-        throw new AccountError(`Masa coba hanya untuk maksimal ${TRIAL_LIMITS.points} booth.`);
       }
       const point: Point = { id: uuid(), createdAt: now(), ...fields };
       sites.points.push(point);

@@ -1,11 +1,13 @@
-// Accounts, locations and points: the types every backend returns, plus the trial rules.
+// The business, its people, locations and points: the types every backend returns.
 
-/** A workspace: one business, its people, locations and points. */
+/** The one business this app runs. */
+export const BUSINESS = 'Dusun Bambu';
+
+/** Dusun Bambu's records on this device: its people, locations and points. */
 export interface Account {
   id: string;
   business: string;
   createdAt: number;
-  trialEndsAt: number;
 }
 
 export type MemberStatus = 'active' | 'invited' | 'disabled';
@@ -41,7 +43,7 @@ export interface Invite {
 export type AuthEventKind = 'register' | 'claim' | 'signin' | 'failed' | 'locked' | 'signout' | 'invite' | 'accepted' | 'reset' | 'password' | 'disabled' | 'enabled' | 'unlocked' | 'screen';
 
 export const AUTH_EVENT_LABELS: Record<AuthEventKind, string> = {
-  register: 'Membuat usaha',
+  register: 'Mengatur pemilik',
   claim: 'Mengamankan usaha',
   signin: 'Masuk',
   failed: 'Kata sandi salah',
@@ -106,23 +108,6 @@ export class AccountError extends Error {
     super(message);
     this.name = 'AccountError';
   }
-}
-
-export const TRIAL_DAYS = 14;
-export const TRIAL_LIMITS = { locations: 3, points: 10 } as const;
-const DAY_MS = 86_400_000;
-
-export function trialEnd(createdAt: number): number {
-  return createdAt + TRIAL_DAYS * DAY_MS;
-}
-
-/** Whole days left, counting today, so the last day reads "1 day left" rather than 0. */
-export function trialDaysLeft(account: Account, now: number): number {
-  return Math.max(0, Math.ceil((account.trialEndsAt - now) / DAY_MS));
-}
-
-export function trialExpired(account: Account, now: number): boolean {
-  return now >= account.trialEndsAt;
 }
 
 /** "Grand Indonesia" with GRA-01 taken gives GRA-02. */

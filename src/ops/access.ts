@@ -17,8 +17,7 @@ export type Permission =
   | 'branding.manage'
   | 'devices.manage'
   | 'staff.manage'
-  | 'settings.manage'
-  | 'fleet.manage';
+  | 'settings.manage';
 
 const EVERYTHING: Permission[] = [
   'pos.sell',
@@ -35,7 +34,6 @@ const EVERYTHING: Permission[] = [
   'devices.manage',
   'staff.manage',
   'settings.manage',
-  'fleet.manage',
 ];
 
 export const ROLES: Record<Role, { label: string; detail: string; can: Permission[] }> = {
@@ -67,7 +65,6 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'devices.manage': 'Mengelola perangkat dan peringatan',
   'staff.manage': 'Mengelola tim, peran dan akses masuk',
   'settings.manage': 'Mengubah harga, lokasi dan pengaturan',
-  'fleet.manage': 'Pembaruan dan bantuan jarak jauh',
 };
 
 /** Permissions in the groups the Roles page shows them in. */
@@ -75,7 +72,7 @@ export const PERMISSION_GROUPS: { label: string; permissions: Permission[] }[] =
   { label: 'Penjualan', permissions: ['pos.sell', 'pos.discount', 'pos.refund', 'shift.run', 'history.view'] },
   { label: 'Operasional', permissions: ['queue.run', 'booth.run'] },
   { label: 'Konten', permissions: ['vouchers.manage', 'frames.manage', 'branding.manage'] },
-  { label: 'Pengelolaan bisnis', permissions: ['reports.view', 'devices.manage', 'settings.manage', 'staff.manage', 'fleet.manage'] },
+  { label: 'Pengelolaan bisnis', permissions: ['reports.view', 'devices.manage', 'settings.manage', 'staff.manage'] },
 ];
 
 /** Roles whose permissions the owner changed on the Roles page. The owner role never changes. */

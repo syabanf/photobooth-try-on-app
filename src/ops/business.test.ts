@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { approves, can, checkPin, findApprover, hashPin, seesBranch } from './access';
-import { bucket, compareVersions, sessionsToPurge, targetVersion, DAY_MS } from './fleet';
-import type { BoothSession, Order, Payment, Release, Staff } from './model';
+import { sessionsToPurge, DAY_MS } from './fleet';
+import type { BoothSession, Order, Payment, Staff } from './model';
 import { bestSellers, parseGatewayCsv, reconcileSettlement, revenueReport, toCsv } from './reports';
 
 describe('access', () => {
@@ -32,29 +32,7 @@ describe('access', () => {
   });
 });
 
-describe('fleet', () => {
-  const release = (id: string, version: string, percent: number, status: Release['status'] = 'staged'): Release => ({ id, version, notes: '', percent, status, createdAt: 0 });
-
-  it('buckets booths stably', () => {
-    expect(bucket('booth-1', 'r1')).toBe(bucket('booth-1', 'r1'));
-    const spread = new Set(Array.from({ length: 200 }, (_, i) => bucket(`b${i}`, 'r')));
-    expect(spread.size).toBeGreaterThan(50);
-  });
-
-  it('stages, widens and rolls back', () => {
-    const booths = Array.from({ length: 400 }, (_, i) => `booth-${i}`);
-    const share = (releases: Release[], version: string) => booths.filter((b) => targetVersion(releases, b, '1.0.0') === version).length / booths.length;
-    expect(share([release('r2', '1.1.0', 10)], '1.1.0')).toBeGreaterThan(0.04);
-    expect(share([release('r2', '1.1.0', 10)], '1.1.0')).toBeLessThan(0.18);
-    expect(share([release('r2', '1.1.0', 100)], '1.1.0')).toBe(1);
-    expect(share([release('r1', '1.0.5', 100), release('r2', '1.1.0', 100, 'rolled-back')], '1.0.5')).toBe(1);
-  });
-
-  it('compares versions numerically', () => {
-    expect(compareVersions('1.10.0', '1.9.9')).toBe(1);
-    expect(compareVersions('1.0', '1.0.0')).toBe(0);
-  });
-
+describe('photo retention', () => {
   it('purges sessions past the retention window once', () => {
     const session = (id: string, ended: number, purgedAt?: number) => ({ id, startedAt: ended, endedAt: ended, purgedAt }) as BoothSession;
     const now = 100 * DAY_MS;

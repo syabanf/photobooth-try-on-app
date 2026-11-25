@@ -10,7 +10,7 @@ import { can, checkPin, findApprover, hashPin, PERMISSIONS, ROLES, seesBranch, s
 import { DEFAULT_CAPTURE, DEFAULT_PREVIEW, printImage, SimulatedCloud, SimulatedGateway, type CameraDriver, type CameraState, type PaymentGateway } from './adapters';
 import { StaticQrisGateway } from './static-qris';
 import { amountDue, changeFor, formatRupiah, lineNet, orderNumber, priceLines, refundMethod } from './cart';
-import { sessionsToPurge, targetVersion } from './fleet';
+import { sessionsToPurge } from './fleet';
 import type {
   BoothProfile,
   BoothSession,
@@ -1036,25 +1036,10 @@ export class Ops {
     }
   }
 
-  // ---------- fleet ----------
+  // ---------- devices ----------
 
   installedVersion(boothId: string): string {
     return this.state.health.find((entry) => entry.boothId === boothId)?.version ?? APP_VERSION;
-  }
-
-  targetFor(boothId: string): string {
-    return targetVersion(this.state.releases, boothId, APP_VERSION);
-  }
-
-  /** The update agent on this device: installs the version the rollout gives it. */
-  applyUpdate(boothId: string): string {
-    const target = this.targetFor(boothId);
-    this.commit('fleet.update', `${this.boothName(boothId)} diperbarui ke ${target}.`, (draft) => {
-      const health = draft.health.find((entry) => entry.boothId === boothId);
-      if (health) health.version = target;
-      else draft.health.push({ boothId, lastHeartbeat: this.now(), version: target, cameraConnected: true, cameraBattery: null, online: true });
-    });
-    return target;
   }
 
   // ---------- faces ----------

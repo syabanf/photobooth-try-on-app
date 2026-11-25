@@ -1,7 +1,7 @@
 // The dashboard: captures over time, the busiest points and locations, and what needs attention.
 
 import type { AccountBackend } from './account/backend';
-import { TRIAL_LIMITS, trialDaysLeft, type Account, type Location, type Point, type Sites } from './account/model';
+import type { Location, Point, Sites } from './account/model';
 import { percentChange, summarize, type DayCount, type Ranked, type Summary } from './dashboard-stats';
 import { actionButton, el, stat } from './dom';
 import { SHOT_LABELS, listShots, type Shot } from './gallery';
@@ -116,7 +116,7 @@ function emptyNote(text: string): HTMLElement {
   return el('p', 'rank-empty', text);
 }
 
-export function mountDashboard(backend: AccountBackend, account: Account, handlers: DashboardHandlers): DashboardView {
+export function mountDashboard(backend: AccountBackend, handlers: DashboardHandlers): DashboardView {
   const $ = <T extends Element>(selector: string) => document.querySelector<T>(selector)!;
   let days = readStored(PERIOD_KEY) === '30' ? 30 : 7;
   let urls: string[] = [];
@@ -151,8 +151,6 @@ export function mountDashboard(backend: AccountBackend, account: Account, handle
   function renderAttention(summary: Summary, sites: Sites): void {
     const card = $<HTMLElement>('#dashAttention');
     const items: { icon: IconName; text: string; action?: [string, () => void] }[] = [];
-    const daysLeft = trialDaysLeft(account, Date.now());
-    if (daysLeft <= 3) items.push({ icon: 'clock', text: `Masa coba berakhir dalam ${amount(daysLeft, 'hari')}.` });
     if (sites.locations.length === 0) {
       items.push({ icon: 'pin', text: 'Belum ada lokasi.', action: ['Tambah', () => handlers.onNavigate('sites')] });
     } else if (sites.points.length === 0) {
@@ -200,8 +198,8 @@ export function mountDashboard(backend: AccountBackend, account: Account, handle
     $('#dashStats').replaceChildren(
       stat('Foto', summary.snapshots.toLocaleString('id-ID'), `dalam ${days} hari`, 'camera', 'soft'),
       stat('Lembar photobooth', summary.sheets.toLocaleString('id-ID'), `dalam ${days} hari`, 'aperture', 'soft'),
-      stat('Booth aktif', String(active), `dari ${sites.points.length} · masa coba maks. ${TRIAL_LIMITS.points}`, 'point', 'soft'),
-      stat('Lokasi', String(sites.locations.length), `masa coba maks. ${TRIAL_LIMITS.locations}`, 'pin', 'soft'),
+      stat('Booth aktif', String(active), `dari ${sites.points.length} booth`, 'point', 'soft'),
+      stat('Lokasi', String(sites.locations.length), 'tempat usaha', 'pin', 'soft'),
     );
   }
 

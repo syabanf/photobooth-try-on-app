@@ -2199,36 +2199,10 @@ p {
   background: var(--surface-2);
 }
 
-.account-trial {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.account-trial[data-urgent='true'] {
-  color: var(--accent);
-}
-
 .account-who {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.trial-meter {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  border-radius: 16px;
-  background: var(--surface-2);
-}
-
-.trial-meter-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
 }
 
 .meter {
@@ -2584,10 +2558,6 @@ p {
 }
 
 @media (max-width: 767px) {
-  .account-trial {
-    display: none;
-  }
-
   .account-pill {
     padding: 0 4px;
   }
@@ -6490,11 +6460,6 @@ body.display-mode {
 .auth-switch .link:hover,
 .auth-forgot:hover {
   text-decoration: underline;
-}
-
-.auth-claim {
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
 }
 
 .auth-who {

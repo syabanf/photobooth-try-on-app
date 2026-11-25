@@ -1040,12 +1040,12 @@ async function start(): Promise<void> {
     return;
   }
   await ops.refreshMembers();
-  mountAccountButton(backend, session, () => ({ label: ROLES[ops.actor()?.role ?? 'operator'].label, seesPlan: ops.can('settings.manage') }));
+  mountAccountButton(backend, session, () => ROLES[ops.actor()?.role ?? 'operator'].label);
   // The menus follow whoever uses the device, including after a PIN switch.
   const applyAccess = () => ui.setAllowed((view) => mayOpen(ops, view));
   applyAccess();
   ops.store.subscribe(applyAccess);
-  dashboard = mountDashboard(backend, account, {
+  dashboard = mountDashboard(backend, {
     devicePointId: () => sites!.devicePointId(),
     pointLabel: (id) => sites!.pointLabel(id),
     onNavigate: showView,

@@ -523,29 +523,6 @@ export interface AdItem {
   active: boolean;
 }
 
-// ---------- fleet ----------
-
-export interface Release {
-  id: string;
-  version: string;
-  notes: string;
-  /** Share of booths, 0 to 100, that take this release. */
-  percent: number;
-  status: 'staged' | 'rolled-back';
-  createdAt: number;
-}
-
-export interface SupportSession {
-  id: string;
-  boothId: string;
-  code: string;
-  requestedBy: string;
-  status: 'waiting' | 'connected' | 'ended';
-  startedAt: number;
-  endedAt?: number;
-  log: string[];
-}
-
 export interface ActivityEntry {
   id: string;
   at: number;
@@ -599,8 +576,6 @@ export interface OpsState {
   aiPresets: Preset[];
   branding: Branding;
   ads: AdItem[];
-  releases: Release[];
-  support: SupportSession[];
   activity: ActivityEntry[];
   settings: Settings;
   counters: { order: number; ticket: number };

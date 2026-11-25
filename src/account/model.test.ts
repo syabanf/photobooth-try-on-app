@@ -1,22 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { initials, suggestPointCode, trialDaysLeft, trialEnd, trialExpired, type Account } from './model';
-
-const DAY = 86_400_000;
-const start = Date.UTC(2026, 8, 25, 9);
-const account: Account = { id: 'a', business: 'Rupa', createdAt: start, trialEndsAt: trialEnd(start) };
-
-describe('trial clock', () => {
-  it('counts the last partial day as a day left', () => {
-    expect(trialDaysLeft(account, start + 13.5 * DAY)).toBe(1);
-    expect(trialExpired(account, start + 13.5 * DAY)).toBe(false);
-  });
-
-  it('ends exactly 14 days after sign-up', () => {
-    expect(trialDaysLeft(account, start + 14 * DAY)).toBe(0);
-    expect(trialExpired(account, start + 14 * DAY)).toBe(true);
-    expect(trialDaysLeft(account, start + 30 * DAY)).toBe(0);
-  });
-});
+import { initials, suggestPointCode } from './model';
 
 describe('suggestPointCode', () => {
   it('takes the next free number for the location prefix', () => {

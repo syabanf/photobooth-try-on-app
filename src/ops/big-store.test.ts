@@ -125,7 +125,7 @@ describe('qrisHandler', () => {
 });
 
 describe('OpsStore records', () => {
-  const account = { id: 'acc', business: 'Studio', createdAt: 0, trialEndsAt: Infinity };
+  const account = { id: 'acc', business: 'Studio', createdAt: 0 };
 
   function counting() {
     const kv = memoryStore();

@@ -1,18 +1,15 @@
-// The sign-in screen (sign in, create an account, set a password from a code, secure an old
-// workspace) and the account sheet behind the avatar pill.
+// The sign-in screen (sign in, set up the owner on a fresh device, set a password from a code) and
+// the account sheet behind the avatar pill.
 
 import type { AccountBackend } from './account/backend';
-import { TRIAL_DAYS, TRIAL_LIMITS, initials, trialDaysLeft, trialExpired, type Account, type Session } from './account/model';
+import { BUSINESS, initials, type Session } from './account/model';
 import { PASSWORD_RULES } from './account/password';
 import { clearErrors, openDialog, showError } from './dialogs';
 import { el } from './dom';
 import { icon } from './icons';
 import { uuid } from './uuid';
 
-const longDate = (time: number) => new Date(time).toLocaleDateString('id-ID', { dateStyle: 'long' });
-const daysLeftText = (days: number) => `sisa ${days} hari`;
-
-type View = { kind: 'signin' | 'register' | 'forgot' } | { kind: 'code'; code: string } | { kind: 'claim'; account: Account } | { kind: 'expired'; session: Session };
+type View = { kind: 'signin' | 'owner' | 'forgot' } | { kind: 'code'; code: string };
 
 interface FieldSpec {
   name: string;
@@ -96,7 +93,7 @@ function linkButton(label: string, onClick: () => void): HTMLButtonElement {
 export async function signedIn(backend: AccountBackend): Promise<Session> {
   const existing = await backend.session();
   const inviteCode = /#invite=([^&]+)/.exec(location.hash)?.[1];
-  if (existing && !trialExpired(existing.account, Date.now()) && !inviteCode) return existing;
+  if (existing && !inviteCode) return existing;
 
   const screen = document.querySelector<HTMLElement>('#authScreen')!;
   const card = document.querySelector<HTMLElement>('#authCard')!;
@@ -104,10 +101,6 @@ export async function signedIn(backend: AccountBackend): Promise<Session> {
 
   return new Promise((resolve) => {
     function finish(session: Session): void {
-      if (trialExpired(session.account, Date.now())) {
-        void show({ kind: 'expired', session });
-        return;
-      }
       if (inviteCode) history.replaceState(null, '', location.pathname);
       screen.hidden = true;
       resolve(session);
@@ -168,40 +161,23 @@ export async function signedIn(backend: AccountBackend): Promise<Session> {
       const forgot = linkButton('Lupa kata sandi?', () => show({ kind: 'forgot' }));
       forgot.classList.add('auth-forgot');
       signIn.querySelector('[data-error-for="password"]')!.after(forgot);
-      const parts: HTMLElement[] = [head('Masuk', 'Pakai email yang dibuatkan pemilik usaha untuk Anda.'), signIn, footer('Baru di sini? ', linkButton('Buat akun', () => show({ kind: 'register' }))), footer('Dapat kode dari pemilik? ', linkButton('Atur kata sandi', () => show({ kind: 'code', code: '' })))];
-
-      const waiting = await backend.unclaimed();
-      if (waiting.length) {
-        const group = el('div', 'pick-group auth-claim');
-        group.append(el('p', 'kicker', 'Belum ada pemilik'), el('p', 'card-desc', 'Usaha ini dibuka sebelum ada fitur masuk. Amankan dengan email Anda agar tetap bisa dipakai.'));
-        for (const account of waiting) {
-          const row = el('button', 'pick-row');
-          row.type = 'button';
-          const text = el('span', 'pick-text');
-          text.append(el('span', 'pick-name', account.business), el('span', 'card-desc', 'Ketuk untuk menambah pemilik'));
-          row.append(el('span', 'avatar', initials(account.business)), text, icon('shield'));
-          row.addEventListener('click', () => show({ kind: 'claim', account }));
-          group.append(row);
-        }
-        parts.push(group);
-      }
-      return parts;
+      return [head('Masuk', 'Pakai email yang dibuatkan pemilik usaha untuk Anda.'), signIn, footer('Dapat kode dari pemilik? ', linkButton('Atur kata sandi', () => show({ kind: 'code', code: '' })))];
     }
 
-    function registerView(): HTMLElement[] {
-      const register = form(
+    /** A fresh device, or records kept from before sign-in: the owner comes first, once. */
+    function ownerView(): HTMLElement[] {
+      const setup = form(
         [
-          field({ name: 'business', label: 'Nama usaha', autocomplete: 'organization', placeholder: 'Dusun Bambu', value: 'Dusun Bambu' }),
           field({ name: 'name', label: 'Nama Anda', autocomplete: 'name', placeholder: 'Contoh: Rizky Pratama' }),
           field({ name: 'email', label: 'Email kerja', type: 'email', autocomplete: 'email', placeholder: 'Contoh: nama@dusunbambu.id' }),
           field({ name: 'password', label: 'Kata sandi', type: 'password', autocomplete: 'new-password' }),
         ],
-        'Buat akun',
-        'Menyiapkan usaha Anda…',
-        (values, key) => backend.register({ business: values.business, name: values.name, email: values.email, password: values.password }, key),
+        'Simpan dan masuk',
+        'Menyimpan…',
+        (values, key) => backend.setupOwner({ name: values.name, email: values.email, password: values.password }, key),
       );
-      register.querySelector('[data-error-for="password"]')!.before(passwordChecklist(register));
-      return [head('Buat akun', `Anda menjadi pemilik. ${TRIAL_DAYS} hari pertama gratis, untuk maksimal ${TRIAL_LIMITS.locations} lokasi dan ${TRIAL_LIMITS.points} booth.`), register, footer('Sudah punya akun? ', linkButton('Masuk', () => show({ kind: 'signin' })))];
+      setup.querySelector('[data-error-for="password"]')!.before(passwordChecklist(setup));
+      return [head(`Atur pemilik ${BUSINESS}`, 'Perangkat ini belum punya pemilik. Pemilik mengatur booth, harga dan tim, lalu mengundang staf lain lewat kode.'), setup, footer('Dapat kode dari pemilik? ', linkButton('Atur kata sandi', () => show({ kind: 'code', code: '' })))];
     }
 
     async function codeView(code: string): Promise<HTMLElement[]> {
@@ -239,21 +215,6 @@ export async function signedIn(backend: AccountBackend): Promise<Session> {
       return [head('Atur kata sandi', 'Pakai kode yang Anda terima saat bergabung atau saat kata sandi direset.'), enter, back];
     }
 
-    function claimView(account: Account): HTMLElement[] {
-      const claim = form(
-        [
-          field({ name: 'name', label: 'Nama Anda', autocomplete: 'name' }),
-          field({ name: 'email', label: 'Email kerja', type: 'email', autocomplete: 'email' }),
-          field({ name: 'password', label: 'Kata sandi', type: 'password', autocomplete: 'new-password' }),
-        ],
-        `Amankan ${account.business}`,
-        'Mengamankan…',
-        (values, key) => backend.claim(account.id, { name: values.name, email: values.email, password: values.password }, key),
-      );
-      claim.querySelector('[data-error-for="password"]')!.before(passwordChecklist(claim));
-      return [head(`Amankan ${account.business}`, 'Lokasi, booth dan penjualannya tetap seperti semula. Mulai sekarang, semua orang harus masuk untuk membukanya.'), claim, footer(linkButton('Kembali ke halaman masuk', () => show({ kind: 'signin' })))];
-    }
-
     function forgotView(): HTMLElement[] {
       const steps = el('ol', 'auth-steps');
       for (const step of ['Hubungi pemilik, admin atau supervisor usaha Anda.', 'Mereka membuka Tim dan akses, Pengguna, memilih nama Anda lalu mengetuk Reset kata sandi.', 'Mereka memberi kode baru. Masukkan kode itu untuk membuat kata sandi baru.']) steps.append(el('li', '', step));
@@ -263,62 +224,33 @@ export async function signedIn(backend: AccountBackend): Promise<Session> {
       return [head('Lupa kata sandi?', 'Pemilik usaha yang meresetnya untuk Anda. Orang di luar tim tidak bisa.'), steps, code, footer(linkButton('Kembali ke halaman masuk', () => show({ kind: 'signin' })))];
     }
 
-    function expiredView(session: Session): HTMLElement[] {
-      const out = el('button', 'btn btn-outline btn-block');
-      out.type = 'button';
-      out.append(icon('logout'), 'Masuk dengan akun lain');
-      out.addEventListener('click', async () => {
-        await backend.signOut();
-        show({ kind: 'signin' });
-      });
-      return [head('Masa coba sudah berakhir', `Masa coba ${session.account.business} berakhir pada ${longDate(session.account.trialEndsAt)}. Lokasi, booth dan penjualannya tetap disimpan sampai paket dilanjutkan.`), out];
-    }
-
     async function show(view: View): Promise<void> {
       const parts =
         view.kind === 'signin' ? await signInView()
-        : view.kind === 'register' ? registerView()
+        : view.kind === 'owner' ? ownerView()
         : view.kind === 'code' ? await codeView(view.code)
-        : view.kind === 'claim' ? claimView(view.account)
-        : view.kind === 'expired' ? expiredView(view.session)
         : forgotView();
       card.replaceChildren(...parts);
       [...card.querySelectorAll<HTMLInputElement>('input')].find((input) => !input.value)?.focus();
     }
 
     if (inviteCode) void show({ kind: 'code', code: decodeURIComponent(inviteCode) });
-    else if (existing) void show({ kind: 'expired', session: existing });
-    else void show({ kind: 'signin' });
+    else void backend.needsOwner().then((fresh) => show({ kind: fresh ? 'owner' : 'signin' }));
   });
 }
 
-/** The avatar pill in the header: who is signed in, the trial, password and sign out. */
-export function mountAccountButton(backend: AccountBackend, session: Session, role: () => { label: string; seesPlan: boolean }): void {
+/** The avatar pill in the header: who is signed in, their password and sign out. */
+export function mountAccountButton(backend: AccountBackend, session: Session, role: () => string): void {
   const { account, member } = session;
   const button = document.querySelector<HTMLButtonElement>('#accountButton')!;
-  const daysLeft = trialDaysLeft(account, Date.now());
-  const daysText = daysLeftText(daysLeft);
   document.querySelector('#accountInitials')!.textContent = initials(member.name);
-  const trial = document.querySelector<HTMLElement>('#accountTrial')!;
-  trial.textContent = `Masa coba · ${daysText}`;
-  trial.dataset.urgent = String(daysLeft <= 3);
   button.setAttribute('aria-label', `Akun ${member.name}`);
 
   button.addEventListener('click', () => {
     const who = el('div', 'account-who');
     const text = el('div');
-    const { label, seesPlan } = role();
-    text.append(el('p', 'device-name', member.name), el('p', 'card-desc', `${member.email} · ${label} di ${account.business}`));
+    text.append(el('p', 'device-name', member.name), el('p', 'card-desc', `${member.email} · ${role()} di ${account.business}`));
     who.append(el('span', 'avatar avatar--lg', initials(member.name)), text);
-
-    const meter = el('div', 'trial-meter');
-    const top = el('div', 'trial-meter-head');
-    top.append(el('span', 'kicker', 'Masa coba gratis'), el('strong', '', daysText));
-    const bar = el('div', 'meter');
-    const fill = el('span');
-    fill.style.width = `${(daysLeft / TRIAL_DAYS) * 100}%`;
-    bar.append(fill);
-    meter.append(top, bar, el('p', 'field-hint', `Berakhir ${longDate(account.trialEndsAt)}. Berlaku untuk maksimal ${TRIAL_LIMITS.locations} lokasi dan ${TRIAL_LIMITS.points} booth.`));
 
     const password = el('button', 'btn btn-ghost');
     password.type = 'button';
@@ -335,8 +267,7 @@ export function mountAccountButton(backend: AccountBackend, session: Session, ro
       // A reload stops the camera and every model, and lands on the sign-in screen.
       location.reload();
     });
-    // The trial is the owner's business; the crew sees who they are and how to sign out.
-    const handle = openDialog({ title: 'Akun Anda', body: seesPlan ? [who, meter] : [who], footer: [password, signOut] });
+    const handle = openDialog({ title: 'Akun Anda', body: [who], footer: [password, signOut] });
   });
 }
 

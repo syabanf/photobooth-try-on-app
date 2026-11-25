@@ -1,5 +1,5 @@
 // Devices: booth health (heartbeat, camera, version), printers and paper, camera profiles, open
-// alerts, who hears about them, and the messages sent.
+// alerts, who hears about them, the messages sent, and the sync of sales to the cloud.
 
 import { formDialog } from '../../../dialogs';
 import { APERTURE_STEPS, ISO_STEPS, SHUTTER_STEPS, SimulatedEdsdk } from '../../adapters';
@@ -8,9 +8,9 @@ import { PAPER, PAPER_SIZES, paperState } from '../../printing';
 import { ALERT_KINDS, isOnline } from '../../telemetry';
 import { cameraSetupDialog } from '../../../dslr/setup-dialog';
 import type { PageContext } from '../router';
-import { act, badge, dateTime, el, notice, page, parseAmount, pills, section, table } from '../kit';
+import { act, badge, dateTime, el, notice, page, parseAmount, pills, section, statRow, table } from '../kit';
 
-type Tab = 'health' | 'printers' | 'cameras' | 'alerts' | 'routing' | 'messages';
+type Tab = 'health' | 'printers' | 'cameras' | 'alerts' | 'routing' | 'messages' | 'sync';
 const view = { tab: 'health' as Tab };
 
 /** Opens Devices on a tab, for links from the setup guide. */
@@ -31,6 +31,7 @@ export function renderDevices({ ops, redraw }: PageContext): HTMLElement {
         { value: 'alerts', label: open.length ? `Peringatan (${open.length})` : 'Peringatan' },
         { value: 'routing', label: 'Penerima peringatan' },
         { value: 'messages', label: 'Pesan terkirim' },
+        { value: 'sync', label: 'Sinkron' },
       ] as const,
       view.tab,
       (tab) => {
@@ -145,7 +146,7 @@ export function renderDevices({ ops, redraw }: PageContext): HTMLElement {
         { empty: 'Memakai aturan bawaan.', onRow: (rule) => editRule(ops, rule) },
       ),
     );
-  } else {
+  } else if (view.tab === 'messages') {
     root.body.append(
       el('p', 'card-desc', 'Email dan pesan WhatsApp yang dikirim aplikasi: peringatan, panggilan antrean, struk, dan tautan foto. Versi ini mencatatnya di sini. Server mengirimnya lewat penyedia email dan WhatsApp Business Anda.'),
       table(
@@ -159,8 +160,36 @@ export function renderDevices({ ops, redraw }: PageContext): HTMLElement {
         { empty: 'Belum ada yang terkirim.' },
       ),
     );
+  } else {
+    root.body.append(syncSection(ops, redraw));
   }
   return root.root;
+}
+
+/** Sales, sessions, refunds and shifts wait on this device until the cloud has them. */
+function syncSection(ops: PageContext['ops'], redraw: () => void): HTMLElement {
+  const sync = section('Sinkron cloud', 'Penjualan, sesi, refund, dan shift disimpan dulu di perangkat dan baru dihapus setelah cloud menerimanya, jadi koneksi putus tidak menghilangkan data.');
+  const pending = ops.outbox.pending();
+  sync.body.append(
+    statRow([
+      { label: 'Koneksi', value: ops.cloud.online() ? 'Online' : 'Offline', hint: ops.cloud.forcedOffline ? 'Simulasi' : 'Dari browser' },
+      { label: 'Data belum terkirim', value: String(pending.length), hint: pending[0]?.lastError ? `Percobaan terakhir: ${pending[0].lastError}` : '' },
+      { label: 'Terkirim', value: String(ops.cloud.received()) },
+    ]),
+  );
+  sync.actions.append(
+    act(ops.cloud.forcedOffline ? 'Kembali online' : 'Simulasikan offline', 'btn btn-outline btn-sm', async () => {
+      ops.cloud.forcedOffline = !ops.cloud.forcedOffline;
+      if (!ops.cloud.forcedOffline) await ops.outbox.retryNow();
+      redraw();
+    }, ops.cloud.forcedOffline ? 'wifi' : 'offline'),
+    act('Sinkron sekarang', 'btn btn-ghost btn-sm', async () => {
+      const sent = await ops.outbox.retryNow();
+      notice(sent ? `${sent} data terkirim.` : ops.cloud.online() ? 'Semua data sudah terkirim.' : 'Masih offline. Data tetap disimpan dan dikirim nanti.', sent ? 'ok' : 'info');
+      redraw();
+    }, 'refresh'),
+  );
+  return sync.root;
 }
 
 function editPrinter(ops: PageContext['ops'], printer?: Printer): void {

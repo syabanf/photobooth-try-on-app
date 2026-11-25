@@ -10,7 +10,7 @@ import { Ops } from './ops';
 import type { StaticQrisGateway } from './static-qris';
 import { OpsStore } from './store';
 
-const account: Account = { id: 'acc', business: 'Studio Rupa', createdAt: 0, trialEndsAt: Infinity };
+const account: Account = { id: 'acc', business: 'Studio Rupa', createdAt: 0 };
 
 function setup() {
   const toasts: string[] = [];
@@ -378,7 +378,7 @@ describe('team sign-in', () => {
   it('signs the owner in, invites a cashier once, and stops sign-in when they leave', async () => {
     const { createLocalBackend } = await import('../account/backend');
     const accounts = createLocalBackend(memoryStore());
-    const session = await accounts.register({ business: 'Dusun Bambu', name: 'Rizky', email: 'rizky@dusunbambu.id', password: 'bambu2026' }, 'r1');
+    const session = await accounts.setupOwner({ name: 'Rizky', email: 'rizky@dusunbambu.id', password: 'bambu2026' }, 'r1');
     const store = new OpsStore(memoryStore(), session.account.id, session.account.business);
     const ops = new Ops(store, session.account, { toast: () => {}, devicePointId: () => null });
     ops.accounts = accounts;

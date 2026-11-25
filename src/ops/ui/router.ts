@@ -6,7 +6,6 @@ import type { Ops } from '../ops';
 import { renderBranding } from './pages/branding';
 import { renderDevices } from './pages/devices';
 import { renderFaces } from './pages/faces';
-import { renderFleet } from './pages/fleet';
 import { renderHistory } from './pages/history';
 import { renderRoles } from './pages/roles';
 import { renderSignIns } from './pages/signins';
@@ -48,7 +47,6 @@ const PAGES: Record<OpsView, { render: Render; permission: Permission }> = {
   branding: { render: renderBranding, permission: 'branding.manage' },
   devices: { render: renderDevices, permission: 'devices.manage' },
   staff: { render: renderStaff, permission: 'staff.manage' },
-  fleet: { render: renderFleet, permission: 'fleet.manage' },
   settings: { render: renderSettings, permission: 'settings.manage' },
 };
 
