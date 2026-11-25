@@ -70,7 +70,7 @@ const VIEWS: Record<View, { kicker: string; title: string; capture: string }> = 
   queue: { kicker: 'Pelanggan menunggu', title: 'Antrean', capture: 'Buka kamera' },
   sales: { kicker: 'Setiap rupiah', title: 'Transaksi', capture: 'Buka kamera' },
   payments: { kicker: 'Metode, biaya dan gateway', title: 'Pembayaran', capture: 'Buka kamera' },
-  reports: { kicker: 'Penjualan, produk, pembayaran, kas dan lantai', title: 'Laporan', capture: 'Buka kamera' },
+  reports: { kicker: 'Penjualan, kasir, jam ramai dan tutup hari', title: 'Laporan', capture: 'Buka kamera' },
   vouchers: { kicker: 'Kode dan acara', title: 'Voucher', capture: 'Buka kamera' },
   frames: { kicker: 'Template cetak', title: 'Bingkai', capture: 'Buka kamera' },
   branding: { kicker: 'Layar booth dan galeri', title: 'Merek', capture: 'Buka kamera' },

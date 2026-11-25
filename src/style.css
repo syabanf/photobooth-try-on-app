@@ -3425,8 +3425,20 @@ p {
   font-size: 13px;
 }
 
+/* As many columns as tiles, so three tiles fill the row instead of leaving a fourth slot empty. */
 .ops-stats {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   margin-bottom: 0;
+}
+
+/* A big amount shrinks with its tile instead of breaking across two lines. */
+.ops-stats .stat {
+  container-type: inline-size;
+}
+
+.ops-stats .stat-value {
+  font-size: min(28px, 13cqi);
+  white-space: nowrap;
 }
 
 .facts {
@@ -6785,4 +6797,185 @@ body.display-mode {
   .btn-icon {
     min-width: 44px;
   }
+}
+
+/* ---------- reports: filters, the day chart, comparison bars and the busy-hours grid ---------- */
+
+.report-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.report-filter {
+  width: auto;
+  min-width: 150px;
+  flex: 1 1 150px;
+}
+
+.trend {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.trend-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.trend-key {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.trend-key--now {
+  background: var(--accent);
+}
+
+.trend-key--before {
+  height: 3px;
+  background: var(--ink);
+}
+
+.trend-plot {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 200px;
+  padding-top: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.trend-max {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.trend-col {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  flex: 1 1 0;
+  height: 100%;
+  min-width: 2px;
+}
+
+.trend-bar {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--accent);
+}
+
+.trend-mark {
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ink);
+}
+
+.trend-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.compare-bars {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+
+.compare-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 160px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.compare-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compare-tracks {
+  display: grid;
+  gap: 3px;
+}
+
+.compare-now,
+.compare-before {
+  display: block;
+  min-width: 2px;
+  border-radius: 999px;
+}
+
+.compare-now {
+  height: 12px;
+  background: var(--accent);
+}
+
+.compare-before {
+  height: 4px;
+  background: var(--ink);
+  opacity: 0.55;
+}
+
+.compare-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.compare-value .is-up {
+  color: var(--success);
+}
+
+.compare-value .is-down {
+  color: var(--accent);
+}
+
+.heat-scroll {
+  overflow-x: auto;
+}
+
+.heat-table {
+  border-collapse: separate;
+  border-spacing: 3px;
+  font-size: 12px;
+}
+
+.heat-table th {
+  padding: 0 4px;
+  color: var(--muted);
+  font-weight: 600;
+  text-align: center;
+}
+
+.heat-cell {
+  min-width: 34px;
+  height: 30px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) calc(var(--heat, 0) * 85%), var(--surface-2));
+  color: var(--foreground);
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
